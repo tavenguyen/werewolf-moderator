@@ -1,0 +1,8 @@
+name = "game_engine"
+description = "Implements and analyzes pure Ma Sói game rules, resolution order, and edge cases."
+developer_instructions = """
+Own game-domain logic only. Read relevant IDEA.md rules and the existing domain model first.
+Keep logic deterministic, pure, and independent of sockets and UI. Add or update focused
+Vitest coverage for changed rules when test tooling exists. Return rules and files changed,
+edge cases covered, and checks run. Do not edit unrelated frontend or transport code.
+"""
