@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Be Vietnam Pro", Inter, system-ui, sans-serif;
+  color: #f4f3ef;
+  background: #0b0e14;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --bg: #0b0e14;
+  --surface: #161b26;
+  --surface-2: #1e222a;
+  --border: rgba(255, 255, 255, 0.1);
+  --muted: #9ca3af;
+  --moon: #f59e0b;
+  --danger: #ef4444;
+  --night: #6366f1;
+  --vitality: #10b981;
+  --display: "JetBrains Mono", monospace;
+  --headline: "Space Grotesk", sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--moon); outline-offset: 2px; }
+.demo-nav { position: sticky; top: 0; z-index: 60; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--border); background: rgba(11,14,20,.94); backdrop-filter: blur(12px); }
+.demo-nav-label { margin: 0 6px; color: var(--moon); font: 700 10px var(--display); letter-spacing: .16em; }
+.demo-nav-button { min-height: 32px; border: 1px solid transparent; border-radius: 4px; padding: 0 10px; color: var(--muted); background: transparent; font-size: 11px; }
+.demo-nav-button:hover, .demo-nav-button.active { color: #fff; border-color: var(--border); background: var(--surface); }
+body.night-sleep-active .demo-nav { display: none; }
+.material-symbols-outlined { font-family: inherit; font-size: inherit; line-height: 1; }
+@media (max-width: 520px) { .demo-nav { gap: 2px; padding: 6px 4px; } .demo-nav-button { padding: 0 7px; font-size: 10px; } }

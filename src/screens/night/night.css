@@ -1,0 +1,79 @@
+.night-screen {
+  --night-text: #f4f3ef;
+  --night-muted: #9ca3af;
+  --night-line: rgba(255, 255, 255, .09);
+  --night-card: #090a0d;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  color: var(--night-text);
+  background: #000;
+  font-family: "Be Vietnam Pro", Inter, sans-serif;
+}
+.night-header { border-color: rgba(255,255,255,.06); }
+.phase-label { display:flex; align-items:center; gap:9px; color:#71717a; font:700 12px "JetBrains Mono",monospace; letter-spacing:.12em; }
+.status-dot { width:10px; height:10px; display:inline-block; border-radius:50%; }
+.danger-dot { background:#d71921; box-shadow:0 0 10px rgba(215,25,33,.28); }
+.night-screen .segmented-control { display:flex; align-items:center; gap:4px; }
+.night-screen .segment { min-height:36px; padding:0 10px; color:#71717a; background:transparent; border:1px solid transparent; border-radius:4px; font-size:12px; }
+.night-screen .segment:hover,.night-screen .segment:focus-visible { color:#e4e4e7; }
+.night-screen .segment.active { color:#e4e4e7; background:#09090b; border-color:rgba(255,255,255,.12); }
+.night-content { width:min(100%, 480px); margin:auto; padding:22px 0; }
+.sleep-content { display:flex; flex:1; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:#52525b; }
+.sleep-icon { width:64px; height:64px; display:grid; place-items:center; margin-bottom:22px; color:#27272a; border:1px solid rgba(255,255,255,.05); border-radius:50%; font-size:32px; }
+.sleep-content h1 { margin:0; color:#52525b; font:600 15px "Space Grotesk",sans-serif; letter-spacing:.08em; }
+.sleep-content p { max-width:245px; margin:8px 0 0; color:#3f3f46; font-size:12px; line-height:1.6; }
+.standby { display:flex; align-items:center; gap:8px; margin-top:36px; padding:6px 12px; color:#52525b; border:1px solid rgba(255,255,255,.04); border-radius:4px; font:12px "JetBrains Mono",monospace; }
+.standby i { width:6px; height:6px; background:#27272a; border-radius:50%; }
+.sleep-content .demo-note { margin-top:16px; font-size:10px; color:#27272a; }
+.role-content { display:flex; flex-direction:column; gap:14px; }
+.role-heading,.role-heading>div,.victim-card,.victim-card>div,.target-heading,.target-card,.seat-count { display:flex; align-items:center; }
+.role-heading { justify-content:space-between; color:#d4d4d8; font:700 12px "Space Grotesk",sans-serif; letter-spacing:.08em; }
+.role-heading>div { gap:8px; }
+.role-glyph { color:#3730a3; font-size:19px; }
+.timer-chip { padding:4px 10px; color:#f59e0b; border:1px solid var(--night-line); border-radius:4px; font:12px "JetBrains Mono",monospace; }
+.victim-card { justify-content:space-between; gap:12px; padding:12px; background:#080608; border:1px solid rgba(127,29,29,.7); border-radius:4px; }
+.victim-card>div { gap:10px; }
+.victim-glyph { color:#ef4444; font-size:22px; }
+.victim-card small,.victim-card strong { display:block; }
+.victim-card small { margin-bottom:4px; color:#71717a; font-size:10px; }
+.victim-card strong { color:#f87171; font-size:12px; }
+.hold-button { position:relative; overflow:hidden; min-height:48px; padding:0 14px; isolation:isolate; color:#d1fae5; background:#052e22; border:1px solid #065f46; border-radius:4px; font-size:12px; font-weight:600; touch-action:none; }
+.hold-button:disabled { opacity:.4; cursor:not-allowed; }
+.hold-progress { position:absolute; z-index:-1; inset:0 auto 0 0; transition:width 35ms linear; }
+.heal-progress { background:rgba(16,185,129,.5); }
+.poison-progress { background:rgba(127,29,29,.65); }
+.hold-label { position:relative; }
+.target-heading { justify-content:space-between; color:#a1a1aa; font-size:11px; }
+.target-heading strong { font-weight:600; }
+.target-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.target-card { min-height:52px; justify-content:space-between; gap:6px; padding:8px 10px; color:#d4d4d8; text-align:left; background:#08080c; border:1px solid rgba(255,255,255,.08); border-radius:4px; font-size:12px; }
+.target-card small { color:#71717a; font:11px "JetBrains Mono",monospace; }
+.target-card.selected { color:#fecaca; background:rgba(127,29,29,.35); border-color:#d71921; }
+.target-card.selected small { color:#fca5a5; }
+.role-actions { display:flex; flex-direction:column; gap:9px; margin-top:auto; padding-top:8px; }
+.poison-button { min-height:54px; width:100%; color:#fca5a5; background:#090404; border-color:#7f1d1d; text-transform:uppercase; letter-spacing:.04em; }
+.secondary-button { min-height:48px; padding:10px 14px; color:#d4d4d8; background:#08080c; border:1px solid var(--night-line); border-radius:4px; font-size:12px; }
+.secondary-button:hover { color:#fff; border-color:rgba(255,255,255,.2); }
+.screen-notice { margin:0; color:#6ee7b7; font-size:12px; text-align:center; }
+.table-content { display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+.screen-title span { color:#71717a; font:11px "JetBrains Mono",monospace; letter-spacing:.1em; }
+.screen-title h1 { margin:4px 0; color:#d4d4d8; font:600 13px "Space Grotesk",sans-serif; }
+.seat-table { width:min(100%,280px); aspect-ratio:1; }
+.seat-count { flex-wrap:wrap; justify-content:center; gap:7px; color:#71717a; font:11px "JetBrains Mono",monospace; }
+.seat-count button { min-width:36px; min-height:36px; color:#d4d4d8; background:#09090b; border:1px solid var(--night-line); border-radius:4px; }
+.seat-count button.seat-count-active { color:#f59e0b; border-color:#f59e0b; }
+.night-footer { color:#3f3f46; border-color:rgba(255,255,255,.05); }
+.night-footer span { padding:0 4px; }
+@media (max-width:420px) {
+  .night-screen { padding:12px; }
+  .night-screen .segment { padding:0 7px; font-size:11px; }
+  .role-content { gap:11px; }
+  .victim-card { padding:9px; }
+  .victim-card .hold-button { padding:0 9px; }
+  .target-heading span { max-width:120px; text-align:right; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .night-screen *, .night-screen *::before, .night-screen *::after { transition-duration:0.01ms !important; }
+}
