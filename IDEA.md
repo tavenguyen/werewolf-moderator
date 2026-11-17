@@ -16,6 +16,10 @@ Xây dựng một ứng dụng web giúp nhóm bạn chơi **Ma Sói trực ti�
 * **Host linh hoạt 2 chế độ**:
   * **Host là Bảng trung tâm (Laptop / iPad / Điện thoại đặt bàn)**: Host không nhận bài, đóng vai trò màn hình hiển thị chung cho cả nhóm (QR Code, đồng hồ đếm ngược, công bố người chết, bảng giải mã cuối ván) và là thiết bị duy nhất phát âm thanh.
   * **Host kiêm Người chơi (Điện thoại)**: Phù hợp khi chỉ có điện thoại; người tạo phòng mở loa trên máy mình và vẫn được chia bài chơi bình thường như mọi người.
+* **Hai cách dùng thiết bị**:
+  * **Một điện thoại dùng chung (Single-device)**: Một điện thoại tạo/điều khiển phòng và phát âm thanh; người tạo phòng vẫn là người chơi, không phải quản trò hy sinh lượt. Host nhập username của tất cả người chơi trên thiết bị này và xác nhận sơ đồ ghế. Trong phần setup đầu ván, người chơi chuyền điện thoại đúng một lần để lần lượt xem vai riêng; nếu nhóm chủ động dùng bài giấy, host có thể nhập vai đã chia thay cho thao tác chia vai số. Việc xem vai trong setup dựa trên sự tin cậy khi chuyền máy; không cam kết chống người có quyền truy cập DevTools trên thiết bị chung.
+  * **Phòng nhiều điện thoại (Multi-device)**: Host tạo phòng và hiển thị QR/mã phòng; từng người chơi vào bằng điện thoại riêng. Host chọn làm bảng trung tâm không nhận vai, hoặc kiêm người chơi trên điện thoại của mình. Server chỉ gửi dữ liệu riêng tư cần thiết tới đúng client.
+  * Hai cách dùng thiết bị là lựa chọn cho cả ván và không đổi giữa chừng. Số người chơi hợp lệ được tính theo người thật; thiết bị bảng trung tâm không tính là người chơi, còn host kiêm người chơi thì có.
 * **Chỉ phát Loa trung tâm, không Rung**: Điện thoại người chơi **không rung** khi tới lượt ban đêm (tránh tiếng rè trên mặt bàn làm lộ danh tính). Mọi người nhận biết lượt của mình qua giọng đọc từ thiết bị phát loa.
 
 ---
@@ -48,12 +52,15 @@ Trước khi bắt đầu, người tạo phòng chọn **Smart Preset** cân b�
 * **Nhạc nền + Giọng đọc MP3 thu sẵn**: Nhạc nền đêm (tiếng mưa, gió rít) chạy xuyên suốt để che tiếng chạm màn hình; âm lượng nhạc nền tự giảm nhẹ khi giọng quản trò đọc lệnh.
 * **Smart Fake Delay**: Hệ thống gọi đủ mọi vai trò có trong ván, kể cả vai đã chết. Dù người chơi còn sống bấm chọn ngay ở giây thứ 2 hay vai đó đã chết, hệ thống đều dùng thời gian chờ ngẫu nhiên (ví dụ 7–14 giây) rồi mới chuyển lượt để không ai đoán được tình trạng sống/chết qua tốc độ qua đêm.
 * **Sleep Overlay**: Máy nào không ở trong lượt hoặc vừa thao tác xong tự động phủ màn hình đen tuyền `#000000` kèm nhắc nhở *"Hãy úp điện thoại xuống bàn"*.
+* **Điện thoại dùng chung vào ban đêm**: Điện thoại luôn đặt cố định ở giữa bàn; bố cục hiển thị sơ đồ ghế vòng tròn để người chơi nhận ra vị trí của mình. Giọng đọc gọi tới vai nào thì người đó mở mắt, với tay chạm vào máy để vào lượt, tự chọn và gửi hành động rồi nhắm mắt lại. Sau khi gửi thao tác, màn hình lập tức trở về Sleep Overlay. Không chuyền điện thoại giữa người chơi vào ban đêm. Kỹ năng dùng một lần vẫn cần chọn mục tiêu rồi xác nhận; người chơi đang thức tự hoàn tất thao tác tại máy.
+* **Nhiều điện thoại vào ban đêm**: Mỗi người thao tác trên điện thoại cá nhân khi được gọi; các máy ngoài lượt và máy vừa gửi thao tác đều hiện Sleep Overlay. Chỉ thiết bị host phát âm thanh.
 * **Chống lỡ tay**: Các kỹ năng dùng 1 lần/ván yêu cầu thao tác 2 bước (*Chọn mục tiêu $\rightarrow$ Xác nhận*).
 
 ### Pha Ngày (Ép tương tác trực tiếp)
 * **Eyes-Up Day Screen**: Màn hình ban ngày chỉ hiện đồng hồ đếm ngược, trạng thái sống/chết và nút Vote.
 * **Khóa Vote 60 giây đầu**: Buộc cả bàn nhìn mặt nhau tranh luận trước khi được bấm vote. Hỗ trợ nút **Tạm dừng** và **+30 giây** gia hạn khi đang tranh luận cao trào.
 * **Vote linh hoạt**: Hỗ trợ vote giơ tay ngoài đời (Host bấm chốt kết quả) hoặc vote kín đồng loạt trên từng điện thoại.
+* **Thao tác công khai khi chỉ có một điện thoại**: Ban ngày điện thoại đặt giữa bàn và dùng làm bảng điều khiển chung. Host/người cầm máy ghi nhận vote giơ tay, tạm dừng hoặc gia hạn timer `+30 giây`, chốt kết quả treo cổ, và nhập lựa chọn công khai của Thợ săn khi nổ súng hoặc Trưởng làng khi truyền ngôi. Không yêu cầu người chơi chuyền máy để vote kín trong chế độ này.
 
 ### Cuối ván (Post-Game Reveal)
 * Hiện bảng **"Giải mã ván đấu"**: công bố vai trò thật của tất cả người chơi kèm dòng thời gian chi tiết từng đêm (Bảo vệ đỡ trúng ai, Phù thủy cứu ai, Sói có tự cắn đồng đội không) để cả nhóm bàn tán trước khi bấm chơi ván mới.
@@ -81,3 +88,50 @@ Trước khi bắt đầu, người tạo phòng chọn **Smart Preset** cân b�
 * **Backend**: **Node.js + TypeScript + Socket.io**, lưu toàn bộ state phòng trên **RAM** (`Map<string, RoomState>`), tự động dọn phòng sau 3 giờ không hoạt động (không cần Database). Server lọc dữ liệu trước khi gửi xuống từng client để chống xem lén qua F12.
 * **Game Engine**: Tách toàn bộ logic xử lý đêm/ngày và edge cases thành các hàm TypeScript thuần độc lập với Socket để dễ viết unit test bằng **Vitest**.
 * **Deploy**: Frontend lên **Vercel** hoặc **Cloudflare Pages** (có sẵn HTTPS cho WakeLock & Audio); Backend lên **Render**, **Railway** hoặc **Fly.io**.
+
+---
+
+## 7. Design System & Quy tắc giao diện
+
+### Design System dùng chung
+
+Phong cách **Modern Dark Atmospheric**: hiện đại, tối giản, gợi không khí đêm trăng bí ẩn; tránh trang trí cổ trang rườm rà. Tất cả màn hình dùng chung hệ màu, typography, khoảng cách, bo góc, viền và cách biểu thị trạng thái; không thiết kế mỗi màn như một sản phẩm riêng.
+
+| Token | Giá trị | Công dụng |
+| :--- | :--- | :--- |
+| Nền chính | `#0B0E14` | Lobby, ban ngày, bảng host, tổng kết |
+| Nền Sleep Overlay | `#000000` | Trạng thái ngủ và chờ lượt ban đêm |
+| Surface/Card | `#161B26` | Thẻ và vùng nội dung trên màn hình thường |
+| Viền card | `rgba(255,255,255,0.08)` | Viền mảnh 1px, không cạnh tranh với nội dung |
+| Đỏ Sói/cảnh báo/độc/treo cổ | `#EF4444` | Trạng thái và hành động mang tính nguy hiểm |
+| Chàm pha đêm | `#6366F1` | Nhãn pha đêm và điểm nhấn phụ |
+| Vàng ánh trăng/timer/hành động chính | `#F59E0B` | Đồng hồ và CTA chính |
+| Xanh ngọc phe Dân/bình cứu | `#10B981` | Trạng thái phe Dân và hành động cứu |
+
+Font chữ không chân hiện đại, ưu tiên Inter hoặc Plus Jakarta Sans. Đồng hồ dùng `tabular-nums`. Nút chạm trên mobile có vùng chạm tối thiểu 48px, CTA chính hướng tới 56px. Trạng thái sống/chết, được chọn/bị khóa và phe chơi phải có nhãn hoặc icon đi kèm màu, không phân biệt bằng màu đơn lẻ. Dùng cùng quy tắc spacing, radius, icon và cấp độ chữ xuyên suốt sáu màn.
+
+### Quy tắc độ sáng và tương phản
+
+* **Lobby, pha ngày, bảng host và tổng kết**: chữ, icon chức năng và trạng thái phải rõ trên nền tương ứng, đáp ứng WCAG AA; chữ thường đạt tương phản tối thiểu 4.5:1 và chữ lớn 3:1.
+* **Sleep Overlay và thao tác đêm**: ưu tiên không hắt sáng ra mặt người chơi. Dùng nền `#000000`, độ sáng thấp, chữ đỏ thẫm hoặc xám trầm chỉ vừa đủ đọc ở cự ly gần; không áp ngưỡng tương phản ban ngày một cách máy móc cho các màn hình này. Bù lại, dùng chữ/nút lớn, icon rõ và vị trí ổn định. Không dùng nền trắng hoặc mảng sáng lớn.
+* Khi thiết kế cho đêm, xem “Hãy úp điện thoại xuống bàn” là chỉ dẫn kín đáo; giữ ở mức sáng thấp, không biến thành tiêu đề sáng nhất màn hình.
+
+### Quy tắc giao diện cho hai chế độ thiết bị
+
+* **Một điện thoại dùng chung**: chỉ chuyền máy lúc setup để mỗi người xem vai một lần. Từ khi bắt đầu đêm, đặt máy ở giữa bàn và giữ nguyên vị trí. Màn đêm có sơ đồ ghế vòng tròn và chỉ dẫn thao tác cho vai đang được gọi; không có luồng handoff giữa các lượt. Sau khi hành động được gửi, máy tự phủ Sleep Overlay.
+* Người chơi ở chế độ một máy tự chịu trách nhiệm riêng tư vật lý khi xem vai lúc setup và khi mở mắt thao tác ban đêm. Giao diện không tuyên bố chống xem dữ liệu qua DevTools trên thiết bị chung.
+* **Nhiều điện thoại**: mỗi điện thoại người chơi hiển thị góc nhìn riêng; máy host trung tâm chỉ hiển thị thông tin công khai. Nếu host kiêm người chơi, vai riêng chỉ hiện trên giao diện người chơi của host, không xuất hiện trong bảng trung tâm.
+* Bố cục mobile ưu tiên một cột; lobby và bảng cài đặt chuyển thành hai cột trên laptop khi đủ chỗ. Bảng host dùng bố cục rộng ba cột và co về dạng tablet/mobile mà không mất timer hay thao tác khẩn cấp.
+
+### Sáu màn hình chuẩn
+
+1. **Trang chủ — Vào phòng/Tạo phòng**: thương hiệu trăng khuyết; luồng nhập mã 4 số/QR, username, tạo phòng và chọn cách dùng thiết bị.
+2. **Lobby/Cài đặt phòng**: QR/mã, người chơi, kết nối, Smart Preset, thước cân bằng phe, luật phòng và trạng thái nút bắt đầu. Biến thể một máy có bước setup xem vai tuần tự; biến thể nhiều máy hỗ trợ người chơi quét mã tham gia.
+3. **Pha đêm/Sleep Overlay**: trạng thái ngủ đen OLED; màn hành động chỉ mở cho lượt phù hợp. Một máy có sơ đồ ghế cố định giữa bàn; nhiều máy có lựa chọn mục tiêu trên thiết bị cá nhân. Bình dùng một lần có bước xác nhận.
+4. **Pha ngày/Eyes-Up**: timer, trạng thái sống/chết và thao tác vote; giữ nguyên khóa vote 60 giây đầu kể cả khi timer pause hoặc được gia hạn. Không có chat.
+5. **Bảng điều khiển Host**: danh sách người chơi, timer/pha và điều khiển, âm thanh, QR, chốt vote và loại khẩn cấp. Chỉ hiển thị thông tin công khai nếu host là bảng trung tâm.
+6. **Tổng kết/Giải mã ván đấu**: banner phe thắng/hòa, vai trò, timeline đêm, rematch và rời phòng; công bố vai người sống chỉ sau khi ván kết thúc.
+
+### Ghi chú cho giai đoạn triển khai frontend
+
+Google Stitch tạo bố cục và hình ảnh tham khảo, không quyết định logic runtime. Khi viết code, bổ sung tên truy cập được và thao tác keyboard tương đương (Enter/Space) cho điều khiển giữ/nhấn; xác nhận UI không làm lộ dữ liệu mà server chưa cấp quyền. Không yêu cầu Stitch sinh ARIA hoặc xử lý keyboard.
