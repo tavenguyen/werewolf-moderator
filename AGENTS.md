@@ -9,6 +9,8 @@
 - Skill project được lưu trong `ai-config/skills/` do thư mục native `.agents/` hiện chỉ đọc. Khi task thuộc domain tương ứng, đọc `ai-config/skills/<skill>/SKILL.md` trước khi làm; không giả định chúng tự được Codex phát hiện.
 - Khi viết, refactor hoặc review code TypeScript/React, đọc `ai-config/skills/clean-code/SKILL.md` cùng skill domain liên quan; giữ diff gọn và không ép thêm tooling chưa có trong repo.
 - Khi thiết kế kiểu dữ liệu, xử lý lỗi TypeScript hoặc dữ liệu không tin cậy, đọc thêm `ai-config/skills/typescript-type-safety/SKILL.md`; skill này bổ sung quy tắc type-safety, không thay thế skill React, game engine hoặc Socket.io.
+- Khi triển khai xử lý input, mạng, quyền truy cập, token, hoặc dữ liệu riêng tư, đọc thêm `ai-config/skills/secure-code/SKILL.md`. Chỉ áp dụng theo ranh giới bảo mật liên quan; không tự thêm framework, dependency hay cơ chế bảo mật chưa được dự án yêu cầu.
+- Khi người dùng yêu cầu review bảo mật hoặc thay đổi chạm ranh giới tin cậy, đọc thêm `ai-config/skills/security-review/SKILL.md` cùng skill domain. Skill này bổ sung review lỗ hổng có bằng chứng, không thay thế `code-review` cho gameplay, race condition và hồi phục kết nối.
 - Agent profile dự án nằm trong `ai-config/agents/` làm bản nguồn. Nếu `.codex/agents/` khả dụng trong môi trường khác, các file TOML này có thể được chép vào đó để Codex đăng ký custom agents.
 
 ## Chất lượng triển khai
