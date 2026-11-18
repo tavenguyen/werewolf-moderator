@@ -11,6 +11,7 @@
 - Khi thiết kế kiểu dữ liệu, xử lý lỗi TypeScript hoặc dữ liệu không tin cậy, đọc thêm `ai-config/skills/typescript-type-safety/SKILL.md`; skill này bổ sung quy tắc type-safety, không thay thế skill React, game engine hoặc Socket.io.
 - Khi triển khai xử lý input, mạng, quyền truy cập, token, hoặc dữ liệu riêng tư, đọc thêm `ai-config/skills/secure-code/SKILL.md`. Chỉ áp dụng theo ranh giới bảo mật liên quan; không tự thêm framework, dependency hay cơ chế bảo mật chưa được dự án yêu cầu.
 - Khi người dùng yêu cầu review bảo mật hoặc thay đổi chạm ranh giới tin cậy, đọc thêm `ai-config/skills/security-review/SKILL.md` cùng skill domain. Skill này bổ sung review lỗ hổng có bằng chứng, không thay thế `code-review` cho gameplay, race condition và hồi phục kết nối.
+- Khi viết, cập nhật hoặc review README/tài liệu kỹ thuật, đọc `ai-config/skills/technical-documentation/SKILL.md` và tham chiếu đúng loại tài liệu. Dùng `ai-config/skills/humanize/SKILL.md` khi người dùng yêu cầu làm prose tự nhiên hơn hoặc rà AI patterns; đây là lượt biên tập bổ sung, không thay thế kiểm chứng dữ kiện kỹ thuật.
 - Agent profile dự án nằm trong `ai-config/agents/` làm bản nguồn. Nếu `.codex/agents/` khả dụng trong môi trường khác, các file TOML này có thể được chép vào đó để Codex đăng ký custom agents.
 
 ## Chất lượng triển khai
