@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ScreenName } from '../../navigation';
 import './home.css';
 
-type Screen = 'lobby' | 'night' | 'day' | 'host' | 'summary' | 'home';
-type Props = { onNavigate?: (screen: Screen) => void };
+type Props = { onNavigate?: (screen: ScreenName) => void };
 
 export default function HomeScreen({ onNavigate }: Props) {
   const [mode, setMode] = useState<'join' | 'create'>('join');
   const [rulesOpen, setRulesOpen] = useState(false);
   const rulesTrigger = useRef<HTMLButtonElement>(null);
   const rulesClose = useRef<HTMLButtonElement>(null);
+  const navigationTimer = useRef<number | undefined>(undefined);
   const [roomCode, setRoomCode] = useState('7290');
   const [nickname, setNickname] = useState('Minh Khang');
   const [notice, setNotice] = useState('');
   const [deviceMode, setDeviceMode] = useState<'shared' | 'multi'>('shared');
+
+  useEffect(() => () => window.clearTimeout(navigationTimer.current), []);
 
   useEffect(() => {
     if (!rulesOpen) return;
@@ -40,7 +43,8 @@ export default function HomeScreen({ onNavigate }: Props) {
       return;
     }
     setNotice(mode === 'join' ? 'Đang mở lobby demo…' : 'Đã tạo phòng demo.');
-    window.setTimeout(() => onNavigate?.('lobby'), 250);
+    window.clearTimeout(navigationTimer.current);
+    navigationTimer.current = window.setTimeout(() => onNavigate?.('lobby'), 250);
   };
 
   return (

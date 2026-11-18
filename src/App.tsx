@@ -6,21 +6,31 @@ import DayScreen from './screens/day/DayScreen';
 import HostScreen from './screens/host/HostScreen';
 import SummaryScreen from './screens/summary/SummaryScreen';
 import { defaultLobbyDemoState, type LobbyDemoState } from './screens/lobby/lobbyTypes';
+import type { ScreenName } from './navigation';
 
-export type ScreenName = 'home' | 'lobby' | 'night' | 'day' | 'host' | 'summary';
+const screens = ['home', 'lobby', 'night', 'day', 'host', 'summary'] as const satisfies readonly ScreenName[];
+
+const screenLabels: Record<ScreenName, string> = {
+  home: 'Trang chủ',
+  lobby: 'Lobby',
+  night: 'Đêm',
+  day: 'Ngày',
+  host: 'Host',
+  summary: 'Tổng kết',
+};
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenName>('home');
   const [lobbyState, setLobbyState] = useState<LobbyDemoState>(defaultLobbyDemoState);
-  const navigate = (next: ScreenName) => setScreen(next);
+  const navigate = setScreen;
 
   return (
     <>
       <nav className="demo-nav" aria-label="Chuyển màn hình demo">
         <span className="demo-nav-label">DEMO</span>
-        {(['home', 'lobby', 'night', 'day', 'host', 'summary'] as const).map((item) => (
+        {screens.map((item) => (
           <button key={item} className={screen === item ? 'demo-nav-button active' : 'demo-nav-button'} onClick={() => navigate(item)}>
-            {({ home: 'Trang chủ', lobby: 'Lobby', night: 'Đêm', day: 'Ngày', host: 'Host', summary: 'Tổng kết' })[item]}
+            {screenLabels[item]}
           </button>
         ))}
       </nav>

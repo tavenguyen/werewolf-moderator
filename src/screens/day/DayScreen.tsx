@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { ScreenName } from '../../navigation';
+import { formatTime } from '../../utils/formatTime';
 import './day.css';
 
-type ScreenName = 'lobby' | 'night' | 'day' | 'host' | 'summary' | 'home';
 type DayScreenProps = { onNavigate?: (screen: ScreenName) => void };
 
 const players = [
@@ -12,10 +13,6 @@ const players = [
   { name: 'Đức Huy', alive: true },
   { name: 'Quỳnh Như', alive: true },
 ];
-
-function formatTime(seconds: number) {
-  return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
-}
 
 export default function DayScreen({ onNavigate }: DayScreenProps) {
   const [remaining, setRemaining] = useState(165);
@@ -30,11 +27,11 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
   useEffect(() => {
     if (paused || (remaining === 0 && lockRemaining === 0)) return;
     const id = window.setInterval(() => {
-      if (remaining > 0) setRemaining(value => Math.max(0, value - 1));
-      if (lockRemaining > 0) setLockRemaining(value => Math.max(0, value - 1));
+      setRemaining(value => Math.max(0, value - 1));
+      setLockRemaining(value => Math.max(0, value - 1));
     }, 1000);
     return () => window.clearInterval(id);
-  }, [paused, remaining, lockRemaining]);
+  }, [paused, remaining === 0, lockRemaining === 0]);
 
   const unlocked = lockRemaining === 0;
   const livingPlayers = players.filter(player => player.alive);

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { defaultLobbyDemoState, type LobbyDemoState, type LobbyPlayer } from './lobbyTypes';
+import type { ScreenName } from '../../navigation';
 import './lobby.css';
 
-type Screen = 'lobby' | 'night' | 'day' | 'host' | 'summary' | 'home';
-type Props = { onNavigate?: (screen: Screen) => void };
+type Props = { onNavigate?: (screen: ScreenName) => void };
 const waitingNames = ['Quỳnh Như', 'Văn Hậu', 'Thúy Kiều'];
 
 type LobbyProps = Props & { initialState?: LobbyDemoState; onStateChange?: (state: LobbyDemoState) => void };
@@ -16,11 +16,9 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
   const [settings, setSettings] = useState(initialState?.settings ?? defaultLobbyDemoState.settings);
   const maxPlayers = 8;
   const ready = players.length >= 6;
-  const roles = useMemo(() => {
-    const wolves = Math.max(2, Math.floor(players.length / 4));
-    const specials = Math.min(2, Math.max(0, players.length - wolves - 2));
-    return { wolves, specials, villagers: Math.max(0, players.length - wolves - specials) };
-  }, [players.length]);
+  const wolves = Math.max(2, Math.floor(players.length / 4));
+  const specials = Math.min(2, Math.max(0, players.length - wolves - 2));
+  const roles = { wolves, specials, villagers: Math.max(0, players.length - wolves - specials) };
 
   useEffect(() => {
     onStateChange?.({ players, preset, advanced, settings });

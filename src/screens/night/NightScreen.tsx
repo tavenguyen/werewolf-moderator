@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import type { ScreenName } from '../../navigation';
 import './night.css';
-
-type ScreenName = 'lobby' | 'night' | 'day' | 'host' | 'summary' | 'home';
 
 type NightScreenProps = {
   onNavigate?: (screen: ScreenName) => void;
@@ -20,10 +19,12 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const [complete, setComplete] = useState<'heal' | 'poison' | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const progressTimer = useRef<number | undefined>(undefined);
+  const completionTimer = useRef<number | undefined>(undefined);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => () => {
     window.clearTimeout(timer.current);
+    window.clearTimeout(completionTimer.current);
     window.clearInterval(progressTimer.current);
   }, []);
 
@@ -40,7 +41,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     setProgress(100);
     setComplete(action);
     setNotice(action === 'heal' ? 'Đã xác nhận dùng bình cứu trong bản demo.' : `Đã xác nhận đầu độc ${target}.`);
-    window.setTimeout(() => {
+    completionTimer.current = window.setTimeout(() => {
       setProgress(0);
       setComplete(null);
       setMode('sleep');

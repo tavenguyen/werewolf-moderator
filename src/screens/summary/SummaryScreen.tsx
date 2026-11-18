@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import type { ScreenName } from '../../navigation';
 import './summary.css';
 
-type ScreenName = 'lobby' | 'night' | 'day' | 'host' | 'summary' | 'home';
 type SummaryScreenProps = { onNavigate?: (screen: ScreenName) => void };
 
 const players = [

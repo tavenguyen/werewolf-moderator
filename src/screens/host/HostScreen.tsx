@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ScreenName } from '../../navigation';
+import { formatTime } from '../../utils/formatTime';
 import './host.css';
-
-type ScreenName = 'lobby' | 'night' | 'day' | 'host' | 'summary' | 'home';
 
 type HostScreenProps = { onNavigate?: (screen: ScreenName) => void };
 
@@ -13,10 +13,6 @@ const players = [
   ['Đức Huy', 'Sống', true],
   ['Quỳnh Như', 'Sống', true],
 ] as const;
-
-function formatTime(seconds: number) {
-  return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
-}
 
 export default function HostScreen({ onNavigate }: HostScreenProps) {
   const [remaining, setRemaining] = useState(165);

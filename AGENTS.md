@@ -7,6 +7,7 @@
 - Giữ game engine là TypeScript thuần, độc lập Socket.io và UI. Backend có thẩm quyền với vai trò, trạng thái phòng và kết quả; chỉ gửi dữ liệu mà từng client được phép biết.
 - Ưu tiên giải pháp gọn. Không thêm dependency, database, framework, hoặc kiến trúc mới khi yêu cầu và repo chưa cần.
 - Skill project được lưu trong `ai-config/skills/` do thư mục native `.agents/` hiện chỉ đọc. Khi task thuộc domain tương ứng, đọc `ai-config/skills/<skill>/SKILL.md` trước khi làm; không giả định chúng tự được Codex phát hiện.
+- Khi viết, refactor hoặc review code TypeScript/React, đọc `ai-config/skills/clean-code/SKILL.md` cùng skill domain liên quan; giữ diff gọn và không ép thêm tooling chưa có trong repo.
 - Agent profile dự án nằm trong `ai-config/agents/` làm bản nguồn. Nếu `.codex/agents/` khả dụng trong môi trường khác, các file TOML này có thể được chép vào đó để Codex đăng ký custom agents.
 
 ## Chất lượng triển khai
