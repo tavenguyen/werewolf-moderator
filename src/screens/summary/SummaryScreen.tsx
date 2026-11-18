@@ -2,7 +2,10 @@ import { useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import './summary.css';
 
-type SummaryScreenProps = { onNavigate?: (screen: ScreenName) => void };
+type SummaryScreenProps = {
+  onNavigate?: (screen: ScreenName) => void;
+  onOpenRules?: (tab?: 'rules' | 'roles') => void;
+};
 
 type PlayerSummary = {
   name: string;
@@ -36,7 +39,6 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
   };
 
   const revealAll = () => {
-    // If not all open, open all with cascade effect
     if (openCards.size < players.length) {
       setOpenCards(new Set(players.map((player) => player.name)));
     } else {
@@ -60,12 +62,12 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
         {/* Victory Banner */}
         <section className="summary-winner">
           <div className="summary-trophy-wrap" aria-hidden="true">
-            <span className="summary-trophy">🏆</span>
+            <span className="summary-trophy">☀️</span>
           </div>
           <div className="summary-winner-copy">
             <span className="winner-eyebrow">PHE CHIẾN THẮNG CHUNG CUỘC</span>
-            <h1>DÂN LÀNG TOÀN THẮNG!</h1>
-            <p>Tất cả Ma Sói đã bị vạch trần và xử tử. Ngôi làng trở lại bình yên.</p>
+            <h1>THÔN BẢN TOÀN THẮNG!</h1>
+            <p>Bầy Ma Sói đã bị vạch trần và quy án. Làng quê trở về yên bình dưới ánh trăng.</p>
           </div>
           <button className="summary-reveal-all" onClick={revealAll}>
             {allRevealed ? 'ÚP TOÀN BÀN' : 'LẬT TOÀN BÀN ✦'}
@@ -74,11 +76,11 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
 
         {/* Dramatic Turning Point */}
         <section className="summary-turning-point">
-          <div className="turning-point-icon" aria-hidden="true">⚡</div>
+          <div className="turning-point-icon" aria-hidden="true">⚔️</div>
           <div className="turning-point-body">
             <strong>BƯỚC NGOẶT ĐỊNH ĐOẠT VÁN ĐẤU</strong>
             <p>
-              Đêm 2: Sói cắn tử vong Thợ Săn Bảo Trâm. Trước khi trút hơi thở cuối cùng, Bảo Trâm kích hoạt phát đạn chính xác bắn hạ <b>Sói Đầu Đàn Đức Huy</b>, lật ngược hoàn toàn cục diện cho Dân Làng!
+              Đêm 2: Sói cắn tử vong Thợ Săn Bảo Trâm. Trước khi trút hơi thở cuối cùng, Bảo Trâm nổ phát súng chuẩn xác găm trúng tim <b>Sói Đầu Đàn Đức Huy</b>, mở toang cánh cửa thắng lợi cho Thôn Dân!
             </p>
           </div>
         </section>
@@ -92,7 +94,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             onClick={() => setTab('cards')}
           >
             <span aria-hidden="true">🎴</span>
-            <span>LẬT THẺ BÀI ({openCards.size}/{players.length})</span>
+            <span>THẺ BÀI HUYỀN BÍ ({openCards.size}/{players.length})</span>
           </button>
           <button
             role="tab"
@@ -100,8 +102,8 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             className={tab === 'timeline' ? 'active' : ''}
             onClick={() => setTab('timeline')}
           >
-            <span aria-hidden="true">⏱️</span>
-            <span>DÒNG THỜI GIAN VÁN ĐẤU</span>
+            <span aria-hidden="true">📜</span>
+            <span>BIÊN NIÊN SỬ VÁN ĐẤU</span>
           </button>
         </div>
 
@@ -119,7 +121,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                   style={{ animationDelay: `${index * 60}ms` }}
                 >
                   <span className="summary-card-inner">
-                    {/* Front Face: Mystic Tarot Card Back */}
+                    {/* Front Face: Rustic Tarot Card Back */}
                     <span className="summary-card-face summary-card-front">
                       <div className="tarot-card-border">
                         <span className="tarot-corner tl" />
@@ -129,7 +131,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                         <small className="card-seat-tag">GHẾ #{String(index + 1).padStart(2, '0')}</small>
                         <div className="tarot-emblem" aria-hidden="true">☾</div>
                         <b className="card-player-name">{player.name}</b>
-                        <small className="summary-card-hint">CHẠM ĐỂ LẬT BÀI</small>
+                        <small className="summary-card-hint">CHẠM ĐỂ GIẢI MÃ</small>
                       </div>
                     </span>
 
@@ -156,7 +158,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             <article className="timeline-event">
               <i className="timeline-dot night-dot" aria-hidden="true" />
               <div className="timeline-heading">
-                <strong>ĐÊM THỨ 1 · BÌNH YÊN</strong>
+                <strong>ĐÊM THỨ I · BÌNH YÊN</strong>
                 <b className="safe">0 tử vong</b>
               </div>
               <p>
@@ -169,19 +171,19 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             <article className="timeline-event">
               <i className="timeline-dot day-dot" aria-hidden="true" />
               <div className="timeline-heading">
-                <strong>NGÀY 1 · BIỂU QUYẾT BẤT THÀNH</strong>
+                <strong>NGÀY I · BIỂU QUYẾT BẤT THÀNH</strong>
                 <b className="safe">Hòa phiếu</b>
               </div>
               <p>
                 • Cả làng tranh luận gay gắt nhưng biểu quyết hòa phiếu giữa Hoàng Nam và Lan Anh.<br />
-                • Không có ai bị xử tử trong ngày 1.
+                • Không có ai bị xử tử trong ngày đầu.
               </p>
             </article>
 
             <article className="timeline-event">
               <i className="timeline-dot night-dot" aria-hidden="true" />
               <div className="timeline-heading">
-                <strong>ĐÊM 2 · CHẾT KÉO THEO ĐẪM MÁU</strong>
+                <strong>ĐÊM THỨ II · PHÁT SÚNG SINH TỬ</strong>
                 <b className="danger">2 người chết</b>
               </div>
               <p>
@@ -193,7 +195,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             <article className="timeline-event">
               <i className="timeline-dot win-dot" aria-hidden="true" />
               <div className="timeline-heading">
-                <strong>NGÀY 2 · CHUNG CUỘC TOÀN THẮNG</strong>
+                <strong>NGÀY II · THÔN BẢN TOÀN THẮNG</strong>
                 <b className="safe">Dân Làng Thắng</b>
               </div>
               <p>
@@ -208,15 +210,15 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
       <footer className="summary-footer">
         <button className="summary-rematch" onClick={() => onNavigate?.('lobby')}>
           <span className="rematch-icon" aria-hidden="true">🎲</span>
-          <span>ĐẢO BÀI &amp; CHƠI VÁN MỚI (REMATCH)</span>
+          <span>ĐẢO BÀI &amp; CHƠI VÁN MỚI</span>
         </button>
         <button
           className="summary-exit"
           onClick={() => onNavigate?.('home')}
-          aria-label="Rời phòng về trang chủ"
-          title="Rời phòng về trang chủ"
+          aria-label="Rời phòng về cổng làng"
+          title="Rời phòng về cổng làng"
         >
-          ↪
+          ⟵
         </button>
       </footer>
     </main>

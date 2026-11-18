@@ -4,6 +4,7 @@ import './night.css';
 
 type NightScreenProps = {
   onNavigate?: (screen: ScreenName) => void;
+  onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
 const roster = [
@@ -47,7 +48,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
 
     setProgress(100);
     setComplete(action);
-    setNotice(action === 'heal' ? '✓ ĐÃ CỨU SỐNG NẠN NHÂN' : `☠ ĐÃ ĐẦU ĐỘC: ${target}`);
+    setNotice(action === 'heal' ? '✓ ĐÃ NIÊM ẤN CỨU NẠN NHÂN' : `☠ ĐÃ NIÊM ẤN ĐẦU ĐỘC: ${target}`);
     completionTimer.current = window.setTimeout(() => {
       setProgress(0);
       setComplete(null);
@@ -104,8 +105,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     <main className={`night-screen app-page ${mode === 'sleep' ? 'night-sleep' : ''}`}>
       <header className="screen-header night-header">
         <div className="phase-label">
-          <span className="status-dot danger-dot" />
-          <span>PHA ĐÊM THỨ 1</span>
+          <span className="status-ember" />
+          <span>TRỜI TỐI · ĐÊM THỨ I</span>
         </div>
         <nav aria-label="Chế độ ban đêm" className="segmented-control">
           {(['sleep', 'role', 'table'] as const).map((item) => (
@@ -116,7 +117,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
               onClick={() => setMode(item)}
               className={mode === item ? 'segment active' : 'segment'}
             >
-              {item === 'sleep' ? 'Úp máy' : item === 'role' ? 'Lượt gọi' : 'Bàn tròn'}
+              {item === 'sleep' ? 'Thổi nến' : item === 'role' ? 'Lượt gọi' : 'Chiếu đá'}
             </button>
           ))}
         </nav>
@@ -128,13 +129,13 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
             <div className="stealth-moon-ring" />
             <div className="sleep-icon">☾</div>
           </div>
-          <h1>ÚP MÁY XUỐNG BÀN</h1>
-          <p>Nhắm mắt lại và lắng nghe hiệu lệnh của quản trò từ loa trung tâm.</p>
+          <h1>THỔI TẮT NGỌN NẾN</h1>
+          <p>Nhắm mắt lại và lắng nghe khẩu lệnh của quản trò từ loa trung tâm.</p>
           <div className="standby">
-            <span className="stealth-radar-dot" aria-hidden="true" />
-            <span>STANDBY · ZERO-GLARE OLED</span>
+            <span className="stealth-ember-dot" aria-hidden="true" />
+            <span>TĨNH LẶNG · BẢO MẬT BAN ĐÊM</span>
           </div>
-          <p className="demo-note">Độ sáng tối thiểu để không chiếu sáng mặt người chơi ban đêm</p>
+          <p className="demo-note">Độ sáng tối thiểu để không chiếu sáng gương mặt khi đêm buông</p>
         </section>
       )}
 
@@ -149,7 +150,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
               </div>
             </div>
             <div className="timer-chip">
-              <span className="timer-pulse-dot" aria-hidden="true" />
+              <span className="timer-pulse-ember" aria-hidden="true" />
               <span>00:18</span>
             </div>
           </div>
@@ -160,14 +161,14 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                 <span className="victim-glyph">☠</span>
               </div>
               <div className="victim-meta">
-                <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
+                <small>DẤU VẾT BẦY SÓI ĐÊM NAY</small>
                 <strong>Bảo Trâm (Ghế #04)</strong>
               </div>
             </div>
             <button
               type="button"
               className={`hold-button heal-button ${complete === 'heal' ? 'is-complete' : ''} ${progress > 0 ? 'is-pressing' : ''}`}
-              aria-label="Giữ một giây để dùng bình cứu"
+              aria-label="Giữ một giây để niêm ấn bình tiên dược cứu người"
               {...holdProps('heal')}
             >
               <span
@@ -175,15 +176,15 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                 style={{ width: `${complete === 'heal' ? 100 : progress}%` }}
               />
               <span className="hold-label">
-                {complete === 'heal' ? '✓ ĐÃ CỨU' : progress > 0 ? `Giữ (${progress}%)` : 'Giữ 1s Cứu'}
+                {complete === 'heal' ? '✓ ĐÃ NIÊM ẤN CỨU' : progress > 0 ? `Ấn dấu (${progress}%)` : 'Ấn Sáp Cứu 1s'}
               </span>
             </button>
           </div>
 
           <div className="target-heading">
             <div>
-              <strong>BÌNH ĐỘC (CÒN 1 LẦN)</strong>
-              <small>Chọn người chơi muốn đầu độc</small>
+              <strong>BÌNH ĐỘC DƯỢC (CÒN I LẦN)</strong>
+              <small>Chọn thôn dân muốn gieo lời nguyền</small>
             </div>
             <span className="target-hint">{target ? `Mục tiêu: ${target}` : 'Chưa chọn'}</span>
           </div>
@@ -213,7 +214,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
               type="button"
               className={`hold-button poison-button ${complete === 'poison' ? 'is-complete' : ''} ${progress > 0 && target ? 'is-pressing' : ''}`}
               disabled={!target || !!complete}
-              aria-label="Giữ một giây để xác nhận đầu độc mục tiêu đã chọn"
+              aria-label="Giữ một giây để niêm ấn độc dược mục tiêu đã chọn"
               {...holdProps('poison')}
             >
               <span
@@ -222,9 +223,9 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
               />
               <span className="hold-label">
                 {complete === 'poison'
-                  ? `☠ ĐÃ ĐẦU ĐỘC: ${target}`
+                  ? `☠ ĐÃ NIÊM ẤN: ${target}`
                   : target
-                  ? `Giữ 1s đầu độc ${target}`
+                  ? `Ấn Sáp Đầu Độc ${target}`
                   : 'Chọn mục tiêu bên trên'}
               </span>
             </button>
@@ -233,7 +234,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
               className="secondary-button"
               onClick={() => { setMode('sleep'); setNotice(''); }}
             >
-              Không dùng bình &amp; úp máy lại
+              Không dùng dược liệu &amp; thổi nến
             </button>
           </div>
 
@@ -244,20 +245,20 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
       {mode === 'table' && (
         <section className="night-content table-content">
           <div className="screen-title">
-            <span>SƠ ĐỒ BÀN TRÒN TỰ ĐỘNG</span>
-            <h1>Định vị ghế ngồi người chơi</h1>
+            <span>CHIẾU ĐÁ HỘI ĐỒNG</span>
+            <h1>Định vị chỗ ngồi thôn dân</h1>
           </div>
-          <svg className="seat-table" viewBox="0 0 280 280" role="img" aria-label={`Sơ đồ bàn tròn ${seats} ghế`}>
-            {/* Center orbital radar */}
-            <circle cx="140" cy="140" r="105" fill="none" stroke="rgba(255,255,255,.09)" strokeDasharray="4 4" />
-            <circle cx="140" cy="140" r="50" fill="none" stroke="rgba(255,255,255,.04)" />
+          <svg className="seat-table" viewBox="0 0 280 280" role="img" aria-label={`Sơ đồ chiếu đá ${seats} ghế`}>
+            {/* Outer stone circle ritual ring */}
+            <circle cx="140" cy="140" r="105" fill="none" stroke="rgba(201,134,56,.18)" strokeDasharray="3 5" />
+            <circle cx="140" cy="140" r="50" fill="none" stroke="rgba(237,231,220,.06)" />
             
-            {/* Center host device */}
-            <rect x="120" y="112" width="40" height="56" rx="6" fill="#090a0d" stroke="#f59e0b" strokeWidth="1.5" />
-            <circle cx="140" cy="136" r="4" fill="#f59e0b" />
-            <text x="140" y="156" textAnchor="middle" fill="#f59e0b" fontSize="7.5" fontWeight="700">MÁY BÀN</text>
+            {/* Center host altar device */}
+            <rect x="118" y="110" width="44" height="60" rx="6" fill="#13161d" stroke="#c98638" strokeWidth="1.5" />
+            <circle cx="140" cy="134" r="4" fill="#c98638" />
+            <text x="140" y="156" textAnchor="middle" fill="#ede7dc" fontSize="7.5" fontWeight="700" letterSpacing="0.05em">LOA BÀN</text>
             
-            {/* Player seats */}
+            {/* Player seat nodes */}
             {seatPositions.map(({ x, y, index }) => (
               <g key={index} className="seat-node">
                 <rect
@@ -266,15 +267,15 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                   width="56"
                   height="22"
                   rx="4"
-                  fill="#0d1017"
-                  stroke={index === 0 ? '#f59e0b' : 'rgba(255,255,255,.14)'}
+                  fill="#141720"
+                  stroke={index === 0 ? '#c98638' : 'rgba(237,231,220,.16)'}
                   strokeWidth={index === 0 ? '1.5' : '1'}
                 />
                 <text
                   x={x}
                   y={y + 3}
                   textAnchor="middle"
-                  fill={index === 0 ? '#f59e0b' : '#d4d4d8'}
+                  fill={index === 0 ? '#c98638' : '#ede7dc'}
                   fontSize="8.5"
                   fontWeight="600"
                 >
@@ -284,8 +285,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
             ))}
           </svg>
 
-          <div className="seat-count" aria-label="Số ghế bàn">
-            <span>SỐ GHẾ BÀN:</span>
+          <div className="seat-count" aria-label="Số chỗ ngồi">
+            <span>SỐ CHỖ NGỒI:</span>
             {[6, 8, 10, 12].map((count) => (
               <button
                 type="button"
@@ -304,16 +305,16 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
             className="next-phase-button"
             onClick={() => onNavigate?.('day')}
           >
-            <span>Trời sáng · Tiếp tục sang pha ngày</span>
-            <span aria-hidden="true">→</span>
+            <span>Trời sáng · Đánh mõ mở ngày</span>
+            <span aria-hidden="true">⟶</span>
           </button>
         </section>
       )}
 
       <footer className="screen-footer night-footer">
-        <span>ZERO-GLARE OLED SYSTEM</span>
+        <span>TĨNH LẶNG TUYỆT ĐỐI</span>
         <span>•</span>
-        <span>BẢO MẬT BAN ĐÊM TUYỆT ĐỐI</span>
+        <span>PHONG ẤN BẢO MẬT BAN ĐÊM</span>
       </footer>
     </main>
   );

@@ -2,28 +2,51 @@
 
 :root {
   font-family: "Be Vietnam Pro", Inter, system-ui, sans-serif;
-  color: #f4f3ef;
-  background: #0b0e14;
+  color: #ede7dc;
+  background: #0d0f13;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --bg: #0b0e14;
-  --surface: #161b26;
-  --surface-2: #1e222a;
-  --surface-hover: #222836;
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --muted: #9ca3af;
-  --subtle: #6b7280;
-  --moon: #f59e0b;
-  --moon-glow: rgba(245, 158, 11, 0.28);
-  --danger: #ef4444;
-  --danger-glow: rgba(239, 68, 68, 0.3);
-  --night: #6366f1;
-  --night-glow: rgba(99, 102, 241, 0.3);
-  --vitality: #10b981;
-  --vitality-glow: rgba(16, 185, 129, 0.3);
-  --display: "JetBrains Mono", monospace;
-  --headline: "Space Grotesk", sans-serif;
+
+  /* Dark Folk Horror Palette — Không màu chứng khoán */
+  --bg: #0d0f13;
+  --surface: #15181f;
+  --surface-2: #1c1f28;
+  --surface-hover: #232733;
+  --border: rgba(201, 134, 56, 0.15);
+  --border-strong: rgba(201, 134, 56, 0.32);
+  --border-dark: rgba(255, 255, 255, 0.06);
+
+  /* Parchment text tones */
+  --parchment: #ede7dc;
+  --parchment-muted: #a39b8e;
+  --parchment-subtle: #746e63;
+
+  /* Folk Accents */
+  --blood: #8e1e24; /* Máu khô, sáp đỏ thẫm */
+  --blood-light: #b9373d;
+  --blood-bg: rgba(142, 30, 36, 0.14);
+  --blood-border: rgba(142, 30, 36, 0.45);
+
+  --lantern: #c98638; /* Ánh nến sáp ong, đồng thau cổ */
+  --lantern-light: #e09f53;
+  --lantern-bg: rgba(201, 134, 56, 0.12);
+  --lantern-border: rgba(201, 134, 56, 0.4);
+
+  --forest: #2b583e; /* Rêu rừng sương mù, thảo dược */
+  --forest-light: #3e7b57;
+  --forest-bg: rgba(43, 88, 62, 0.14);
+  --forest-border: rgba(43, 88, 62, 0.42);
+
+  --twilight: #4d476f; /* Sương khói đêm, tím chàm cổ */
+  --twilight-light: #6c6499;
+  --twilight-bg: rgba(77, 71, 111, 0.16);
+  --twilight-border: rgba(77, 71, 111, 0.45);
+
+  /* Typography */
+  --font-title: "Cinzel", "Times New Roman", serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-body: "Be Vietnam Pro", Inter, sans-serif;
+
   color-scheme: dark;
 }
 
@@ -36,9 +59,10 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: var(--bg);
+  color: var(--parchment);
   overflow-x: hidden;
-  selection-background-color: var(--moon);
-  selection-color: #0b0e14;
+  selection-background-color: var(--lantern);
+  selection-color: #0d0f13;
 }
 
 button, input, select {
@@ -55,28 +79,28 @@ button:disabled {
 }
 
 button:focus-visible, input:focus-visible, select:focus-visible {
-  outline: 2px solid var(--moon);
+  outline: 2px solid var(--lantern);
   outline-offset: 2px;
 }
 
-/* Screen transition container */
+/* Screen transition */
 .screen-container {
-  animation: screenFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: screenFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: opacity, transform;
 }
 
 @keyframes screenFadeIn {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.995);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
-/* Modern Atmospheric Floating Demo HUD */
+/* Antique Brass & Leather Floating Moderator Bar */
 .demo-nav-wrapper {
   position: sticky;
   top: 0;
@@ -93,24 +117,24 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 5px 8px;
   border: 1px solid var(--border-strong);
   border-radius: 9999px;
-  background: rgba(11, 14, 20, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.2);
+  background: rgba(18, 20, 26, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 134, 56, 0.2);
   transition: all 0.2s ease;
 }
 
 .demo-nav-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px 0 8px;
-  color: var(--moon);
-  font: 700 10px/1 var(--display);
-  letter-spacing: 0.16em;
+  gap: 7px;
+  padding: 0 10px 0 6px;
+  color: var(--lantern);
+  font: 700 10px/1 var(--font-title);
+  letter-spacing: 0.14em;
   border-right: 1px solid var(--border);
 }
 
@@ -118,9 +142,9 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--moon);
-  box-shadow: 0 0 8px var(--moon);
-  animation: moonPulse 2s infinite ease-in-out;
+  background: var(--lantern);
+  box-shadow: 0 0 6px rgba(201, 134, 56, 0.6);
+  animation: candleFlicker 3s infinite ease-in-out;
 }
 
 .demo-nav-items {
@@ -131,14 +155,14 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 .demo-nav-button {
   position: relative;
-  min-height: 32px;
+  min-height: 30px;
   border: 1px solid transparent;
   border-radius: 9999px;
   padding: 0 12px;
-  color: var(--muted);
+  color: var(--parchment-muted);
   background: transparent;
-  font: 600 11px/1 var(--headline);
-  letter-spacing: 0.03em;
+  font: 600 11.5px/1 var(--font-body);
+  letter-spacing: 0.02em;
   transition: all 0.16s ease;
   display: flex;
   align-items: center;
@@ -146,9 +170,9 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 
 .demo-nav-button kbd {
-  font: 700 9px var(--display);
-  color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.08);
+  font: 700 9px var(--font-serif);
+  color: var(--parchment-subtle);
+  background: rgba(237, 231, 220, 0.06);
   padding: 1px 4px;
   border-radius: 3px;
   display: inline-block;
@@ -156,20 +180,20 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 
 .demo-nav-button:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--parchment);
+  background: rgba(201, 134, 56, 0.08);
 }
 
 .demo-nav-button.active {
   color: #fff;
-  border-color: rgba(245, 158, 11, 0.3);
-  background: rgba(245, 158, 11, 0.12);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.18);
+  border-color: var(--border-strong);
+  background: rgba(201, 134, 56, 0.16);
+  box-shadow: 0 0 10px rgba(201, 134, 56, 0.15);
 }
 
 .demo-nav-button.active kbd {
-  color: var(--moon);
-  background: rgba(245, 158, 11, 0.2);
+  color: var(--lantern);
+  background: rgba(201, 134, 56, 0.25);
 }
 
 body.night-sleep-active .demo-nav-wrapper {
@@ -177,82 +201,42 @@ body.night-sleep-active .demo-nav-wrapper {
 }
 
 /* Atmospheric Animations */
-@keyframes moonPulse {
+@keyframes candleFlicker {
   0%, 100% {
-    transform: scale(1);
     opacity: 0.85;
-    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+    filter: drop-shadow(0 0 4px rgba(201, 134, 56, 0.4));
+  }
+  25% {
+    opacity: 0.65;
+    filter: drop-shadow(0 0 2px rgba(201, 134, 56, 0.25));
   }
   50% {
-    transform: scale(1.05);
-    opacity: 1;
-    filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.7));
+    opacity: 0.95;
+    filter: drop-shadow(0 0 8px rgba(201, 134, 56, 0.55));
+  }
+  75% {
+    opacity: 0.75;
+    filter: drop-shadow(0 0 3px rgba(201, 134, 56, 0.3));
   }
 }
 
-@keyframes stealthBreath {
+@keyframes silentBreathe {
   0%, 100% {
-    opacity: 0.25;
-    transform: scale(0.97);
+    opacity: 0.3;
+    transform: scale(0.98);
   }
   50% {
-    opacity: 0.55;
-    transform: scale(1.03);
+    opacity: 0.6;
+    transform: scale(1.02);
   }
 }
 
-@keyframes wolfHeartbeat {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
-  }
-  20% {
-    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
-  }
-  40% {
-    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
-  }
+@keyframes waxPress {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.96); }
+  100% { transform: scale(1); }
 }
 
-@keyframes soundwaveAnim {
-  0%, 100% {
-    height: 4px;
-  }
-  50% {
-    height: 18px;
-  }
-}
-
-@keyframes shimmerSweep {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-/* Reusable audio soundwave bars */
-.audio-equalizer {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 18px;
-}
-
-.audio-equalizer span {
-  width: 3px;
-  border-radius: 99px;
-  background: var(--night);
-  animation: soundwaveAnim 1.2s ease-in-out infinite;
-}
-
-.audio-equalizer span:nth-child(1) { animation-delay: 0.1s; }
-.audio-equalizer span:nth-child(2) { animation-delay: 0.3s; }
-.audio-equalizer span:nth-child(3) { animation-delay: 0.5s; }
-.audio-equalizer span:nth-child(4) { animation-delay: 0.2s; }
-.audio-equalizer span:nth-child(5) { animation-delay: 0.4s; }
-
-/* Accessible reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

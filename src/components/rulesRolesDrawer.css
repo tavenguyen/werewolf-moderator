@@ -1,0 +1,632 @@
+/* Rules & Roles Slide-over Drawer / Modal */
+.rules-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(8, 10, 14, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: flex-end;
+  animation: drawerFadeIn 0.22s ease-out;
+}
+
+@keyframes drawerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes drawerSlideIn {
+  from {
+    transform: translateX(36px);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.rules-drawer-panel {
+  width: min(100%, 580px);
+  height: 100%;
+  background: var(--surface, #15181f);
+  border-left: 1px solid var(--border-strong, rgba(201, 134, 56, 0.35));
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  animation: drawerSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  color: var(--parchment, #ede7dc);
+  font-family: var(--font-body, "Be Vietnam Pro", sans-serif);
+}
+
+.rules-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border, rgba(201, 134, 56, 0.18));
+  background: #101319;
+  flex: none;
+}
+
+.rules-tab-group {
+  display: flex;
+  gap: 6px;
+  background: #090b0f;
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.15));
+}
+
+.rules-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted, #a39b8e);
+  font: 700 12px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.rules-tab-btn:hover {
+  color: var(--parchment, #ede7dc);
+}
+
+.rules-tab-btn.active {
+  background: #171b24;
+  border-color: rgba(201, 134, 56, 0.4);
+  color: var(--parchment, #ede7dc);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.rules-drawer-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.2));
+  background: #090b0f;
+  color: var(--muted, #a39b8e);
+  font-size: 22px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: none;
+  transition: all 0.16s ease;
+}
+
+.rules-drawer-close:hover {
+  border-color: var(--lantern, #c98638);
+  color: var(--parchment, #ede7dc);
+}
+
+.rules-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Rules Steps */
+.rules-steps-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rules-step-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #101319;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.18));
+}
+
+.step-num-badge {
+  font: 700 20px var(--headline, "Cinzel", serif);
+  color: var(--lantern, #c98638);
+  flex: none;
+}
+
+.rules-step-card strong {
+  display: block;
+  font: 700 14px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.04em;
+  color: var(--parchment, #ede7dc);
+  margin-bottom: 6px;
+}
+
+.rules-step-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted, #a39b8e);
+}
+
+.rules-privacy-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: rgba(201, 134, 56, 0.08);
+  border: 1px solid rgba(201, 134, 56, 0.25);
+  color: var(--lantern, #c98638);
+  font: 500 12px var(--font-body);
+  line-height: 1.5;
+}
+
+/* Roles Codex Toolbar: Search & Quick Filters */
+.roles-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  position: sticky;
+  top: -20px;
+  z-index: 10;
+  background: var(--surface, #15181f);
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--border, rgba(201, 134, 56, 0.15));
+}
+
+.roles-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-height: 44px;
+  border-radius: 6px;
+  background: #0f1218;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.25));
+  transition: border-color 0.18s ease;
+}
+
+.roles-search-box:focus-within {
+  border-color: var(--lantern, #c98638);
+  box-shadow: 0 0 10px rgba(201, 134, 56, 0.2);
+}
+
+.search-icon {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.roles-search-box input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--parchment, #ede7dc);
+  font-size: 13px;
+  outline: none;
+}
+
+.roles-search-box input::placeholder {
+  color: #6e675f;
+}
+
+.search-clear-btn {
+  background: transparent;
+  border: 0;
+  color: var(--muted, #a39b8e);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.roles-filter-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.2));
+  background: #101319;
+  color: var(--muted, #a39b8e);
+  font: 700 11px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.filter-btn:hover {
+  color: var(--parchment, #ede7dc);
+  border-color: rgba(201, 134, 56, 0.4);
+}
+
+.filter-btn.active {
+  background: var(--lantern, #c98638);
+  color: #0b0e14;
+  border-color: var(--lantern, #c98638);
+  box-shadow: 0 2px 8px rgba(201, 134, 56, 0.3);
+}
+
+.filter-btn.side-village.active {
+  background: var(--forest, #2b583e);
+  color: #fff;
+  border-color: var(--forest, #2b583e);
+}
+
+.filter-btn.side-wolf.active {
+  background: var(--blood, #8e1e24);
+  color: #fff;
+  border-color: var(--blood, #8e1e24);
+}
+
+.filter-btn.side-third.active {
+  background: #8a6d4b;
+  color: #fff;
+  border-color: #8a6d4b;
+}
+
+/* Roles List Grid */
+.roles-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.role-practical-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 8px;
+  background: #101319;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.18));
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.role-practical-card:hover {
+  border-color: rgba(201, 134, 56, 0.5);
+  background: #151922;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.role-card-main-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.role-card-symbol-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: rgba(237, 231, 220, 0.05);
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.2));
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  flex: none;
+}
+
+.role-card-headline {
+  flex: 1;
+  min-width: 0;
+}
+
+.role-card-name {
+  display: block;
+  font: 700 14px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.04em;
+  color: var(--parchment, #ede7dc);
+  margin-bottom: 3px;
+}
+
+.role-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-side-tag {
+  font: 700 8.5px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.card-side-tag.side-village {
+  background: rgba(43, 88, 62, 0.35);
+  color: #a3d9bc;
+}
+
+.card-side-tag.side-wolf {
+  background: rgba(142, 30, 36, 0.35);
+  color: #fca5a5;
+}
+
+.card-side-tag.side-third {
+  background: rgba(138, 109, 75, 0.35);
+  color: #e5c99e;
+}
+
+.card-wake-tag {
+  font: 600 9px var(--display, "Cormorant Garamond", serif);
+  font-style: italic;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(237, 231, 220, 0.06);
+  color: var(--muted, #a39b8e);
+}
+
+.role-card-zoom-glyph {
+  font-size: 15px;
+  color: var(--lantern, #c98638);
+  opacity: 0.6;
+  flex: none;
+}
+
+.role-practical-card:hover .role-card-zoom-glyph {
+  opacity: 1;
+}
+
+.role-card-seer-line {
+  font-size: 11.5px;
+  color: var(--muted, #a39b8e);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(237, 231, 220, 0.03);
+  width: fit-content;
+}
+
+.role-card-seer-line b {
+  color: var(--lantern, #c98638);
+}
+
+.role-card-brief {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #a39b8e);
+}
+
+.roles-empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted, #a39b8e);
+  font-size: 13px;
+}
+
+.roles-empty-state button {
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #11141a;
+  color: var(--lantern, #c98638);
+  font: 700 11px var(--headline);
+  cursor: pointer;
+}
+
+/* Zoom-out / Spotlight Role View */
+@keyframes zoomSpotlight {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.role-zoom-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #101319;
+  border: 1.5px solid rgba(201, 134, 56, 0.4);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  animation: zoomSpotlight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.role-zoom-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.role-back-link {
+  background: transparent;
+  border: 0;
+  color: var(--lantern, #c98638);
+  font: 700 12px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.role-back-link:hover {
+  text-decoration: underline;
+}
+
+.role-badge-side {
+  font: 700 9px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.role-badge-side.side-village {
+  background: rgba(43, 88, 62, 0.3);
+  color: #c3e2d1;
+  border: 1px solid rgba(43, 88, 62, 0.6);
+}
+
+.role-badge-side.side-wolf {
+  background: rgba(142, 30, 36, 0.3);
+  color: #fca5a5;
+  border: 1px solid rgba(142, 30, 36, 0.6);
+}
+
+.role-badge-side.side-third {
+  background: rgba(138, 109, 75, 0.3);
+  color: #f5dfba;
+  border: 1px solid rgba(138, 109, 75, 0.6);
+}
+
+.role-zoom-header-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.role-zoom-emblem {
+  width: 76px;
+  height: 76px;
+  border-radius: 16px;
+  background: #151922;
+  border: 2px solid var(--lantern, #c98638);
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.6);
+}
+
+.role-zoom-emblem span {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.role-zoom-header-block h2 {
+  margin: 0;
+  font: 800 22px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.06em;
+  color: var(--parchment, #ede7dc);
+}
+
+.role-zoom-quote {
+  margin: 4px 0 0;
+  font: 13px var(--display, "Cormorant Garamond", serif);
+  font-style: italic;
+  color: var(--lantern, #c98638);
+}
+
+/* 4 Battlefield Details Grid */
+.role-battlefield-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.battlefield-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #0b0d12;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.16));
+}
+
+.battlefield-span2 {
+  grid-column: span 2;
+}
+
+.battlefield-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.battlefield-title strong {
+  font: 700 11px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.05em;
+  color: var(--lantern, #c98638);
+}
+
+.battlefield-value {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--muted, #a39b8e);
+}
+
+.battlefield-value b {
+  color: var(--parchment, #ede7dc);
+}
+
+.seer-highlight {
+  color: #fca5a5 !important;
+}
+
+.wake-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(201, 134, 56, 0.12);
+  color: var(--lantern, #c98638);
+  font: 700 11px var(--headline, "Cinzel", serif);
+  width: fit-content;
+}
+
+.battlefield-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--parchment, #ede7dc);
+}
+
+.battlefield-rule-alert {
+  border-color: rgba(142, 30, 36, 0.4);
+  background: rgba(142, 30, 36, 0.08);
+}
+
+.battlefield-rule-alert strong {
+  color: #fca5a5;
+}
+
+.battlefield-tip {
+  border-color: rgba(201, 134, 56, 0.35);
+  background: rgba(201, 134, 56, 0.06);
+}
+
+.role-zoom-dismiss-btn {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border, rgba(201, 134, 56, 0.3));
+  border-radius: 6px;
+  background: #171c26;
+  color: var(--parchment, #ede7dc);
+  font: 700 12px var(--headline, "Cinzel", serif);
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.role-zoom-dismiss-btn:hover {
+  border-color: var(--lantern, #c98638);
+  background: #1e2432;
+}
+
+@media (max-width: 580px) {
+  .rules-drawer-panel {
+    width: 100%;
+  }
+  .role-battlefield-grid {
+    grid-template-columns: 1fr;
+  }
+  .battlefield-span2 {
+    grid-column: span 1;
+  }
+}

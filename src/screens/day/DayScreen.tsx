@@ -3,7 +3,10 @@ import type { ScreenName } from '../../navigation';
 import { formatTime } from '../../utils/formatTime';
 import './day.css';
 
-type DayScreenProps = { onNavigate?: (screen: ScreenName) => void };
+type DayScreenProps = {
+  onNavigate?: (screen: ScreenName) => void;
+  onOpenRules?: (tab?: 'rules' | 'roles') => void;
+};
 
 const initialPlayers = [
   { name: 'Minh Khang', alive: true, mayor: true },
@@ -14,7 +17,7 @@ const initialPlayers = [
   { name: 'Quỳnh Như', alive: true },
 ];
 
-export default function DayScreen({ onNavigate }: DayScreenProps) {
+export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
   const [totalTime] = useState(180);
   const [remaining, setRemaining] = useState(165);
   const [lockRemaining, setLockRemaining] = useState(60);
@@ -57,43 +60,54 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
     <main className="day-screen app-page">
       <header className="screen-header day-header">
         <div className="phase-label">
-          <span className="status-dot day-dot" />
-          <span>NGÀY 2 <b>•</b> THẢO LUẬN DÂN LÀNG</span>
+          <span className="day-candle-flame" aria-hidden="true">☀️</span>
+          <span>TRỜI SÁNG · NGÀY II <b>•</b> THẢO LUẬN DÂN LÀNG</span>
         </div>
-        <nav aria-label="Chế độ xem ban ngày" className="day-mode-switch">
+        <div className="day-header-actions">
+          <nav aria-label="Chế độ xem ban ngày" className="day-mode-switch">
+            <button
+              type="button"
+              aria-pressed={mode === 'shared'}
+              onClick={() => setMode('shared')}
+              className={mode === 'shared' ? 'day-mode-active' : ''}
+            >
+              CHIẾU CHUNG
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'player'}
+              onClick={() => setMode('player')}
+              className={mode === 'player' ? 'day-mode-active' : ''}
+            >
+              PHIẾU KÍN
+            </button>
+          </nav>
           <button
             type="button"
-            aria-pressed={mode === 'shared'}
-            onClick={() => setMode('shared')}
-            className={mode === 'shared' ? 'day-mode-active' : ''}
+            className="day-rules-button"
+            onClick={() => onOpenRules?.('roles')}
+            title="Tra cứu luật làng và 10 vai trò thực chiến"
           >
-            BÀN CHUNG
+            <span aria-hidden="true">📜</span>
+            <span>Luật &amp; Vai trò</span>
           </button>
-          <button
-            type="button"
-            aria-pressed={mode === 'player'}
-            onClick={() => setMode('player')}
-            className={mode === 'player' ? 'day-mode-active' : ''}
-          >
-            NGƯỜI CHƠI
-          </button>
-        </nav>
+        </div>
       </header>
 
       <div className="day-main">
-        {/* Circular Countdown Clock */}
+        {/* Antique Sundial Countdown Clock */}
         <section className={`day-clock-card ${isUrgent ? 'is-urgent' : ''}`}>
-          <span className="eyebrow">ĐỒNG HỒ THẢO LUẬN TỰ DO</span>
+          <span className="eyebrow">ĐỒNG HỒ NẮNG • THẢO LUẬN DÂN LÀNG</span>
           
           <div className="day-clock-graphic">
             <svg className="timer-svg" viewBox="0 0 160 160">
-              {/* Background ring */}
+              {/* Background antique brass ring */}
               <circle
                 cx="80"
                 cy="80"
                 r={radius}
                 className="timer-ring-bg"
-                strokeWidth="7"
+                strokeWidth="6"
                 fill="none"
               />
               {/* Progress ring */}
@@ -102,7 +116,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
                 cy="80"
                 r={radius}
                 className={`timer-ring-progress ${isUrgent ? 'urgent-ring' : ''}`}
-                strokeWidth="7"
+                strokeWidth="6"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
@@ -111,7 +125,9 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
             </svg>
             <div className="clock-digits-wrap">
               <div className="day-clock" aria-live="off">{formatTime(remaining)}</div>
-              <span className="clock-status-tag">{paused ? 'TẠM DỪNG' : isUrgent ? 'SẮP HẾT GIỜ' : 'ĐANG ĐẾM'}</span>
+              <span className="clock-status-tag">
+                {paused ? 'TẠM DỪNG' : isUrgent ? 'HOÀNG HÔN BUÔNG' : 'ĐANG TRÔI'}
+              </span>
             </div>
           </div>
 
@@ -119,9 +135,9 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
             <span className="lock-icon" aria-hidden="true">{unlocked ? '🔓' : '🔒'}</span>
             <span>
               {unlocked ? (
-                <strong className="unlocked-text">BIỂU QUYẾT ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU VOTE</strong>
+                <strong className="unlocked-text">BIỂU QUYẾT ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU VOTE TREO CỔ</strong>
               ) : (
-                <>KHÓA BIỂU QUYẾT: <strong>{lockRemaining}S TRANH LUẬN ĐẦU</strong></>
+                <>KHÓA BIỂU QUYẾT: <strong>{lockRemaining}S ĐÀM ĐẠO ĐẦU</strong></>
               )}
             </span>
           </div>
@@ -146,24 +162,21 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
           </div>
         </section>
 
-        {/* Narrator Card with Live Audio Waves */}
+        {/* Narrator Scroll Card */}
         <section className="narration-card">
           <div className="narration-avatar" aria-hidden="true">
-            <span className="narration-icon">🎙️</span>
+            <span className="narration-icon">📜</span>
           </div>
           <div className="narration-body">
             <div className="narration-title-bar">
-              <strong>LỜI THOẠI QUẢN TRÒ TỰ ĐỘNG</strong>
-              <div className="audio-equalizer" title="Quản trò đang phát giọng nói">
-                <span />
-                <span />
-                <span />
-                <span />
-                <span />
+              <strong>CỔ THƯ QUẢN TRÒ BÁO HIỆU</strong>
+              <div className="narration-sigil" title="Lời quản trò đang được cất lên">
+                <span className="sigil-dot" />
+                <small>PHÁT LOA TRUNG TÂM</small>
               </div>
             </div>
             <p>
-              “Trời đã sáng, đêm qua Thợ Săn Bảo Trâm đã tử vong. Cả làng có thời gian thảo luận tự do trước khi tiến hành bỏ phiếu treo cổ.”
+              “Trời đã sáng, đêm qua Thợ Săn Bảo Trâm đã tử vong. Cả làng có thời gian thảo luận tìm ra kẻ khả nghi trước khi tiến hành phán quyết treo cổ.”
             </p>
           </div>
           <button
@@ -172,7 +185,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
             onClick={() => setIsNarrating((v) => !v)}
             title="Nghe lại lời dẫn"
           >
-            {isNarrating ? 'Đang phát' : 'Phát lại'}
+            {isNarrating ? 'Đang phát' : 'Nghe lại'}
           </button>
         </section>
 
@@ -181,7 +194,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
             <div className="day-panel-heading">
               <div className="heading-group">
                 <span className="heading-dot" />
-                <strong>TRẠNG THÁI BÀN ĐẤU</strong>
+                <strong>CHIẾU BÀN THÔN DÂN</strong>
               </div>
               <span className="player-stats">
                 <b>{livingPlayers.length}</b> Sống · <b>{initialPlayers.length - livingPlayers.length}</b> Chết
@@ -205,7 +218,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
                     <b className="mayor-badge">👑 TRƯỞNG LÀNG</b>
                   ) : (
                     <span className={player.alive ? 'alive-label' : 'dead-label'}>
-                      {player.alive ? 'SỐNG' : '☠ TỬ VONG'}
+                      {player.alive ? 'CÒN SỐNG' : '☠ ĐÃ CHẾT'}
                     </span>
                   )}
                 </div>
@@ -217,7 +230,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
             <div className="day-panel-heading">
               <div className="heading-group">
                 <span className="heading-dot" />
-                <strong>BỎ PHIẾU BÍ MẬT CỦA BẠN</strong>
+                <strong>BỎ PHIẾU TREO CỔ KÍN</strong>
               </div>
               <span className={unlocked ? 'unlocked-label' : 'locked-label'}>
                 {unlocked ? '✓ ĐÃ MỞ PHIẾU' : `🔒 KHÓA ${lockRemaining}S`}
@@ -263,13 +276,13 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
                 onClick={() => {
                   if (selected && !voteSubmitted) {
                     setVoteSubmitted(true);
-                    setNotice(`✓ Đã ghi nhận phiếu vote của bạn: ${selected}`);
+                    setNotice(`✓ Đã niêm ấn phiếu vote của bạn: ${selected}`);
                   }
                 }}
               >
                 <span>
                   {voteSubmitted
-                    ? `✓ ĐÃ GỬI PHIẾU VOTE (${selected})`
+                    ? `✓ ĐÃ NIÊM ẤN PHIẾU VOTE (${selected})`
                     : selected
                     ? `BỎ PHIẾU TREO CỔ: ${selected}`
                     : 'CHỌN MỤC TIÊU ĐỂ GỬI PHIẾU'}
@@ -283,7 +296,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
       <footer className="day-bottom-bar">
         {confirmFinalize ? (
           <div className="finalize-confirm" role="group" aria-label="Xác nhận chốt kết quả">
-            <span className="confirm-text">Xác nhận hoàn tất thảo luận &amp; lật mở kết quả ván?</span>
+            <span className="confirm-text">Xác nhận hoàn tất phán quyết &amp; lật bài giải mã ván đấu?</span>
             <div className="confirm-btns">
               <button type="button" className="confirm-cancel" onClick={() => setConfirmFinalize(false)}>
                 Hủy
@@ -303,7 +316,7 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
             <span className="gavel-icon" aria-hidden="true">⚒</span>
             <span>
               {unlocked
-                ? 'CHỐT KẾT QUẢ BIỂU QUYẾT TREO CỔ'
+                ? 'CHỐT PHÁN QUYẾT BIỂU QUYẾT TREO CỔ'
                 : `KHÓA CHỐT VOTE (${lockRemaining}S ĐẦU)`}
             </span>
           </button>

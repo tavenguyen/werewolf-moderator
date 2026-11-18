@@ -3,7 +3,10 @@ import type { ScreenName } from '../../navigation';
 import { formatTime } from '../../utils/formatTime';
 import './host.css';
 
-type HostScreenProps = { onNavigate?: (screen: ScreenName) => void };
+type HostScreenProps = {
+  onNavigate?: (screen: ScreenName) => void;
+  onOpenRules?: (tab?: 'rules' | 'roles') => void;
+};
 
 const players = [
   ['Minh Khang', 'Trưởng làng', true],
@@ -14,7 +17,7 @@ const players = [
   ['Quỳnh Như', 'Sống', true],
 ] as const;
 
-export default function HostScreen({ onNavigate }: HostScreenProps) {
+export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps) {
   const [remaining, setRemaining] = useState(165);
   const [lockRemaining, setLockRemaining] = useState(60);
   const [paused, setPaused] = useState(false);
@@ -70,25 +73,33 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
     <main className="host-screen">
       <header className="host-header">
         <div className="host-brand">
-          <span className="host-led" aria-hidden="true" />
+          <span className="host-candle-flame" aria-hidden="true">🕯️</span>
           <div>
             <h1>
-              BẢNG ĐIỀU PHỐI TRUNG TÂM <span>• PHÒNG #7290</span>
+              BÀN ĐIỀU PHỐI QUẢN TRÒ <span>• PHÒNG #7290</span>
             </h1>
-            <p>Màn hình công khai đặt giữa bàn hoặc chiếu Smart TV / iPad</p>
+            <p>Màn hình trung tâm đặt giữa bàn hoặc chiếu Smart TV / iPad</p>
           </div>
         </div>
         <div className="host-header-actions">
+          <button
+            className="host-button"
+            onClick={() => onOpenRules?.('roles')}
+            title="Tra cứu luật làng và 10 vai trò thực chiến"
+          >
+            <span aria-hidden="true">📜</span>
+            <span>Luật &amp; Vai trò</span>
+          </button>
           <button ref={qrTrigger} className="host-button" onClick={() => setQrOpen(true)} aria-haspopup="dialog">
             <span aria-hidden="true">▦</span>
-            <span>QR Kết nối lại</span>
+            <span>Mật Mã QR</span>
           </button>
           <button className="host-button" onClick={toggleFullscreen} title="Bật/Tắt toàn màn hình">
             <span aria-hidden="true">⛶</span>
             <span>Toàn màn hình</span>
           </button>
           <button className="host-mobile-nav" onClick={() => onNavigate?.('day')}>
-            Pha ngày
+            Trời sáng
           </button>
         </div>
       </header>
@@ -97,7 +108,7 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
         {/* Left Column: Player Roster */}
         <aside className="host-panel host-roster">
           <div className="host-panel-title">
-            <strong>DANH SÁCH BÀN ĐẤU</strong>
+            <strong>CHIẾU BÀN DÂN LÀNG</strong>
             <span className="host-alive-tag">{livingCount} SỐNG · {deadCount} CHẾT</span>
           </div>
 
@@ -123,7 +134,7 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
           <div className="host-emergency-wrap">
             {!emergencyOpen ? (
               <button className="host-emergency" onClick={() => setEmergencyOpen(true)}>
-                <span>LOẠI KHẨN CẤP (RỜI BÀN)</span>
+                <span>TRỤC XUẤT KHẨN CẤP (RỜI BÀN)</span>
                 <span aria-hidden="true">⚠️</span>
               </button>
             ) : (
@@ -154,7 +165,7 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
         <section className={`host-panel host-main-panel ${isUrgent ? 'host-urgent' : ''}`}>
           <div className="host-panel-title host-center-title">
             <div className="host-title-left">
-              <span className="phase-badge">NGÀY 2</span>
+              <span className="phase-badge">TRỜI SÁNG · NGÀY II</span>
               <strong>ĐỒNG HỒ BIỂU QUYẾT TOÀN BÀN</strong>
             </div>
             <span className="host-stable">
@@ -179,17 +190,14 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
 
           <div className="host-script">
             <div className="host-script-icon-wrap" aria-hidden="true">
-              <span className="host-script-icon">🎙️</span>
+              <span className="host-script-icon">📜</span>
             </div>
             <div className="host-script-text">
               <div className="host-script-header">
-                <strong>LỜI THOẠI QUẢN TRÒ (PHÁT RA LOA TRUNG TÂM):</strong>
-                <div className="audio-equalizer">
-                  <span />
-                  <span />
-                  <span />
-                  <span />
-                  <span />
+                <strong>LỜI RĂN QUẢN TRÒ (PHÁT LOA TRUNG TÂM):</strong>
+                <div className="host-script-ember" title="Loa đang phát giọng nói">
+                  <span className="ember-dot" />
+                  <small>ĐANG PHÁT</small>
                 </div>
               </div>
               <p>“Trời sáng, đêm qua Thợ Săn Bảo Trâm đã hy sinh. Cả làng có thời gian tìm ra kẻ khả nghi trước khi biểu quyết.”</p>
@@ -255,8 +263,8 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
         {/* Right Column: Audio & Privacy Guard */}
         <aside className="host-panel host-audio-panel">
           <div className="host-panel-title">
-            <strong>BẢNG ĐIỀU CHỈNH ÂM THANH</strong>
-            <span className="audio-badge">DUCKING AUTO</span>
+            <strong>ÂM HƯỞNG &amp; BẢO MẬT</strong>
+            <span className="audio-badge">TỰ HẠ NHẠC</span>
           </div>
 
           <div className="host-slider-group">
@@ -323,7 +331,7 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="host-modal-heading">
-              <h2 id="host-qr-title">MÃ KẾT NỐI BÀN ĐẤU</h2>
+              <h2 id="host-qr-title">MẬT MÃ KẾT NỐI BÀN ĐẤU</h2>
               <button
                 ref={qrClose}
                 onClick={() => {
@@ -337,20 +345,19 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
             </div>
 
             <div className="host-qr-wrap">
-              <div className="qr-scan-line" aria-hidden="true" />
               <svg viewBox="0 0 80 80" className="host-qr-svg" aria-label="Mã QR kết nối phòng 7290">
-                <rect width="80" height="80" fill="#080a0e" rx="4" />
-                <rect x="6" y="6" width="20" height="20" fill="none" stroke="#f59e0b" strokeWidth="3" rx="2" />
-                <rect x="11" y="11" width="10" height="10" fill="#f59e0b" rx="1" />
-                <rect x="54" y="6" width="20" height="20" fill="none" stroke="#f59e0b" strokeWidth="3" rx="2" />
-                <rect x="59" y="11" width="10" height="10" fill="#f59e0b" rx="1" />
-                <rect x="6" y="54" width="20" height="20" fill="none" stroke="#f59e0b" strokeWidth="3" rx="2" />
-                <rect x="11" y="59" width="10" height="10" fill="#f59e0b" rx="1" />
-                <rect x="32" y="8" width="4" height="4" fill="#a1a1aa" />
-                <rect x="42" y="8" width="4" height="4" fill="#a1a1aa" />
-                <rect x="36" y="16" width="4" height="4" fill="#f59e0b" />
-                <rect x="36" y="36" width="8" height="8" fill="#f59e0b" rx="2" />
-                <rect x="36" y="62" width="4" height="4" fill="#a1a1aa" />
+                <rect width="80" height="80" fill="#13161c" rx="4" />
+                <rect x="6" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                <rect x="11" y="11" width="10" height="10" fill="#c98638" rx="1" />
+                <rect x="54" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                <rect x="59" y="11" width="10" height="10" fill="#c98638" rx="1" />
+                <rect x="6" y="54" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                <rect x="11" y="59" width="10" height="10" fill="#c98638" rx="1" />
+                <rect x="32" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="42" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="36" y="16" width="4" height="4" fill="#c98638" />
+                <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="2" />
+                <rect x="36" y="62" width="4" height="4" fill="#ede7dc" opacity="0.8" />
               </svg>
             </div>
 

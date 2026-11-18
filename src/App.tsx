@@ -5,6 +5,7 @@ import NightScreen from './screens/night/NightScreen';
 import DayScreen from './screens/day/DayScreen';
 import HostScreen from './screens/host/HostScreen';
 import SummaryScreen from './screens/summary/SummaryScreen';
+import RulesAndRolesDrawer from './components/RulesAndRolesDrawer';
 import { defaultLobbyDemoState, type LobbyDemoState } from './screens/lobby/lobbyTypes';
 import type { ScreenName } from './navigation';
 
@@ -22,7 +23,14 @@ const screenLabels: Record<ScreenName, { title: string; keyNum: string }> = {
 export default function App() {
   const [screen, setScreen] = useState<ScreenName>('home');
   const [lobbyState, setLobbyState] = useState<LobbyDemoState>(defaultLobbyDemoState);
+  const [rulesDrawerOpen, setRulesDrawerOpen] = useState(false);
+  const [rulesDrawerTab, setRulesDrawerTab] = useState<'rules' | 'roles'>('rules');
   const navigate = setScreen;
+
+  const handleOpenRules = (tab: 'rules' | 'roles' = 'rules') => {
+    setRulesDrawerTab(tab);
+    setRulesDrawerOpen(true);
+  };
 
   // Handle sanitized host nickname setup from home screen
   const handleHostJoined = (sanitizedName: string) => {
@@ -45,6 +53,11 @@ export default function App() {
         return;
       }
 
+      // If drawer is open, do not trigger numeric shortcuts
+      if (rulesDrawerOpen) {
+        return;
+      }
+
       // Security & Role privacy: Do not allow accidental screen jumping out of pitch-black Night mode
       if (screen === 'night') {
         return;
@@ -58,7 +71,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen]);
+  }, [screen, rulesDrawerOpen]);
 
   return (
     <>
@@ -86,20 +99,39 @@ export default function App() {
 
       <div key={screen} className="screen-container">
         {screen === 'home' && (
-          <HomeScreen onNavigate={navigate} onPlayerJoined={handleHostJoined} />
+          <HomeScreen
+            onNavigate={navigate}
+            onPlayerJoined={handleHostJoined}
+            onOpenRules={handleOpenRules}
+          />
         )}
         {screen === 'lobby' && (
           <LobbyScreen
             onNavigate={navigate}
             initialState={lobbyState}
             onStateChange={setLobbyState}
+            onOpenRules={handleOpenRules}
           />
         )}
-        {screen === 'night' && <NightScreen onNavigate={navigate} />}
-        {screen === 'day' && <DayScreen onNavigate={navigate} />}
-        {screen === 'host' && <HostScreen onNavigate={navigate} />}
-        {screen === 'summary' && <SummaryScreen onNavigate={navigate} />}
+        {screen === 'night' && (
+          <NightScreen onNavigate={navigate} onOpenRules={handleOpenRules} />
+        )}
+        {screen === 'day' && (
+          <DayScreen onNavigate={navigate} onOpenRules={handleOpenRules} />
+        )}
+        {screen === 'host' && (
+          <HostScreen onNavigate={navigate} onOpenRules={handleOpenRules} />
+        )}
+        {screen === 'summary' && (
+          <SummaryScreen onNavigate={navigate} onOpenRules={handleOpenRules} />
+        )}
       </div>
+
+      <RulesAndRolesDrawer
+        isOpen={rulesDrawerOpen}
+        onClose={() => setRulesDrawerOpen(false)}
+        initialTab={rulesDrawerTab}
+      />
     </>
   );
 }

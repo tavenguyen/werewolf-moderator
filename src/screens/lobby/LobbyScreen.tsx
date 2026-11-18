@@ -3,12 +3,15 @@ import { defaultLobbyDemoState, type LobbyDemoState, type LobbyPlayer } from './
 import type { ScreenName } from '../../navigation';
 import './lobby.css';
 
-type Props = { onNavigate?: (screen: ScreenName) => void };
+type Props = {
+  onNavigate?: (screen: ScreenName) => void;
+  onOpenRules?: (tab?: 'rules' | 'roles') => void;
+};
 const waitingNames = ['Quỳnh Như', 'Văn Hậu', 'Thúy Kiều', 'Gia Bảo', 'Tường Vy'];
 
 type LobbyProps = Props & { initialState?: LobbyDemoState; onStateChange?: (state: LobbyDemoState) => void };
 
-export default function LobbyScreen({ onNavigate, initialState, onStateChange }: LobbyProps) {
+export default function LobbyScreen({ onNavigate, initialState, onStateChange, onOpenRules }: LobbyProps) {
   const [players, setPlayers] = useState<LobbyPlayer[]>(initialState?.players ?? defaultLobbyDemoState.players);
   const [preset, setPreset] = useState<LobbyDemoState['preset']>(initialState?.preset ?? 'basic');
   const [advanced, setAdvanced] = useState(initialState?.advanced ?? false);
@@ -30,7 +33,7 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
     const nextIndex = (players.length - defaultLobbyDemoState.players.length) % waitingNames.length;
     const name = waitingNames[Math.max(0, nextIndex)];
     setPlayers((current) => [...current, { name }]);
-    setNotice(`${name} vừa tham gia bàn.`);
+    setNotice(`${name} vừa thắp nến vào chiếu họp.`);
   };
 
   const removeLastPlayer = () => {
@@ -38,7 +41,7 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
     const last = players[players.length - 1];
     if (last.host) return;
     setPlayers((current) => current.slice(0, -1));
-    setNotice(`Đã xóa ${last.name} khỏi bàn.`);
+    setNotice(`Đã mời ${last.name} rời chiếu.`);
   };
 
   const toggleSetting = (key: keyof typeof settings) => setSettings((current) => ({ ...current, [key]: !current[key] }));
@@ -46,21 +49,29 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
   return (
     <div className="lobby-page">
       <header className="lobby-header">
-        <button className="lobby-back" onClick={() => onNavigate?.('home')} aria-label="Quay về trang chủ" title="Về trang chủ">
-          ←
+        <button className="lobby-back" onClick={() => onNavigate?.('home')} aria-label="Quay về cổng làng" title="Về trang chủ">
+          ⟵
         </button>
         <div className="lobby-heading">
-          <span className="lobby-led" />
+          <span className="lobby-candle-flame" aria-hidden="true">🕯️</span>
           <div>
             <h1>
-              Lobby điều phối <span>• Phòng #7290</span>
+              ĐIỂM DANH THÔN BẢN <span>• PHÒNG #{7290}</span>
             </h1>
-            <p>Sẵn sàng kết nối thiết bị · Bảng điều khiển quản trò</p>
+            <p>Tiếng mõ làng báo hiệu giờ tụ họp · Chờ đủ người trước khi đêm buông</p>
           </div>
         </div>
         <div className="lobby-header-actions">
+          <button
+            className="lobby-link-button"
+            onClick={() => onOpenRules?.('roles')}
+            title="Tra cứu luật làng và 10 vai trò thực chiến"
+          >
+            <span aria-hidden="true">📜</span>
+            <span>Luật &amp; Vai trò</span>
+          </button>
           <button className="lobby-link-button" onClick={() => onNavigate?.('host')}>
-            <span>Mở bảng Host</span>
+            <span>Bàn Quản Trò</span>
             <span aria-hidden="true">↗</span>
           </button>
         </div>
@@ -70,57 +81,57 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
         <div className="lobby-left-column">
           <section className="lobby-card lobby-room-card">
             <div className="lobby-room-details">
-              <span className="lobby-kicker">MÃ PHÒNG TRỰC TIẾP</span>
+              <span className="lobby-kicker">MẬT TỰ ĐIỂM DANH</span>
               <strong className="lobby-room-code">7290</strong>
-              <p>Người chơi quét QR hoặc nhập mã 4 số để vào bàn tức thì</p>
+              <p>Thôn dân quét ấn mã hoặc nhập 4 số để vào chiếu họp</p>
             </div>
             
-            <div className="lobby-qr-container" title="Mã QR vào phòng">
-              <div className="qr-scan-line" aria-hidden="true" />
+            <div className="lobby-qr-container" title="Ấn mã vào phòng 7290">
+              <div className="qr-woodcut-frame" aria-hidden="true" />
               <svg viewBox="0 0 80 80" className="lobby-qr-svg" aria-label="Mã QR kết nối phòng 7290">
-                {/* Background matrix pattern */}
-                <rect width="80" height="80" fill="#080a0e" rx="4" />
+                {/* Woodcut parchment background */}
+                <rect width="80" height="80" fill="#13161c" rx="4" />
                 {/* Corner anchors */}
-                <rect x="6" y="6" width="20" height="20" fill="none" stroke="#f59e0b" strokeWidth="3" rx="2" />
-                <rect x="11" y="11" width="10" height="10" fill="#f59e0b" rx="1" />
+                <rect x="6" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                <rect x="11" y="11" width="10" height="10" fill="#c98638" rx="1" />
                 
-                <rect x="54" y="6" width="20" height="20" fill="none" stroke="#f59e0b" strokeWidth="3" rx="2" />
-                <rect x="59" y="11" width="10" height="10" fill="#f59e0b" rx="1" />
+                <rect x="54" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                <rect x="59" y="11" width="10" height="10" fill="#c98638" rx="1" />
                 
-                <rect x="6" y="54" width="20" height="20" fill="none" stroke="#f59e0b" strokeWidth="3" rx="2" />
-                <rect x="11" y="59" width="10" height="10" fill="#f59e0b" rx="1" />
+                <rect x="6" y="54" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                <rect x="11" y="59" width="10" height="10" fill="#c98638" rx="1" />
                 
-                {/* Stylized QR dots */}
-                <rect x="32" y="8" width="4" height="4" fill="#a1a1aa" />
-                <rect x="42" y="8" width="4" height="4" fill="#a1a1aa" />
-                <rect x="36" y="16" width="4" height="4" fill="#f59e0b" />
-                <rect x="32" y="24" width="4" height="4" fill="#a1a1aa" />
-                <rect x="44" y="24" width="4" height="4" fill="#a1a1aa" />
+                {/* Stylized QR ink marks */}
+                <rect x="32" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="42" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="36" y="16" width="4" height="4" fill="#c98638" />
+                <rect x="32" y="24" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="44" y="24" width="4" height="4" fill="#ede7dc" opacity="0.8" />
                 
-                <rect x="8" y="34" width="4" height="4" fill="#a1a1aa" />
-                <rect x="18" y="38" width="4" height="4" fill="#f59e0b" />
-                <rect x="36" y="36" width="8" height="8" fill="#f59e0b" rx="2" />
-                <rect x="58" y="34" width="4" height="4" fill="#a1a1aa" />
-                <rect x="68" y="38" width="4" height="4" fill="#a1a1aa" />
+                <rect x="8" y="34" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="18" y="38" width="4" height="4" fill="#c98638" />
+                <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="2" />
+                <rect x="58" y="34" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="68" y="38" width="4" height="4" fill="#ede7dc" opacity="0.8" />
                 
-                <rect x="32" y="48" width="4" height="4" fill="#a1a1aa" />
-                <rect x="42" y="54" width="4" height="4" fill="#f59e0b" />
-                <rect x="36" y="62" width="4" height="4" fill="#a1a1aa" />
-                <rect x="54" y="58" width="6" height="6" fill="#a1a1aa" />
-                <rect x="66" y="66" width="6" height="6" fill="#f59e0b" />
+                <rect x="32" y="48" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="42" y="54" width="4" height="4" fill="#c98638" />
+                <rect x="36" y="62" width="4" height="4" fill="#ede7dc" opacity="0.8" />
+                <rect x="54" y="58" width="6" height="6" fill="#ede7dc" opacity="0.8" />
+                <rect x="66" y="66" width="6" height="6" fill="#c98638" />
               </svg>
-              <span className="qr-badge">QUÉT QR VÀO BÀN</span>
+              <span className="qr-badge">ẤN MÃ THÔN</span>
             </div>
           </section>
 
           <section className="lobby-card lobby-players-card">
             <div className="lobby-section-title">
               <div>
-                <h2>Danh sách người chơi</h2>
+                <h2>Danh sách thôn dân</h2>
                 <span className="lobby-count">{players.length}/{maxPlayers}</span>
               </div>
               <span className={ready ? 'lobby-ready' : 'lobby-needs'}>
-                {ready ? '✓ ĐỦ ĐIỀU KIỆN' : `CẦN THÊM ${6 - players.length} NGƯỜI`}
+                {ready ? '✓ ĐỦ ĐIỀU KIỆN KHAI MÀN' : `CẦN THÊM ${6 - players.length} NGƯỜI`}
               </span>
             </div>
 
@@ -129,13 +140,13 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
                 <div className={`lobby-player ${player.host ? 'host-player' : ''}`} key={`${player.name}-${index}`}>
                   <div className="player-meta">
                     <span className="player-seat">#{String(index + 1).padStart(2, '0')}</span>
-                    <i className="lobby-online-dot" />
+                    <i className="lobby-candle-dot" />
                     <span className="player-name">{player.name}</span>
                   </div>
                   {player.host ? (
-                    <b className="badge-host">HOST 👑</b>
+                    <b className="badge-host">TRƯỞNG THÔN 👑</b>
                   ) : (
-                    <b className="badge-online">ONLINE</b>
+                    <b className="badge-online">CÓ MẶT</b>
                   )}
                 </div>
               ))}
@@ -145,11 +156,11 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
               {players.length < maxPlayers && (
                 <button className="lobby-add-player" onClick={addPlayer}>
                   <span aria-hidden="true">＋</span>
-                  <span>Thêm người chơi demo</span>
+                  <span>Mời thêm thôn dân thử nghiệm</span>
                 </button>
               )}
               {players.length > 5 && (
-                <button className="lobby-remove-player" onClick={removeLastPlayer} title="Xóa người vừa thêm">
+                <button className="lobby-remove-player" onClick={removeLastPlayer} title="Bớt người vừa thêm">
                   <span>− Bớt</span>
                 </button>
               )}
@@ -159,8 +170,8 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
 
             <div className="lobby-balance" aria-label={`${roles.villagers} dân làng, ${roles.specials} chức năng, ${roles.wolves} ma sói`}>
               <div className="lobby-balance-header">
-                <span className="balance-title">THƯỚC CÂN BẰNG THẾ TRẬN</span>
-                <span className="balance-status">{ready ? 'Cân bằng tốt' : 'Chưa đủ người'}</span>
+                <span className="balance-title">CÁN CÂN THẾ TRẬN</span>
+                <span className="balance-status">{ready ? 'Cân bằng âm dương' : 'Chưa đủ quân số'}</span>
               </div>
               <div className="lobby-balance-bar">
                 <i style={{ width: `${(roles.villagers / players.length) * 100}%` }} title={`Dân làng: ${roles.villagers}`} />
@@ -168,9 +179,9 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
                 <i style={{ width: `${(roles.wolves / players.length) * 100}%` }} title={`Ma sói: ${roles.wolves}`} />
               </div>
               <div className="balance-legend">
-                <span className="legend-villager"><i /> Dân làng: <b>{roles.villagers}</b></span>
-                <span className="legend-special"><i /> Chức năng: <b>{roles.specials}</b></span>
-                <span className="legend-wolf"><i /> Ma Sói: <b>{roles.wolves}</b></span>
+                <span className="legend-villager"><i /> Thôn dân: <b>{roles.villagers}</b></span>
+                <span className="legend-special"><i /> Thần linh: <b>{roles.specials}</b></span>
+                <span className="legend-wolf"><i /> Ma sói: <b>{roles.wolves}</b></span>
               </div>
             </div>
           </section>
@@ -180,20 +191,20 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
           <section className="lobby-card lobby-preset-card">
             <div className="lobby-section-title">
               <div>
-                <h2>Cấu hình ván đấu</h2>
+                <h2>Quy ước ván đấu</h2>
               </div>
-              <span className="lobby-kicker">SMART PRESET</span>
+              <span className="lobby-kicker">CỔ KINH THÔN BẢN</span>
             </div>
 
-            <div className="lobby-presets" role="group" aria-label="Chọn preset">
+            <div className="lobby-presets" role="group" aria-label="Chọn quy ước ván đấu">
               <button
                 onClick={() => setPreset('basic')}
                 className={preset === 'basic' ? 'active basic' : ''}
                 aria-pressed={preset === 'basic'}
               >
                 <div className="preset-top">
-                  <span className="preset-badge">Chuẩn</span>
-                  <strong className="preset-name">Cơ bản</strong>
+                  <span className="preset-badge">Bản Chuẩn</span>
+                  <strong className="preset-name">Tiêu Chuẩn</strong>
                 </div>
                 <small>6–8 người · Tiên tri + Bảo vệ + 2 Sói</small>
               </button>
@@ -204,8 +215,8 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
                 aria-pressed={preset === 'chaos'}
               >
                 <div className="preset-top">
-                  <span className="preset-badge">Hấp dẫn</span>
-                  <strong className="preset-name">Kịch tính</strong>
+                  <span className="preset-badge">Huyết Nguyệt</span>
+                  <strong className="preset-name">Kịch Tính</strong>
                 </div>
                 <small>9–12 người · Thêm Phù thủy, Sói đầu đàn</small>
               </button>
@@ -216,10 +227,10 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
                 aria-pressed={preset === 'custom'}
               >
                 <div className="preset-top">
-                  <span className="preset-badge">Pro</span>
-                  <strong className="preset-name">Tự chỉnh</strong>
+                  <span className="preset-badge">Tự Định</span>
+                  <strong className="preset-name">Tùy Biến</strong>
                 </div>
-                <small>Tùy biến luật &amp; công tắc nâng cao</small>
+                <small>Tùy biến điều lệ &amp; luật lệ nâng cao</small>
               </button>
             </div>
 
@@ -228,7 +239,7 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
               aria-expanded={advanced}
               onClick={() => setAdvanced((open) => !open)}
             >
-              <span>Công tắc luật nâng cao</span>
+              <span>Mở rộng điều lệ thôn</span>
               <span className="toggle-symbol" aria-hidden="true">{advanced ? '−' : '+'}</span>
             </button>
 
@@ -236,7 +247,7 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
               <div className="lobby-settings">
                 <Setting
                   label="Lật vai khi chết"
-                  desc="Công bố vai trò của người chơi ngay khi bị xử tử hoặc bị cắn"
+                  desc="Công bố vai trò của thôn dân ngay khi bị xử tử hoặc bị cắn"
                   checked={settings.reveal}
                   onChange={() => toggleSetting('reveal')}
                 />
@@ -254,13 +265,13 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
                 />
                 <Setting
                   label="Phù thủy được tự cứu"
-                  desc="Cho phép Phù thủy dùng bình cứu cho chính bản thân mình"
+                  desc="Cho phép Phù thủy dùng bình tiên dược cho chính mình"
                   checked={settings.selfHeal}
                   onChange={() => toggleSetting('selfHeal')}
                 />
                 <Setting
                   label="Cứu mù mất bình nếu trượt"
-                  desc="Mất bình cứu nếu bấm cứu khi đêm đó không ai bị sói cắn trúng"
+                  desc="Mất bình tiên dược nếu bấm cứu khi đêm đó không ai bị sói cắn trúng"
                   checked={settings.blindWaste}
                   onChange={() => toggleSetting('blindWaste')}
                 />
@@ -268,19 +279,19 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
             )}
 
             <p className="lobby-demo-note">
-              <span>✦</span> Thiết lập luật được kiểm soát chặt chẽ bởi Game Engine trên máy chủ.
+              <span>✦</span> Mọi quy tắc và phân chia vai trò được phong ấn bảo mật trên Game Engine máy chủ.
             </p>
           </section>
 
           <section className={`lobby-start-card ${ready ? 'is-ready' : 'not-ready'}`}>
             <div className="start-meta">
               <strong className="start-title">
-                {ready ? 'Bàn đấu đã sẵn sàng!' : `Cần thêm ${6 - players.length} người chơi`}
+                {ready ? 'Lễ hội bóng đêm đã sẵn sàng!' : `Cần thêm ${6 - players.length} thôn dân`}
               </strong>
               <span className="start-desc">
                 {ready
-                  ? 'Bấm bắt đầu để phát loa quản trò và chuyển sang Đêm 1'
-                  : 'Cần tối thiểu 6 người để đảm bảo cân bằng thế trận'}
+                  ? 'Gõ mõ khai hội, tắt hết nến và bước vào Đêm Thứ 1'
+                  : 'Cần tối thiểu 6 người để đảm bảo tính công bằng của ván đấu'}
               </span>
             </div>
             <button
@@ -288,8 +299,8 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange }:
               disabled={!ready}
               onClick={() => onNavigate?.('night')}
             >
-              <span className="play-icon" aria-hidden="true">▶</span>
-              <span>BẮT ĐẦU VÁN ĐẤU</span>
+              <span className="play-icon" aria-hidden="true">⚔</span>
+              <span>BẮT ĐẦU VÁN ĐẤU • ĐÊM 1</span>
             </button>
           </section>
         </div>
