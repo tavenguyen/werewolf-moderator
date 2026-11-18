@@ -24,21 +24,41 @@ export default function App() {
   const [lobbyState, setLobbyState] = useState<LobbyDemoState>(defaultLobbyDemoState);
   const navigate = setScreen;
 
+  // Handle sanitized host nickname setup from home screen
+  const handleHostJoined = (sanitizedName: string) => {
+    setLobbyState((prev) => ({
+      ...prev,
+      players: prev.players.map((p, idx) => (idx === 0 ? { ...p, name: sanitizedName } : p)),
+    }));
+  };
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't trigger when user is typing in input or textarea
+      // Security: Do not intercept browser shortcuts (Ctrl, Alt, Meta, Shift)
+      if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+        return;
+      }
+
+      // Security: Do not trigger while typing in inputs, textareas, or contenteditables
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
         return;
       }
+
+      // Security & Role privacy: Do not allow accidental screen jumping out of pitch-black Night mode
+      if (screen === 'night') {
+        return;
+      }
+
       const num = parseInt(event.key, 10);
       if (num >= 1 && num <= screens.length) {
         setScreen(screens[num - 1]);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [screen]);
 
   return (
     <>
@@ -65,8 +85,16 @@ export default function App() {
       </div>
 
       <div key={screen} className="screen-container">
-        {screen === 'home' && <HomeScreen onNavigate={navigate} />}
-        {screen === 'lobby' && <LobbyScreen onNavigate={navigate} initialState={lobbyState} onStateChange={setLobbyState} />}
+        {screen === 'home' && (
+          <HomeScreen onNavigate={navigate} onPlayerJoined={handleHostJoined} />
+        )}
+        {screen === 'lobby' && (
+          <LobbyScreen
+            onNavigate={navigate}
+            initialState={lobbyState}
+            onStateChange={setLobbyState}
+          />
+        )}
         {screen === 'night' && <NightScreen onNavigate={navigate} />}
         {screen === 'day' && <DayScreen onNavigate={navigate} />}
         {screen === 'host' && <HostScreen onNavigate={navigate} />}

@@ -38,6 +38,13 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     window.clearInterval(progressTimer.current);
     timer.current = undefined;
     progressTimer.current = undefined;
+
+    // Security: Validate target exists before applying poison
+    if (action === 'poison' && (!target || !roster.includes(target))) {
+      setProgress(0);
+      return;
+    }
+
     setProgress(100);
     setComplete(action);
     setNotice(action === 'heal' ? '✓ ĐÃ CỨU SỐNG NẠN NHÂN' : `☠ ĐÃ ĐẦU ĐỘC: ${target}`);
@@ -50,7 +57,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   };
 
   const startHold = (action: 'heal' | 'poison') => {
-    if (complete || (action === 'poison' && !target) || timer.current) return;
+    if (complete || (action === 'poison' && (!target || !roster.includes(target))) || timer.current) return;
     setProgress(0);
     const started = Date.now();
     progressTimer.current = window.setInterval(() => {
@@ -77,6 +84,9 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     onPointerUp: cancelHold,
     onPointerLeave: cancelHold,
     onPointerCancel: cancelHold,
+    onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+    },
     onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
       if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) startHold(action);
     },
@@ -268,7 +278,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                   fontSize="8.5"
                   fontWeight="600"
                 >
-                  {index + 1}.{roster[index].split(' ')[0]}
+                  {index + 1}.{(roster[index] || `Ghế ${index + 1}`).split(' ')[0]}
                 </text>
               </g>
             ))}

@@ -2,9 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import './home.css';
 
-type Props = { onNavigate?: (screen: ScreenName) => void };
+type Props = {
+  onNavigate?: (screen: ScreenName) => void;
+  onPlayerJoined?: (name: string) => void;
+};
 
-export default function HomeScreen({ onNavigate }: Props) {
+// Security: Strip ASCII control characters and zero-width spaces
+function sanitizeNickname(raw: string): string {
+  return raw
+    .replace(/[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .slice(0, 24);
+}
+
+export default function HomeScreen({ onNavigate, onPlayerJoined }: Props) {
   const [mode, setMode] = useState<'join' | 'create'>('join');
   const [rulesOpen, setRulesOpen] = useState(false);
   const rulesTrigger = useRef<HTMLButtonElement>(null);
@@ -34,14 +45,17 @@ export default function HomeScreen({ onNavigate }: Props) {
   }, [rulesOpen]);
 
   const enterLobby = () => {
-    if (mode === 'join' && !/^\d{4}$/.test(roomCode)) {
+    const cleanCode = roomCode.replace(/\D/g, '').slice(0, 4);
+    if (mode === 'join' && cleanCode.length !== 4) {
       setNotice('Mã phòng cần có đúng 4 chữ số.');
       return;
     }
-    if (!nickname.trim()) {
-      setNotice('Hãy nhập tên trước khi tiếp tục.');
+    const cleanName = sanitizeNickname(nickname);
+    if (!cleanName) {
+      setNotice('Hãy nhập tên hợp lệ trước khi tiếp tục.');
       return;
     }
+    onPlayerJoined?.(cleanName);
     setNotice(mode === 'join' ? 'Đang mở lobby demo…' : 'Đã tạo phòng demo.');
     window.clearTimeout(navigationTimer.current);
     navigationTimer.current = window.setTimeout(() => onNavigate?.('lobby'), 250);

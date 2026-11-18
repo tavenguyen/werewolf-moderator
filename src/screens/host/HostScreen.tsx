@@ -28,31 +28,36 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
   const qrClose = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (paused || (remaining === 0 && lockRemaining === 0)) return;
+    if (paused) return;
     const timer = window.setInterval(() => {
       setRemaining((value) => Math.max(0, value - 1));
       setLockRemaining((value) => Math.max(0, value - 1));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [paused, remaining, lockRemaining]);
+  }, [paused]);
 
   useEffect(() => {
-    if (!qrOpen) return;
-    qrClose.current?.focus();
+    if (!qrOpen && !emergencyOpen && !confirming) return;
+    if (qrOpen) qrClose.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setQrOpen(false);
-        qrTrigger.current?.focus();
-      } else if (event.key === 'Tab') {
+        if (qrOpen) {
+          setQrOpen(false);
+          qrTrigger.current?.focus();
+        }
+        if (emergencyOpen) setEmergencyOpen(false);
+        if (confirming) setConfirming(false);
+      } else if (event.key === 'Tab' && qrOpen) {
         event.preventDefault();
         qrClose.current?.focus();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [qrOpen]);
+  }, [qrOpen, emergencyOpen, confirming]);
 
   const toggleFullscreen = () => {
+    if (!document.fullscreenEnabled) return;
     if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.().catch(() => undefined);
     else void document.exitFullscreen?.().catch(() => undefined);
   };

@@ -27,13 +27,22 @@ export default function DayScreen({ onNavigate }: DayScreenProps) {
   const [isNarrating, setIsNarrating] = useState(true);
 
   useEffect(() => {
-    if (paused || (remaining === 0 && lockRemaining === 0)) return;
+    if (paused) return;
     const id = window.setInterval(() => {
       setRemaining((value) => Math.max(0, value - 1));
       setLockRemaining((value) => Math.max(0, value - 1));
     }, 1000);
     return () => window.clearInterval(id);
-  }, [paused, remaining, lockRemaining]);
+  }, [paused]);
+
+  useEffect(() => {
+    if (!confirmFinalize) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConfirmFinalize(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [confirmFinalize]);
 
   const unlocked = lockRemaining === 0;
   const livingPlayers = initialPlayers.filter((player) => player.alive);

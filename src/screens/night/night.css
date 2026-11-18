@@ -303,6 +303,8 @@
   cursor: pointer;
   transition: all 0.16s ease;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .heal-button {
