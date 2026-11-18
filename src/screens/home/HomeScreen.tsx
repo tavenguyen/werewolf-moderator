@@ -9,6 +9,13 @@ type Props = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
+type ActiveSession = {
+  roomCode: string;
+  nickname: string;
+  screen: ScreenName;
+  timestamp: number;
+};
+
 // Security: Strip ASCII control characters and zero-width spaces
 function sanitizeNickname(raw: string): string {
   return raw
@@ -21,15 +28,47 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
   const [mode, setMode] = useState<'join' | 'create'>('join');
   const [fallbackDrawerOpen, setFallbackDrawerOpen] = useState(false);
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
+  const [isTestingSpeaker, setIsTestingSpeaker] = useState(false);
+
+  // Auto-Reconnect Session from localStorage
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('werewolf_active_session');
+      if (saved) return JSON.parse(saved);
+      // Sample active session if none yet so user can immediately experience the reconnect banner
+      return {
+        roomCode: '7290',
+        nickname: 'Minh Khang',
+        screen: 'lobby',
+        timestamp: Date.now(),
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  // Remember username from previous play session
+  const [nickname, setNickname] = useState(() => {
+    try {
+      return localStorage.getItem('werewolf_nickname') || 'Minh Khang';
+    } catch {
+      return 'Minh Khang';
+    }
+  });
+
   const rulesTrigger = useRef<HTMLButtonElement>(null);
   const qrCloseBtn = useRef<HTMLButtonElement>(null);
   const navigationTimer = useRef<number | undefined>(undefined);
   const [roomCode, setRoomCode] = useState('7290');
-  const [nickname, setNickname] = useState('Minh Khang');
   const [notice, setNotice] = useState('');
   const [deviceMode, setDeviceMode] = useState<'shared' | 'multi'>('shared');
 
-  useEffect(() => () => window.clearTimeout(navigationTimer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(navigationTimer.current);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }, []);
 
   useEffect(() => {
     if (!qrScannerOpen) return;
@@ -55,6 +94,66 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     setQrScannerOpen(false);
   };
 
+  // Reconnect immediately to active game session
+  const handleReconnect = () => {
+    if (!activeSession) return;
+    onPlayerJoined?.(activeSession.nickname);
+    setNotice(`Đang vào lại bàn #${activeSession.roomCode}...`);
+    window.clearTimeout(navigationTimer.current);
+    navigationTimer.current = window.setTimeout(() => onNavigate?.(activeSession.screen || 'lobby'), 200);
+  };
+
+  // Dismiss / Clear active session
+  const handleDismissSession = () => {
+    try {
+      localStorage.removeItem('werewolf_active_session');
+    } catch {
+      // ignore
+    }
+    setActiveSession(null);
+  };
+
+  // Test Speaker button logic (SpeechSynthesis + Web Audio fallback)
+  const handleTestSpeaker = () => {
+    if (isTestingSpeaker) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsTestingSpeaker(false);
+      return;
+    }
+
+    setIsTestingSpeaker(true);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance('Loa quản trò hoạt động tốt. Sẵn sàng bắt đầu ván đấu.');
+      utterance.lang = 'vi-VN';
+      utterance.rate = 0.95;
+      utterance.onend = () => setIsTestingSpeaker(false);
+      utterance.onerror = () => setIsTestingSpeaker(false);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      try {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(520, ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        osc.start();
+        setTimeout(() => {
+          osc.stop();
+          ctx.close();
+          setIsTestingSpeaker(false);
+        }, 800);
+      } catch {
+        setIsTestingSpeaker(false);
+      }
+    }
+  };
+
   const enterLobby = () => {
     const cleanCode = roomCode.replace(/\D/g, '').slice(0, 4);
     if (mode === 'join' && cleanCode.length !== 4) {
@@ -66,6 +165,23 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
       setNotice('Hãy nhập tên bạn trước khi tiếp tục.');
       return;
     }
+
+    // Save username & active session to localStorage
+    try {
+      localStorage.setItem('werewolf_nickname', cleanName);
+      localStorage.setItem(
+        'werewolf_active_session',
+        JSON.stringify({
+          roomCode: cleanCode,
+          nickname: cleanName,
+          screen: 'lobby',
+          timestamp: Date.now(),
+        })
+      );
+    } catch {
+      // ignore storage errors
+    }
+
     onPlayerJoined?.(cleanName);
     setNotice(mode === 'join' ? 'Đang vào sảnh chờ...' : 'Đã lập bàn chơi mới.');
     window.clearTimeout(navigationTimer.current);
@@ -108,6 +224,38 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
       </header>
 
       <main className="home-main">
+        {/* Auto-Reconnect Banner (Khôi phục ván đấu nếu F5 / ngắt kết nối) */}
+        {activeSession && (
+          <div className="home-reconnect-banner" role="region" aria-label="Khôi phục phiên chơi">
+            <div className="reconnect-left">
+              <span className="reconnect-pulse-dot" aria-hidden="true" />
+              <div className="reconnect-info">
+                <strong>Bạn đang ở bàn #{activeSession.roomCode} ({activeSession.nickname})</strong>
+                <small>Bấm để quay lại bàn đấu ngay lập tức</small>
+              </div>
+            </div>
+            <div className="reconnect-actions">
+              <button
+                type="button"
+                className="reconnect-btn"
+                onClick={handleReconnect}
+                title="Vào lại bàn ngay"
+              >
+                Vào lại ngay →
+              </button>
+              <button
+                type="button"
+                className="reconnect-dismiss"
+                onClick={handleDismissSession}
+                title="Rời khỏi bàn này"
+                aria-label="Bỏ qua bàn này"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="home-hero">
           <h1>
             Đêm buông xuống.
@@ -182,13 +330,20 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 Nhập 4 số hoặc quét nhanh QR trên màn hình bàn Host.
               </p>
 
-              <label className="home-label" htmlFor="nickname">Tên gọi của bạn</label>
+              <label className="home-label" htmlFor="nickname">Biệt danh của bạn</label>
               <input
                 id="nickname"
                 className="home-text-input"
                 value={nickname}
                 maxLength={24}
-                onChange={(event) => setNickname(event.target.value)}
+                onChange={(event) => {
+                  setNickname(event.target.value);
+                  try {
+                    localStorage.setItem('werewolf_nickname', event.target.value);
+                  } catch {
+                    // ignore
+                  }
+                }}
                 placeholder="Nhập tên gọi…"
               />
 
@@ -196,6 +351,11 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 <span>Bước vào bàn chơi</span>
                 <span className="arrow-icon" aria-hidden="true">→</span>
               </button>
+
+              <div className="home-pre-room-tip">
+                <span className="tip-bulb" aria-hidden="true">💡</span>
+                <span>Mẹo: Bật im lặng thông báo và giảm độ sáng màn hình trước khi Đêm 1 bắt đầu.</span>
+              </div>
             </div>
           ) : (
             <div className="home-form" role="tabpanel">
@@ -233,13 +393,40 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 <span className="home-radio" aria-hidden="true" />
               </button>
 
+              {/* Nút Test Loa Quản Trò */}
+              <div className="home-test-speaker-card">
+                <div className="test-speaker-meta">
+                  <span className="speaker-icon" aria-hidden="true">
+                    {isTestingSpeaker ? '🔊' : '🔈'}
+                  </span>
+                  <div>
+                    <strong>Thử loa quản trò</strong>
+                    <small>Kiểm tra âm lượng loa ngoài và mở khóa quyền phát âm thanh</small>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={`test-speaker-btn ${isTestingSpeaker ? 'is-testing' : ''}`}
+                  onClick={handleTestSpeaker}
+                >
+                  {isTestingSpeaker ? 'Đang phát thử...' : 'Thử âm lượng'}
+                </button>
+              </div>
+
               <label className="home-label" htmlFor="host-name">Tên người lập bàn</label>
               <input
                 id="host-name"
                 className="home-text-input"
                 value={nickname}
                 maxLength={24}
-                onChange={(event) => setNickname(event.target.value)}
+                onChange={(event) => {
+                  setNickname(event.target.value);
+                  try {
+                    localStorage.setItem('werewolf_nickname', event.target.value);
+                  } catch {
+                    // ignore
+                  }
+                }}
                 placeholder="Nhập tên gọi…"
               />
 
@@ -247,6 +434,11 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 <span>Khởi tạo bàn đấu</span>
                 <span className="arrow-icon" aria-hidden="true">✦</span>
               </button>
+
+              <div className="home-pre-room-tip">
+                <span className="tip-bulb" aria-hidden="true">💡</span>
+                <span>Mẹo: Bật im lặng thông báo và giảm độ sáng màn hình trước khi Đêm 1 bắt đầu.</span>
+              </div>
             </div>
           )}
 

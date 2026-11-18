@@ -342,6 +342,202 @@
   font-size: 15px;
 }
 
+/* Reconnect Banner (Auto-Reconnect) */
+.home-reconnect-banner {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(201, 134, 56, 0.12), rgba(20, 24, 34, 0.95));
+  border: 1px solid rgba(201, 134, 56, 0.45);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 0 12px rgba(201, 134, 56, 0.05);
+  animation: bannerSlideDown 0.25s ease-out;
+}
+
+@keyframes bannerSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.reconnect-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.reconnect-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+  animation: livePulse 1.8s infinite ease-in-out;
+  flex: none;
+}
+
+.reconnect-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.reconnect-info strong {
+  font: 700 12.5px var(--font-title);
+  color: var(--parchment);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reconnect-info small {
+  font: 11px var(--font-serif);
+  font-style: italic;
+  color: var(--parchment-muted);
+}
+
+.reconnect-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.reconnect-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--lantern);
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(142, 30, 36, 0.85), rgba(102, 20, 24, 0.95));
+  color: var(--parchment);
+  font: 700 11.5px var(--font-title);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.reconnect-btn:hover {
+  background: linear-gradient(135deg, #a6242b, #78181d);
+  box-shadow: 0 0 10px rgba(201, 134, 56, 0.35);
+  transform: translateY(-1px);
+}
+
+.reconnect-dismiss {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid rgba(237, 231, 220, 0.1);
+  background: transparent;
+  color: var(--parchment-muted);
+  font-size: 16px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.reconnect-dismiss:hover {
+  border-color: rgba(201, 134, 56, 0.3);
+  color: var(--parchment);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Pre-room Tip */
+.home-pre-room-tip {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: rgba(237, 231, 220, 0.03);
+  border: 1px dashed rgba(201, 134, 56, 0.25);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 11px/1.4 var(--font-serif);
+  font-style: italic;
+  color: var(--parchment-muted);
+}
+
+.tip-bulb {
+  font-size: 13px;
+  line-height: 1;
+  flex: none;
+}
+
+/* Test Speaker Card */
+.home-test-speaker-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(17, 20, 26, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.test-speaker-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.speaker-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex: none;
+}
+
+.test-speaker-meta strong {
+  display: block;
+  font: 700 12px var(--font-title);
+  color: var(--parchment);
+  margin-bottom: 2px;
+}
+
+.test-speaker-meta small {
+  display: block;
+  font: 10.5px/1.35 var(--font-serif);
+  color: var(--parchment-muted);
+}
+
+.test-speaker-btn {
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(201, 134, 56, 0.5);
+  background: rgba(201, 134, 56, 0.1);
+  color: var(--lantern);
+  font: 700 11px var(--font-title);
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  transition: all 0.18s ease;
+}
+
+.test-speaker-btn:hover {
+  background: rgba(201, 134, 56, 0.2);
+  border-color: var(--lantern);
+  color: var(--parchment);
+}
+
+.test-speaker-btn.is-testing {
+  background: linear-gradient(135deg, rgba(201, 134, 56, 0.35), rgba(142, 30, 36, 0.35));
+  border-color: var(--lantern);
+  color: var(--parchment);
+  animation: speakerPulse 1s infinite alternate ease-in-out;
+}
+
+@keyframes speakerPulse {
+  from { box-shadow: 0 0 4px rgba(201, 134, 56, 0.3); }
+  to { box-shadow: 0 0 14px rgba(201, 134, 56, 0.7); }
+}
+
 /* Device Option */
 .home-device-option {
   display: flex;
@@ -691,6 +887,48 @@
   .home-device-option {
     padding: 9px 11px;
     gap: 9px;
+  }
+
+  .home-reconnect-banner {
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+
+  .reconnect-info strong {
+    font-size: 11.5px;
+  }
+
+  .reconnect-info small {
+    font-size: 10px;
+  }
+
+  .reconnect-btn {
+    padding: 5px 9px;
+    font-size: 10.5px;
+  }
+
+  .home-test-speaker-card {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .test-speaker-meta strong {
+    font-size: 11.5px;
+  }
+
+  .test-speaker-meta small {
+    font-size: 9.5px;
+  }
+
+  .test-speaker-btn {
+    padding: 5px 9px;
+    font-size: 10.5px;
+  }
+
+  .home-pre-room-tip {
+    padding: 6px 8px;
+    font-size: 10px;
   }
 
   .device-icon-wrap {
