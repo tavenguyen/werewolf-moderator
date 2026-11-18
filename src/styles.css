@@ -9,27 +9,271 @@
   --bg: #0b0e14;
   --surface: #161b26;
   --surface-2: #1e222a;
-  --border: rgba(255, 255, 255, 0.1);
+  --surface-hover: #222836;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
   --muted: #9ca3af;
+  --subtle: #6b7280;
   --moon: #f59e0b;
+  --moon-glow: rgba(245, 158, 11, 0.28);
   --danger: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.3);
   --night: #6366f1;
+  --night-glow: rgba(99, 102, 241, 0.3);
   --vitality: #10b981;
+  --vitality-glow: rgba(16, 185, 129, 0.3);
   --display: "JetBrains Mono", monospace;
   --headline: "Space Grotesk", sans-serif;
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); }
-button, input, select { font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--moon); outline-offset: 2px; }
-.demo-nav { position: sticky; top: 0; z-index: 60; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--border); background: rgba(11,14,20,.94); backdrop-filter: blur(12px); }
-.demo-nav-label { margin: 0 6px; color: var(--moon); font: 700 10px var(--display); letter-spacing: .16em; }
-.demo-nav-button { min-height: 32px; border: 1px solid transparent; border-radius: 4px; padding: 0 10px; color: var(--muted); background: transparent; font-size: 11px; }
-.demo-nav-button:hover, .demo-nav-button.active { color: #fff; border-color: var(--border); background: var(--surface); }
-body.night-sleep-active .demo-nav { display: none; }
-.material-symbols-outlined { font-family: inherit; font-size: inherit; line-height: 1; }
-@media (max-width: 520px) { .demo-nav { gap: 2px; padding: 6px 4px; } .demo-nav-button { padding: 0 7px; font-size: 10px; } }
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg);
+  overflow-x: hidden;
+  selection-background-color: var(--moon);
+  selection-color: #0b0e14;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  user-select: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--moon);
+  outline-offset: 2px;
+}
+
+/* Screen transition container */
+.screen-container {
+  animation: screenFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}
+
+@keyframes screenFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Modern Atmospheric Floating Demo HUD */
+.demo-nav-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 8px 12px;
+}
+
+.demo-nav {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9999px;
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.demo-nav-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  color: var(--moon);
+  font: 700 10px/1 var(--display);
+  letter-spacing: 0.16em;
+  border-right: 1px solid var(--border);
+}
+
+.demo-nav-label .hud-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moon);
+  box-shadow: 0 0 8px var(--moon);
+  animation: moonPulse 2s infinite ease-in-out;
+}
+
+.demo-nav-items {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.demo-nav-button {
+  position: relative;
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: transparent;
+  font: 600 11px/1 var(--headline);
+  letter-spacing: 0.03em;
+  transition: all 0.16s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.demo-nav-button kbd {
+  font: 700 9px var(--display);
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  display: inline-block;
+  line-height: 1;
+}
+
+.demo-nav-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.demo-nav-button.active {
+  color: #fff;
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.12);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.18);
+}
+
+.demo-nav-button.active kbd {
+  color: var(--moon);
+  background: rgba(245, 158, 11, 0.2);
+}
+
+body.night-sleep-active .demo-nav-wrapper {
+  display: none !important;
+}
+
+/* Atmospheric Animations */
+@keyframes moonPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+    filter: drop-shadow(0 0 18px rgba(245, 158, 11, 0.7));
+  }
+}
+
+@keyframes stealthBreath {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes wolfHeartbeat {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  20% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+  40% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes soundwaveAnim {
+  0%, 100% {
+    height: 4px;
+  }
+  50% {
+    height: 18px;
+  }
+}
+
+@keyframes shimmerSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Reusable audio soundwave bars */
+.audio-equalizer {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+}
+
+.audio-equalizer span {
+  width: 3px;
+  border-radius: 99px;
+  background: var(--night);
+  animation: soundwaveAnim 1.2s ease-in-out infinite;
+}
+
+.audio-equalizer span:nth-child(1) { animation-delay: 0.1s; }
+.audio-equalizer span:nth-child(2) { animation-delay: 0.3s; }
+.audio-equalizer span:nth-child(3) { animation-delay: 0.5s; }
+.audio-equalizer span:nth-child(4) { animation-delay: 0.2s; }
+.audio-equalizer span:nth-child(5) { animation-delay: 0.4s; }
+
+/* Accessible reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .demo-nav-wrapper {
+    padding: 6px;
+  }
+  .demo-nav-label {
+    display: none;
+  }
+  .demo-nav-button {
+    padding: 0 8px;
+    font-size: 10px;
+    min-height: 28px;
+  }
+  .demo-nav-button kbd {
+    display: none;
+  }
+}
