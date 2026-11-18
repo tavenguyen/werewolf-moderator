@@ -97,7 +97,7 @@ export default function HostScreen({ onNavigate }: HostScreenProps) {
           </div>
 
           <div className="host-player-list">
-            {players.map(([name, status, alive], index) => (
+            {players.map(([name, , alive], index) => (
               <div className={`host-player ${!alive ? 'is-dead' : ''} ${index === 0 ? 'is-mayor' : ''}`} key={name}>
                 <div className="host-player-name">
                   <span className="host-seat">#{String(index + 1).padStart(2, '0')}</span>
