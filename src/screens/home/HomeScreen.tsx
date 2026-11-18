@@ -20,7 +20,9 @@ function sanitizeNickname(raw: string): string {
 export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: Props) {
   const [mode, setMode] = useState<'join' | 'create'>('join');
   const [fallbackDrawerOpen, setFallbackDrawerOpen] = useState(false);
+  const [qrScannerOpen, setQrScannerOpen] = useState(false);
   const rulesTrigger = useRef<HTMLButtonElement>(null);
+  const qrCloseBtn = useRef<HTMLButtonElement>(null);
   const navigationTimer = useRef<number | undefined>(undefined);
   const [roomCode, setRoomCode] = useState('7290');
   const [nickname, setNickname] = useState('Minh Khang');
@@ -29,12 +31,28 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
 
   useEffect(() => () => window.clearTimeout(navigationTimer.current), []);
 
+  useEffect(() => {
+    if (!qrScannerOpen) return;
+    qrCloseBtn.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setQrScannerOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [qrScannerOpen]);
+
   const handleOpenRules = () => {
     if (onOpenRules) {
       onOpenRules('rules');
     } else {
       setFallbackDrawerOpen(true);
     }
+  };
+
+  const handleSimulateQrScan = (code: string) => {
+    setRoomCode(code);
+    setNotice(`✓ Đã quét thành công mã phòng #${code}`);
+    setQrScannerOpen(false);
   };
 
   const enterLobby = () => {
@@ -92,7 +110,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
       <main className="home-main">
         <div className="home-hero">
           <h1>
-            Đêm buông xuống.<br />
+            Đêm buông xuống.
             <em>Cuộc chơi bắt đầu.</em>
           </h1>
         </div>
@@ -120,37 +138,48 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
           {mode === 'join' ? (
             <div className="home-form" role="tabpanel">
               <div className="home-field-heading">
-                <label htmlFor="room-code">Mã bàn (4 số)</label>
-                <span className="home-demo-label">MÃ PHÒNG</span>
+                <label htmlFor="room-code">Mã bàn 4 số</label>
               </div>
               
-              <div className="home-code-wrapper">
-                <input
-                  id="room-code"
-                  className="home-code-input"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={4}
-                  value={roomCode}
-                  onChange={(event) => setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                  aria-describedby="demo-note"
-                />
-                <div className="home-code-display" aria-hidden="true">
-                  {[0, 1, 2, 3].map((idx) => {
-                    const digit = roomCode[idx] ?? '';
-                    const isCurrent = idx === roomCode.length;
-                    return (
-                      <div key={idx} className={`code-box ${digit ? 'filled' : ''} ${isCurrent ? 'active' : ''}`}>
-                        {digit || '·'}
-                      </div>
-                    );
-                  })}
+              <div className="home-code-row">
+                <div className="home-code-wrapper">
+                  <input
+                    id="room-code"
+                    className="home-code-input"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={roomCode}
+                    onChange={(event) => setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                    aria-describedby="code-help-text"
+                  />
+                  <div className="home-code-display" aria-hidden="true">
+                    {[0, 1, 2, 3].map((idx) => {
+                      const digit = roomCode[idx] ?? '';
+                      const isCurrent = idx === roomCode.length;
+                      return (
+                        <div key={idx} className={`code-box ${digit ? 'filled' : ''} ${isCurrent ? 'active' : ''}`}>
+                          {digit || '·'}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="home-qr-scan-btn"
+                  onClick={() => setQrScannerOpen(true)}
+                  title="Quét mã QR trên màn hình bàn Host"
+                >
+                  <span className="qr-scan-glyph" aria-hidden="true">📷</span>
+                  <span>Quét QR</span>
+                </button>
               </div>
 
-              <p id="demo-note" className="home-helper">
+              <p id="code-help-text" className="home-helper">
                 <span className="helper-icon" aria-hidden="true">❦</span>
-                Quét mã QR trên màn hình của Quản trò hoặc nhập 4 số để vào chiếu họp.
+                Nhập 4 số hoặc quét nhanh QR trên màn hình bàn Host.
               </p>
 
               <label className="home-label" htmlFor="nickname">Tên gọi của bạn</label>
@@ -223,17 +252,66 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
 
           {notice && <p className="home-notice" role="status">{notice}</p>}
         </section>
-
-        <div className="home-footnote">
-          <span aria-hidden="true">❦</span>
-          <span>Bàn chơi Ma Sói tự động · Đơn giản và thuận tiện</span>
-        </div>
       </main>
 
       <footer className="home-footer">
-        <span>MA SÓI HOST · SẴN SÀNG KHAI MÀN</span>
-        <span>HỘI ĐỒNG THÔN BẢN</span>
+        <div className="home-status-live">
+          <span className="live-pulse-dot" aria-hidden="true" />
+          <span>Máy chủ trực tiếp</span>
+        </div>
+        <span className="home-room-ping">Phòng #7290 sẵn sàng</span>
       </footer>
+
+      {/* QR Scanner Camera Modal */}
+      {qrScannerOpen && (
+        <div
+          className="qr-scanner-backdrop"
+          role="presentation"
+          onClick={() => setQrScannerOpen(false)}
+        >
+          <section
+            className="qr-scanner-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="qr-scanner-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="qr-scanner-head">
+              <h2 id="qr-scanner-title">Quét mã QR vào bàn</h2>
+              <button
+                ref={qrCloseBtn}
+                type="button"
+                className="qr-scanner-close"
+                aria-label="Đóng quét camera"
+                onClick={() => setQrScannerOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="qr-viewfinder-box" aria-hidden="true">
+              <span className="viewfinder-corner tl" />
+              <span className="viewfinder-corner tr" />
+              <span className="viewfinder-corner bl" />
+              <span className="viewfinder-corner br" />
+              <div className="viewfinder-scan-beam" />
+              <span className="viewfinder-hint">Hướng camera về phía mã QR trên bàn Host</span>
+            </div>
+
+            <p className="qr-scanner-note">
+              Camera sẵn sàng quét mã bàn đấu hiển thị trên màn hình Quản trò hoặc Smart TV.
+            </p>
+
+            <button
+              type="button"
+              className="qr-scanner-simulate-btn"
+              onClick={() => handleSimulateQrScan('7290')}
+            >
+              <span>⚡ Nhận diện ngay phòng #7290</span>
+            </button>
+          </section>
+        </div>
+      )}
 
       {/* Fallback Drawer if used outside App */}
       {!onOpenRules && (
