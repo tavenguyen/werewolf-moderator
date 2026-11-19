@@ -42,10 +42,12 @@
   --twilight-bg: rgba(77, 71, 111, 0.16);
   --twilight-border: rgba(77, 71, 111, 0.45);
 
-  /* Typography */
-  --font-title: "Cinzel", "Times New Roman", serif;
-  --font-serif: "Cormorant Garamond", Georgia, serif;
-  --font-body: "Be Vietnam Pro", Inter, sans-serif;
+  /* Typography with 100% Native Vietnamese Support & Dark Werewolf Vibe */
+  --font-title: "Playfair Display", "Spectral", Georgia, serif;
+  --font-serif: "Lora", "Spectral", Georgia, serif;
+  --font-body: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, sans-serif;
+  --headline: var(--font-title);
+  --display: var(--font-serif);
 
   color-scheme: dark;
 }

@@ -8,12 +8,13 @@ type Props = {
   initialTab?: 'rules' | 'roles';
 };
 
-export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rules' }: Props) {
+export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'roles' }: Props) {
   const [activeTab, setActiveTab] = useState<'rules' | 'roles'>(initialTab);
   const [filterSide, setFilterSide] = useState<RoleSide | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<GameRole | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const detailPanelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -38,6 +39,13 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rul
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, selectedRole, onClose]);
 
+  // Scroll to top of detail panel when selected role changes
+  useEffect(() => {
+    if (selectedRole && detailPanelRef.current) {
+      detailPanelRef.current.scrollTop = 0;
+    }
+  }, [selectedRole]);
+
   const filteredRoles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return gameRoles.filter((role) => {
@@ -52,6 +60,15 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rul
       return matchSide && matchSearch;
     });
   }, [filterSide, searchQuery]);
+
+  // Prev / Next role navigation in detail view
+  const { prevRole, nextRole, selectedRoleIndex } = useMemo(() => {
+    if (!selectedRole) return { prevRole: null, nextRole: null, selectedRoleIndex: -1 };
+    const idx = gameRoles.findIndex((r) => r.id === selectedRole.id);
+    const prev = idx > 0 ? gameRoles[idx - 1] : gameRoles[gameRoles.length - 1];
+    const next = idx < gameRoles.length - 1 ? gameRoles[idx + 1] : gameRoles[0];
+    return { prevRole: prev, nextRole: next, selectedRoleIndex: idx };
+  }, [selectedRole]);
 
   if (!isOpen) return null;
 
@@ -70,270 +87,326 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rul
       }}
     >
       <aside
-        className="rules-drawer-panel"
+        className="rules-drawer-panel masa-aesthetic"
         role="dialog"
         aria-modal="true"
-        aria-label="Sổ tay luật làng và bách khoa vai trò"
+        aria-label="Sổ tay luật làng và danh sách vai trò"
       >
-        <div className="rules-drawer-header">
-          <div className="rules-tab-group" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'rules'}
-              className={`rules-tab-btn ${activeTab === 'rules' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('rules'); setSelectedRole(null); }}
-            >
-              <span aria-hidden="true">📜</span>
-              <span>Luật làng</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'roles'}
-              className={`rules-tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
-              onClick={() => setActiveTab('roles')}
-            >
-              <span aria-hidden="true">🎴</span>
-              <span>Danh sách vai trò</span>
-            </button>
+        {/* Editorial Minimalist Header */}
+        <header className="masa-drawer-header">
+          <div className="masa-header-left">
+            <span className="masa-eyebrow">HỒ SƠ QUẢN TRÒ</span>
+            <div className="masa-tab-group" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'roles'}
+                className={`masa-tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('roles'); }}
+              >
+                VAI TRÒ ({gameRoles.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'rules'}
+                className={`masa-tab-btn ${activeTab === 'rules' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('rules'); setSelectedRole(null); }}
+              >
+                LUẬT LÀNG
+              </button>
+            </div>
           </div>
 
           <button
             ref={closeButtonRef}
             type="button"
-            className="rules-drawer-close"
+            className="masa-drawer-close"
             aria-label="Đóng bảng tra cứu"
             onClick={onClose}
           >
-            ×
+            ĐÓNG [×]
           </button>
-        </div>
+        </header>
 
-        <div className="rules-drawer-body">
+        {/* Drawer Body */}
+        <div className="masa-drawer-body">
           {activeTab === 'rules' ? (
-            <div className="rules-steps-wrap">
-              <div className="rules-step-card">
-                <span className="step-num-badge">I</span>
-                <div>
-                  <strong>Trời tối: Thổi nến và úp máy xuống bàn</strong>
-                  <p>
-                    Tất cả người chơi úp điện thoại xuống mặt bàn. Loa quản trò cất tiếng gọi từng vai trò, ai được gọi thì nhẹ nhàng mở mắt thao tác kín trên máy cá nhân rồi nhắm mắt lại. Tuyệt đối không chuyền điện thoại trong đêm.
-                  </p>
-                </div>
+            /* Minimalist Rules View */
+            <div className="masa-rules-wrap">
+              <div className="masa-rules-intro">
+                <span className="masa-meta-label">QUY TẮC BÀN ĐẤU</span>
+                <h2 className="masa-editorial-title">Trật tự ba hồi trong đêm Ma Sói</h2>
+                <p className="masa-editorial-lede">
+                  Trò chơi vận hành hoàn toàn tự động qua giọng quản trò và thiết bị cá nhân. Người chơi tập trung đối thoại trực tiếp, không nhìn màn hình của nhau.
+                </p>
               </div>
 
-              <div className="rules-step-card">
-                <span className="step-num-badge">II</span>
-                <div>
-                  <strong>Trời sáng: Mở mắt và luận tội</strong>
-                  <p>
-                    Cả làng thức giấc thảo luận tự do. Đồng hồ khóa nút biểu quyết 60 giây đầu tiên để đảm bảo mọi người tập trung nhìn thẳng vào mắt nhau tranh luận trước khi bỏ phiếu treo cổ.
-                  </p>
-                </div>
+              <div className="masa-rules-list">
+                <article className="masa-rule-step">
+                  <div className="masa-step-index">HỒI I</div>
+                  <div className="masa-step-content">
+                    <h3>Trời tối · Thổi nến và úp máy xuống bàn</h3>
+                    <p>
+                      Tất cả người chơi úp điện thoại xuống mặt bàn. Loa quản trò cất tiếng gọi từng vai trò, ai được gọi thì nhẹ nhàng mở mắt thao tác kín trên máy cá nhân rồi nhắm mắt lại. Tuyệt đối không chuyền điện thoại trong đêm.
+                    </p>
+                  </div>
+                </article>
+
+                <article className="masa-rule-step">
+                  <div className="masa-step-index">HỒI II</div>
+                  <div className="masa-step-content">
+                    <h3>Trời sáng · Mở mắt và luận tội</h3>
+                    <p>
+                      Cả làng thức giấc thảo luận tự do. Đồng hồ khóa nút biểu quyết 60 giây đầu tiên để đảm bảo mọi người tập trung nhìn thẳng vào mắt nhau tranh luận trước khi bỏ phiếu treo cổ.
+                    </p>
+                  </div>
+                </article>
+
+                <article className="masa-rule-step">
+                  <div className="masa-step-index">HỒI III</div>
+                  <div className="masa-step-content">
+                    <h3>Hạ màn · Lật bài và điểm lại ván đấu</h3>
+                    <p>
+                      Khi một phe đạt điều kiện toàn thắng, toàn bộ thẻ bài thực sự của người chơi sẽ được lật mở kèm nhật ký từng đêm để cùng giải mã ván đấu trước khi bắt đầu ván mới.
+                    </p>
+                  </div>
+                </article>
               </div>
 
-              <div className="rules-step-card">
-                <span className="step-num-badge">III</span>
-                <div>
-                  <strong>Hạ màn: Lật bài và điểm lại ván đấu</strong>
-                  <p>
-                    Khi một phe đạt điều kiện toàn thắng, toàn bộ thẻ bài thực sự của người chơi sẽ được lật mở kèm nhật ký từng đêm để cùng giải mã ván đấu trước khi bắt đầu ván mới.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rules-privacy-banner">
-                <span aria-hidden="true">🔒</span>
-                <span>Không cần tạo tài khoản. Mọi vai trò và phiếu vote kín được Game Engine bảo mật tuyệt đối.</span>
+              <div className="masa-rules-footnote">
+                <span className="masa-footnote-mark">§</span>
+                <p>
+                  Không yêu cầu đăng ký tài khoản. Danh tính vai trò và phiếu biểu quyết kín được Game Engine mã hóa và bảo mật trên thiết bị.
+                </p>
               </div>
             </div>
           ) : (
-            <div className="roles-codex-wrap">
+            /* Roles Catalog & Detail (Chef Masa NYC Aesthetic) */
+            <div className="masa-roles-container">
               {selectedRole ? (
-                /* Zoom-out / Spotlight Role Detail */
-                <article className="role-zoom-panel" aria-label={`Chi tiết vai trò ${selectedRole.name}`}>
-                  <div className="role-zoom-topbar">
+                /* Detail Reveal Panel ("Bấm vào như thế rồi hiện ra") */
+                <article
+                  ref={detailPanelRef}
+                  className="masa-detail-panel"
+                  aria-label={`Chi tiết vai trò ${selectedRole.name}`}
+                >
+                  <div className="masa-detail-topbar">
                     <button
                       type="button"
-                      className="role-back-link"
+                      className="masa-back-btn"
                       onClick={() => setSelectedRole(null)}
                     >
-                      ← Quay lại danh sách
+                      <span aria-hidden="true">←</span>
+                      <span>DANH MỤC VAI TRÒ</span>
                     </button>
-                    <span className={`role-badge-side side-${selectedRole.side}`}>
+
+                    <span className={`masa-side-tag side-${selectedRole.side}`}>
                       {selectedRole.sideLabel}
                     </span>
                   </div>
 
-                  <div className="role-zoom-header-block">
-                    <div
-                      className="role-zoom-emblem"
-                      style={{ borderColor: selectedRole.auraColor }}
+                  {/* Main Role Title Block */}
+                  <header className="masa-detail-hero">
+                    <span className="masa-role-index">
+                      NO. {String(selectedRoleIndex + 1).padStart(2, '0')}
+                    </span>
+                    <h2 className="masa-role-large-name">{selectedRole.name}</h2>
+                    <p className="masa-role-quote">“{selectedRole.tagline}”</p>
+                  </header>
+
+                  {/* Spec Strip - Typographic & Minimalist (No emojis) */}
+                  <div className="masa-spec-strip" role="list">
+                    <div className="masa-spec-col" role="listitem">
+                      <span className="masa-spec-label">PHE PHÁI</span>
+                      <strong className="masa-spec-val">{selectedRole.sideLabel}</strong>
+                    </div>
+
+                    <div className="masa-spec-col" role="listitem">
+                      <span className="masa-spec-label">TIÊN TRI SOI RA</span>
+                      <strong className="masa-spec-val highlight">{selectedRole.seerResult}</strong>
+                    </div>
+
+                    <div className="masa-spec-col" role="listitem">
+                      <span className="masa-spec-label">TẦN SUẤT THỨC DẬY</span>
+                      <strong className="masa-spec-val">{selectedRole.wakeFrequency}</strong>
+                    </div>
+                  </div>
+
+                  {/* Editorial Content Sections */}
+                  <div className="masa-sections-wrap">
+                    <section className="masa-section">
+                      <h3 className="masa-section-title">
+                        <span className="masa-section-num">01</span>
+                        <span>NĂNG LỰC ĐẶC BIỆT</span>
+                      </h3>
+                      <p className="masa-section-body">{selectedRole.description}</p>
+                    </section>
+
+                    <section className="masa-section">
+                      <h3 className="masa-section-title">
+                        <span className="masa-section-num">02</span>
+                        <span>QUY TẮC THỰC CHIẾN TẠI BÀN</span>
+                      </h3>
+                      <p className="masa-section-body rule-note">{selectedRole.roomRuleNote}</p>
+                    </section>
+
+                    <section className="masa-section">
+                      <h3 className="masa-section-title">
+                        <span className="masa-section-num">03</span>
+                        <span>CHIẾN THUẬT &amp; TÂM LÝ</span>
+                      </h3>
+                      <p className="masa-section-body tactic-tip">{selectedRole.tacticTip}</p>
+                    </section>
+                  </div>
+
+                  {/* Role Pager Footer */}
+                  <footer className="masa-detail-footer">
+                    {prevRole && (
+                      <button
+                        type="button"
+                        className="masa-pager-btn prev"
+                        onClick={() => setSelectedRole(prevRole)}
+                        title={`Xem vai trò trước: ${prevRole.name}`}
+                      >
+                        <span className="pager-arrow">←</span>
+                        <div className="pager-text">
+                          <small>TRƯỚC</small>
+                          <span>{prevRole.name}</span>
+                        </div>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="masa-return-btn"
+                      onClick={() => setSelectedRole(null)}
                     >
-                      <span>{selectedRole.symbol}</span>
-                    </div>
-                    <h2>{selectedRole.name}</h2>
-                    <p className="role-zoom-quote">“{selectedRole.tagline}”</p>
-                  </div>
+                      ĐÓNG CHI TIẾT
+                    </button>
 
-                  <div className="role-battlefield-grid">
-                    {/* Thông tin 1: Phe & Kết quả soi */}
-                    <div className="battlefield-card">
-                      <div className="battlefield-title">
-                        <span aria-hidden="true">👁️</span>
-                        <strong>Phe phái &amp; Kết quả soi</strong>
-                      </div>
-                      <div className="battlefield-value">
-                        <span>Thuộc: <b>{selectedRole.sideLabel}</b></span>
-                        <span>Tiên tri soi ra: <b className="seer-highlight">{selectedRole.seerResult}</b></span>
-                      </div>
-                    </div>
-
-                    {/* Thông tin 2: Tần suất thức dậy */}
-                    <div className="battlefield-card">
-                      <div className="battlefield-title">
-                        <span aria-hidden="true">⏳</span>
-                        <strong>Tần suất thức dậy</strong>
-                      </div>
-                      <div className="battlefield-value">
-                        <span className="wake-tag">{selectedRole.wakeFrequency}</span>
-                      </div>
-                    </div>
-
-                    {/* Thông tin 3: Mô tả kỹ năng */}
-                    <div className="battlefield-card battlefield-span2">
-                      <div className="battlefield-title">
-                        <span aria-hidden="true">📜</span>
-                        <strong>Mô tả kỹ năng</strong>
-                      </div>
-                      <p className="battlefield-desc">{selectedRole.description}</p>
-                    </div>
-
-                    {/* Thông tin 4: Lưu ý luật phòng */}
-                    <div className="battlefield-card battlefield-span2 battlefield-rule-alert">
-                      <div className="battlefield-title">
-                        <span aria-hidden="true">⚠️</span>
-                        <strong>Lưu ý luật phòng thực chiến</strong>
-                      </div>
-                      <p className="battlefield-desc">{selectedRole.roomRuleNote}</p>
-                    </div>
-
-                    {/* Mẹo thực chiến */}
-                    <div className="battlefield-card battlefield-span2 battlefield-tip">
-                      <div className="battlefield-title">
-                        <span aria-hidden="true">💡</span>
-                        <strong>Mẹo tâm lý thực chiến</strong>
-                      </div>
-                      <p className="battlefield-desc">{selectedRole.tacticTip}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="role-zoom-dismiss-btn"
-                    onClick={() => setSelectedRole(null)}
-                  >
-                    Thu nhỏ vai trò
-                  </button>
+                    {nextRole && (
+                      <button
+                        type="button"
+                        className="masa-pager-btn next"
+                        onClick={() => setSelectedRole(nextRole)}
+                        title={`Xem vai trò tiếp theo: ${nextRole.name}`}
+                      >
+                        <div className="pager-text align-right">
+                          <small>TIẾP THEO</small>
+                          <span>{nextRole.name}</span>
+                        </div>
+                        <span className="pager-arrow">→</span>
+                      </button>
+                    )}
+                  </footer>
                 </article>
               ) : (
-                /* Roles List with Quick Filter & Search */
-                <div className="roles-list-container">
-                  {/* Search Bar & Quick Filters */}
-                  <div className="roles-toolbar">
-                    <div className="roles-search-box">
-                      <span className="search-icon" aria-hidden="true">🔍</span>
+                /* Roles Catalog List (Chef Masa NYC Grid/List) */
+                <div className="masa-list-panel">
+                  {/* Minimalist Filter & Search Bar */}
+                  <div className="masa-toolbar">
+                    <div className="masa-filter-tabs" role="group" aria-label="Lọc vai trò theo phe">
+                      <button
+                        type="button"
+                        className={`masa-filter-link ${filterSide === 'all' ? 'active' : ''}`}
+                        onClick={() => setFilterSide('all')}
+                      >
+                        TẤT CẢ ({gameRoles.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`masa-filter-link ${filterSide === 'village' ? 'active' : ''}`}
+                        onClick={() => setFilterSide('village')}
+                      >
+                        DÂN LÀNG
+                      </button>
+                      <button
+                        type="button"
+                        className={`masa-filter-link ${filterSide === 'wolf' ? 'active' : ''}`}
+                        onClick={() => setFilterSide('wolf')}
+                      >
+                        MA SÓI
+                      </button>
+                      <button
+                        type="button"
+                        className={`masa-filter-link ${filterSide === 'third' ? 'active' : ''}`}
+                        onClick={() => setFilterSide('third')}
+                      >
+                        PHE THỨ 3
+                      </button>
+                    </div>
+
+                    <div className="masa-search-wrapper">
                       <input
                         type="text"
-                        placeholder="Tìm tên vai trò, kỹ năng, kết quả soi…"
+                        placeholder="Tìm tên vai trò, kỹ năng, luật..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        className="masa-search-input"
                         aria-label="Tìm kiếm vai trò"
                       />
                       {searchQuery && (
                         <button
                           type="button"
-                          className="search-clear-btn"
+                          className="masa-search-clear"
                           onClick={() => setSearchQuery('')}
-                          aria-label="Xóa tìm kiếm"
+                          aria-label="Xóa nội dung tìm kiếm"
                         >
                           ×
                         </button>
                       )}
                     </div>
-
-                    <div className="roles-filter-bar" role="group" aria-label="Lọc theo phe phái">
-                      <button
-                        type="button"
-                        className={`filter-btn ${filterSide === 'all' ? 'active' : ''}`}
-                        onClick={() => setFilterSide('all')}
-                      >
-                        Tất cả ({gameRoles.length})
-                      </button>
-                      <button
-                        type="button"
-                        className={`filter-btn side-village ${filterSide === 'village' ? 'active' : ''}`}
-                        onClick={() => setFilterSide('village')}
-                      >
-                        Phe Dân
-                      </button>
-                      <button
-                        type="button"
-                        className={`filter-btn side-wolf ${filterSide === 'wolf' ? 'active' : ''}`}
-                        onClick={() => setFilterSide('wolf')}
-                      >
-                        Phe Sói
-                      </button>
-                      <button
-                        type="button"
-                        className={`filter-btn side-third ${filterSide === 'third' ? 'active' : ''}`}
-                        onClick={() => setFilterSide('third')}
-                      >
-                        Phe Thứ 3
-                      </button>
-                    </div>
                   </div>
 
+                  {/* Role Items Catalog */}
                   {filteredRoles.length === 0 ? (
-                    <div className="roles-empty-state">
-                      <p>Không tìm thấy vai trò nào phù hợp với từ khóa &ldquo;{searchQuery}&rdquo;.</p>
-                      <button type="button" onClick={() => { setSearchQuery(''); setFilterSide('all'); }}>
-                        Đặt lại bộ lọc
+                    <div className="masa-empty-state">
+                      <p>Không có vai trò nào khớp với từ khóa &ldquo;{searchQuery}&rdquo;.</p>
+                      <button
+                        type="button"
+                        className="masa-reset-btn"
+                        onClick={() => { setSearchQuery(''); setFilterSide('all'); }}
+                      >
+                        Đặt lại tìm kiếm
                       </button>
                     </div>
                   ) : (
-                    <div className="roles-card-grid">
-                      {filteredRoles.map((role) => (
-                        <button
-                          key={role.id}
-                          type="button"
-                          className={`role-practical-card side-${role.side}`}
-                          onClick={() => setSelectedRole(role)}
-                        >
-                          <div className="role-card-main-header">
-                            <div className="role-card-symbol-badge">
-                              <span>{role.symbol}</span>
-                            </div>
-                            <div className="role-card-headline">
-                              <strong className="role-card-name">{role.name}</strong>
-                              <div className="role-card-badges">
-                                <span className={`card-side-tag side-${role.side}`}>
-                                  {role.sideLabel}
-                                </span>
-                                <span className="card-wake-tag">{role.wakeFrequency}</span>
+                    <div className="masa-catalog-list" role="list">
+                      {filteredRoles.map((role) => {
+                        const globalIndex = gameRoles.findIndex((r) => r.id === role.id);
+                        const roleNum = String(globalIndex + 1).padStart(2, '0');
+
+                        return (
+                          <button
+                            key={role.id}
+                            type="button"
+                            className={`masa-catalog-item side-${role.side}`}
+                            onClick={() => setSelectedRole(role)}
+                            role="listitem"
+                          >
+                            <div className="masa-item-left">
+                              <span className="masa-item-num">{roleNum}</span>
+                              <div className="masa-item-name-block">
+                                <h3 className="masa-item-name">{role.name}</h3>
+                                <p className="masa-item-tagline">{role.tagline}</p>
                               </div>
                             </div>
-                            <span className="role-card-zoom-glyph" title="Xem chi tiết thực chiến">↗</span>
-                          </div>
 
-                          <div className="role-card-seer-line">
-                            <small>Soi: <b>{role.seerResult}</b></small>
-                          </div>
-
-                          <p className="role-card-brief">{role.description}</p>
-                        </button>
-                      ))}
+                            <div className="masa-item-right">
+                              <div className="masa-item-badges">
+                                <span className={`masa-item-side-pill side-${role.side}`}>
+                                  {role.sideLabel}
+                                </span>
+                                <span className="masa-item-wake-pill">
+                                  {role.wakeFrequency}
+                                </span>
+                              </div>
+                              <span className="masa-item-reveal-arrow" aria-hidden="true">→</span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

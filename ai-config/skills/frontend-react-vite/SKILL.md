@@ -9,6 +9,11 @@ Before coding, inspect app structure, router, scripts, CSS setup, component libr
 - Treat server-provided room/game state as authoritative. UI state may control presentation and temporary interaction, but must not determine roles, deaths, votes, or win conditions.
 - Cover loading, empty, error, disconnected, disabled, and success states for each relevant flow. Prevent duplicate submissions and give recoverable errors a clear next action.
 - Design for small phones and shared host displays. Keep daytime screens glanceable and nighttime screens discreet; do not expose another player's private role in markup, state, logs, or error text.
+- Prevent text clipping and overflow across viewports (320px to 428px mobile up to desktop). For dynamic or user-generated text (nicknames up to 24 chars, room codes, status banners):
+  - Always pair flex children with `min-width: 0` to prevent parent blowout.
+  - Avoid rigid single-row locks that squeeze text beside action buttons into unreadable fragments; wrap or stack actions on compact screens.
+  - Ensure critical identification data (room codes, player names) remains fully legible and not prematurely severed by aggressive `text-overflow: ellipsis`.
+  - Use `overflow-wrap: anywhere` or `word-break: break-word` where long unbroken names could cause horizontal overflow.
 - Use semantic HTML, keyboard-operable controls, visible focus, accessible names, and sufficient contrast. Do not encode status with color alone.
 - Respect mobile audio/autoplay constraints, reduced-motion preferences where relevant, and safe cleanup of subscriptions, timers, and media resources.
 - Follow repo route, styling, and testing conventions. Do not add a testing library until the project has one or the task calls for it.

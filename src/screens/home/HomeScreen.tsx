@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import RulesAndRolesDrawer from '../../components/RulesAndRolesDrawer';
+import DayNightAtmosphereCanvas from './DayNightAtmosphereCanvas';
+import forestBg from '../../assets/dark-forest.jpg';
 import './home.css';
 
 type Props = {
@@ -25,10 +27,19 @@ function sanitizeNickname(raw: string): string {
 }
 
 export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: Props) {
-  const [mode, setMode] = useState<'join' | 'create'>('join');
+  const [activeModal, setActiveModal] = useState<'join' | 'create' | null>(null);
   const [fallbackDrawerOpen, setFallbackDrawerOpen] = useState(false);
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
   const [isTestingSpeaker, setIsTestingSpeaker] = useState(false);
+
+  // Day / Night Atmosphere State (0.0 = Sáng / Bình Minh, 1.0 = Tối / Nửa Đêm)
+  const [dayNightFactor, setDayNightFactor] = useState(0.85); // Mặc định đêm
+  const [cursorPos, setCursorPos] = useState({
+    x: typeof window !== 'undefined' ? window.innerWidth * 0.75 : 800,
+    y: typeof window !== 'undefined' ? window.innerHeight * 0.35 : 400,
+    active: false,
+  });
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
 
   // Auto-Reconnect Session from localStorage
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(() => {
@@ -58,6 +69,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
 
   const rulesTrigger = useRef<HTMLButtonElement>(null);
   const qrCloseBtn = useRef<HTMLButtonElement>(null);
+  const modalCloseBtn = useRef<HTMLButtonElement>(null);
   const navigationTimer = useRef<number | undefined>(undefined);
   const [roomCode, setRoomCode] = useState('7290');
   const [notice, setNotice] = useState('');
@@ -71,18 +83,46 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
   }, []);
 
   useEffect(() => {
-    if (!qrScannerOpen) return;
-    qrCloseBtn.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setQrScannerOpen(false);
+      if (event.key === 'Escape') {
+        if (qrScannerOpen) {
+          setQrScannerOpen(false);
+        } else if (activeModal) {
+          setActiveModal(null);
+        }
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [qrScannerOpen]);
+  }, [qrScannerOpen, activeModal]);
+
+  // Pointer movement tracking (myshaky style interaction)
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const x = e.clientX;
+    const y = e.clientY;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    setCursorPos({ x, y, active: true });
+
+    // Move left -> Day (0), Move right -> Night (1)
+    const factor = Math.min(Math.max((x - w * 0.08) / (w * 0.84), 0), 1);
+    setDayNightFactor(factor);
+
+    // Subtle 3D card tilt
+    const rx = -((y / h) - 0.5) * 6;
+    const ry = ((x / w) - 0.5) * 8;
+    setTilt({ rotateX: rx, rotateY: ry });
+  };
+
+  const handlePointerLeave = () => {
+    setCursorPos((prev) => ({ ...prev, active: false }));
+    setTilt({ rotateX: 0, rotateY: 0 });
+  };
 
   const handleOpenRules = () => {
     if (onOpenRules) {
-      onOpenRules('rules');
+      onOpenRules('roles');
     } else {
       setFallbackDrawerOpen(true);
     }
@@ -111,6 +151,9 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
       // ignore
     }
     setActiveSession(null);
+    if (activeModal === 'reconnect') {
+      setActiveModal(null);
+    }
   };
 
   // Test Speaker button logic (SpeechSynthesis + Web Audio fallback)
@@ -154,9 +197,9 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     }
   };
 
-  const enterLobby = () => {
+  const enterLobby = (action: 'join' | 'create') => {
     const cleanCode = roomCode.replace(/\D/g, '').slice(0, 4);
-    if (mode === 'join' && cleanCode.length !== 4) {
+    if (action === 'join' && cleanCode.length !== 4) {
       setNotice('Mã phòng cần có đúng 4 chữ số.');
       return;
     }
@@ -183,26 +226,81 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     }
 
     onPlayerJoined?.(cleanName);
-    setNotice(mode === 'join' ? 'Đang vào sảnh chờ...' : 'Đã lập bàn chơi mới.');
+    setNotice(action === 'join' ? 'Đang vào sảnh chờ...' : 'Đã lập bàn chơi mới.');
     window.clearTimeout(navigationTimer.current);
     navigationTimer.current = window.setTimeout(() => onNavigate?.('lobby'), 250);
   };
 
+  // Determine Atmosphere Stage
+  let celestialStage: 'day' | 'twilight' | 'night' = 'night';
+  if (dayNightFactor < 0.35) {
+    celestialStage = 'day';
+  } else if (dayNightFactor < 0.65) {
+    celestialStage = 'twilight';
+  }
+
   return (
-    <div className="home-page">
+    <div
+      className={`home-page atmosphere-${celestialStage}`}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+    >
+      {/* Dark Forest Photo Background with Parallax */}
+      <div
+        className="home-forest-backdrop"
+        style={{
+          transform: `scale(1.06) translate(${
+            cursorPos.active
+              ? (cursorPos.x / (typeof window !== 'undefined' ? window.innerWidth : 1) - 0.5) * -16
+              : 0
+          }px, ${
+            cursorPos.active
+              ? (cursorPos.y / (typeof window !== 'undefined' ? window.innerHeight : 1) - 0.5) * -10
+              : 0
+          }px)`,
+        }}
+        aria-hidden="true"
+      >
+        <img
+          src={forestBg}
+          alt=""
+          className="home-forest-img"
+        />
+        <div className="home-forest-vignette" />
+      </div>
+
+      {/* Interactive Background Atmosphere Canvas */}
+      <DayNightAtmosphereCanvas
+        dayNightFactor={dayNightFactor}
+        cursorPos={cursorPos}
+      />
+
+      {/* Top Header */}
       <header className="home-header">
         <a className="home-brand" href="#home" onClick={(event) => event.preventDefault()} aria-label="Ma Sói Host">
           <div className="home-moon-symbol" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" className="moon-svg">
-              <path
-                d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-                fill="currentColor"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            {dayNightFactor > 0.5 ? (
+              <svg viewBox="0 0 24 24" fill="none" className="moon-svg">
+                <path
+                  d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" className="sun-svg">
+                <circle cx="12" cy="12" r="5" fill="currentColor" />
+                <path
+                  d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            )}
           </div>
           <div className="home-brand-text">
             <span>MA SÓI HOST</span>
@@ -210,96 +308,139 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
           </div>
         </a>
 
-        <div className="home-header-nav">
+      </header>
+
+      {/* Central Interactive Screen (myshaky style) */}
+      <main className="home-main home-main-stage">
+        {/* Shaky-Inspired Nav Dock: Placed right below the header line */}
+        <nav className="home-shaky-nav" aria-label="Menu chức năng chính">
           <button
-            ref={rulesTrigger}
-            className="home-button home-button-quiet"
+            type="button"
+            className={`shaky-nav-item ${activeModal === 'join' ? 'is-active' : ''}`}
+            onClick={() => { setActiveModal('join'); setNotice(''); }}
+          >
+            <span className="shaky-nav-text">Vào bàn</span>
+            {activeSession && <span className="shaky-nav-dot" title="Có bàn đang chơi" aria-hidden="true" />}
+          </button>
+
+          <button
+            type="button"
+            className={`shaky-nav-item ${activeModal === 'create' ? 'is-active' : ''}`}
+            onClick={() => { setActiveModal('create'); setNotice(''); }}
+          >
+            <span className="shaky-nav-text">Lập bàn</span>
+          </button>
+
+          <button
+            type="button"
+            className="shaky-nav-item"
             onClick={handleOpenRules}
             title="Tra cứu luật làng và 10 vai trò thực chiến"
           >
-            <span aria-hidden="true">📜</span>
-            <span>Luật &amp; Vai trò</span>
+            <span className="shaky-nav-text">Luật &amp; Vai trò</span>
           </button>
-        </div>
-      </header>
+        </nav>
 
-      <main className="home-main">
-        {/* Auto-Reconnect Banner (Khôi phục ván đấu nếu F5 / ngắt kết nối) */}
-        {activeSession && (
-          <div className="home-reconnect-banner" role="region" aria-label="Khôi phục phiên chơi">
-            <div className="reconnect-left">
-              <span className="reconnect-pulse-dot" aria-hidden="true" />
-              <div className="reconnect-info">
-                <strong>Bạn đang ở bàn #{activeSession.roomCode} ({activeSession.nickname})</strong>
-                <small>Bấm để quay lại bàn đấu ngay lập tức</small>
-              </div>
-            </div>
-            <div className="reconnect-actions">
+        {/* Centerpiece: ONLY WEREWOLF MODERATOR Typography with 3D Tilt */}
+        <div
+          className="home-center-stage"
+          style={{
+            transform: `perspective(900px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
+          }}
+        >
+          <h1 className="center-hero-title">
+            <span className="title-word title-werewolf">WEREWOLF</span>
+            <span className="title-word title-moderator">MODERATOR</span>
+          </h1>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="home-footer">
+        <div className="home-status-live">
+          <span className="live-pulse-dot" aria-hidden="true" />
+          <span>Máy chủ trực tiếp</span>
+        </div>
+      </footer>
+
+      {/* MODAL 1: Vào bàn có sẵn (Join Room) */}
+      {activeModal === 'join' && (
+        <div
+          className="home-modal-backdrop"
+          role="presentation"
+          onClick={() => setActiveModal(null)}
+        >
+          <div
+            className="home-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-join-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2 id="modal-join-title">Vào bàn có sẵn</h2>
               <button
+                ref={modalCloseBtn}
                 type="button"
-                className="reconnect-btn"
-                onClick={handleReconnect}
-                title="Vào lại bàn ngay"
-              >
-                Vào lại ngay →
-              </button>
-              <button
-                type="button"
-                className="reconnect-dismiss"
-                onClick={handleDismissSession}
-                title="Rời khỏi bàn này"
-                aria-label="Bỏ qua bàn này"
+                className="modal-close-btn"
+                onClick={() => setActiveModal(null)}
+                aria-label="Đóng cửa sổ"
               >
                 ×
               </button>
             </div>
-          </div>
-        )}
 
-        <div className="home-hero">
-          <h1>
-            Đêm buông xuống.
-            <em>Cuộc chơi bắt đầu.</em>
-          </h1>
-        </div>
+            <div className="home-form">
+              {/* Thẻ Vào lại bàn nếu có phiên lưu dở */}
+              {activeSession && (
+                <div className="modal-reconnect-card" role="region" aria-label="Bàn đang chơi dở">
+                  <div className="reconnect-card-top">
+                    <div className="reconnect-card-title-group">
+                      <span className="live-pulse-dot" aria-hidden="true" />
+                      <strong className="reconnect-card-title">
+                        Bàn đang chơi #{activeSession.roomCode} ({activeSession.nickname})
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="reconnect-dismiss-btn"
+                      onClick={handleDismissSession}
+                      title="Bỏ qua bàn này"
+                      aria-label="Bỏ qua bàn này"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p className="reconnect-card-sub">
+                    Bạn có phiên chơi chưa hoàn tất trên máy này
+                  </p>
+                  <button
+                    type="button"
+                    className="reconnect-quick-btn"
+                    onClick={handleReconnect}
+                  >
+                    <span>Vào lại ngay</span>
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              )}
 
-        <section className="home-console" aria-label="Vào hoặc tạo phòng">
-          <div className="home-tabs" role="tablist" aria-label="Chọn thao tác">
-            <button
-              role="tab"
-              aria-selected={mode === 'join'}
-              className={mode === 'join' ? 'selected' : ''}
-              onClick={() => { setMode('join'); setNotice(''); }}
-            >
-              <span>Vào bàn có sẵn</span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={mode === 'create'}
-              className={mode === 'create' ? 'selected' : ''}
-              onClick={() => { setMode('create'); setNotice(''); }}
-            >
-              <span>Lập bàn đấu mới</span>
-            </button>
-          </div>
-
-          {mode === 'join' ? (
-            <div className="home-form" role="tabpanel">
               <div className="home-field-heading">
-                <label htmlFor="room-code">Mã bàn 4 số</label>
+                <label htmlFor="modal-room-code">Mã bàn 4 số</label>
               </div>
-              
+
               <div className="home-code-row">
                 <div className="home-code-wrapper">
                   <input
-                    id="room-code"
+                    id="modal-room-code"
                     className="home-code-input"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={4}
                     value={roomCode}
                     onChange={(event) => setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                    aria-describedby="code-help-text"
+                    aria-describedby="modal-code-help"
+                    autoFocus
                   />
                   <div className="home-code-display" aria-hidden="true">
                     {[0, 1, 2, 3].map((idx) => {
@@ -325,14 +466,14 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 </button>
               </div>
 
-              <p id="code-help-text" className="home-helper">
+              <p id="modal-code-help" className="home-helper">
                 <span className="helper-icon" aria-hidden="true">❦</span>
                 Nhập 4 số hoặc quét nhanh QR trên màn hình bàn Host.
               </p>
 
-              <label className="home-label" htmlFor="nickname">Biệt danh của bạn</label>
+              <label className="home-label" htmlFor="modal-nickname">Biệt danh của bạn</label>
               <input
-                id="nickname"
+                id="modal-nickname"
                 className="home-text-input"
                 value={nickname}
                 maxLength={24}
@@ -347,7 +488,10 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 placeholder="Nhập tên gọi…"
               />
 
-              <button className="home-button home-button-primary" onClick={enterLobby}>
+              <button
+                className="home-button home-button-primary"
+                onClick={() => enterLobby('join')}
+              >
                 <span>Bước vào bàn chơi</span>
                 <span className="arrow-icon" aria-hidden="true">→</span>
               </button>
@@ -356,11 +500,42 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 <span className="tip-bulb" aria-hidden="true">💡</span>
                 <span>Mẹo: Bật im lặng thông báo và giảm độ sáng màn hình trước khi Đêm 1 bắt đầu.</span>
               </div>
+
+              {notice && <p className="home-notice" role="status">{notice}</p>}
             </div>
-          ) : (
-            <div className="home-form" role="tabpanel">
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Lập bàn đấu mới (Create Room) */}
+      {activeModal === 'create' && (
+        <div
+          className="home-modal-backdrop"
+          role="presentation"
+          onClick={() => setActiveModal(null)}
+        >
+          <div
+            className="home-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-create-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2 id="modal-create-title">Lập bàn đấu mới</h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setActiveModal(null)}
+                aria-label="Đóng cửa sổ"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="home-form">
               <p className="home-label">Chọn phương thức đặt máy</p>
-              
+
               <button
                 type="button"
                 className={`home-device-option ${deviceMode === 'shared' ? 'active' : ''}`}
@@ -413,9 +588,9 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 </button>
               </div>
 
-              <label className="home-label" htmlFor="host-name">Tên người lập bàn</label>
+              <label className="home-label" htmlFor="modal-host-name">Tên người lập bàn</label>
               <input
-                id="host-name"
+                id="modal-host-name"
                 className="home-text-input"
                 value={nickname}
                 maxLength={24}
@@ -430,7 +605,10 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 placeholder="Nhập tên gọi…"
               />
 
-              <button className="home-button home-button-primary" onClick={enterLobby}>
+              <button
+                className="home-button home-button-primary"
+                onClick={() => enterLobby('create')}
+              >
                 <span>Khởi tạo bàn đấu</span>
                 <span className="arrow-icon" aria-hidden="true">✦</span>
               </button>
@@ -439,20 +617,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                 <span className="tip-bulb" aria-hidden="true">💡</span>
                 <span>Mẹo: Bật im lặng thông báo và giảm độ sáng màn hình trước khi Đêm 1 bắt đầu.</span>
               </div>
+
+              {notice && <p className="home-notice" role="status">{notice}</p>}
             </div>
-          )}
-
-          {notice && <p className="home-notice" role="status">{notice}</p>}
-        </section>
-      </main>
-
-      <footer className="home-footer">
-        <div className="home-status-live">
-          <span className="live-pulse-dot" aria-hidden="true" />
-          <span>Máy chủ trực tiếp</span>
+          </div>
         </div>
-        <span className="home-room-ping">Phòng #7290 sẵn sàng</span>
-      </footer>
+      )}
 
       {/* QR Scanner Camera Modal */}
       {qrScannerOpen && (
@@ -510,6 +680,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
         <RulesAndRolesDrawer
           isOpen={fallbackDrawerOpen}
           onClose={() => setFallbackDrawerOpen(false)}
+          initialTab="roles"
         />
       )}
     </div>
