@@ -275,44 +275,9 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
         cursorPos={cursorPos}
       />
 
-      {/* Top Header */}
-      <header className="home-header">
-        <a className="home-brand" href="#home" onClick={(event) => event.preventDefault()} aria-label="Ma Sói Host">
-          <div className="home-moon-symbol" aria-hidden="true">
-            {dayNightFactor > 0.5 ? (
-              <svg viewBox="0 0 24 24" fill="none" className="moon-svg">
-                <path
-                  d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-                  fill="currentColor"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" className="sun-svg">
-                <circle cx="12" cy="12" r="5" fill="currentColor" />
-                <path
-                  d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            )}
-          </div>
-          <div className="home-brand-text">
-            <span>MA SÓI HOST</span>
-            <small>Quản trò tự động cho đêm chơi Ma Sói</small>
-          </div>
-        </a>
-
-      </header>
-
       {/* Central Interactive Screen (myshaky style) */}
       <main className="home-main home-main-stage">
-        {/* Shaky-Inspired Nav Dock: Placed right below the header line */}
+        {/* Shaky-Inspired Nav Dock */}
         <nav className="home-shaky-nav" aria-label="Menu chức năng chính">
           <button
             type="button"
