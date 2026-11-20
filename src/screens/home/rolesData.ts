@@ -1,6 +1,11 @@
 export type RoleSide = 'village' | 'wolf' | 'third';
 
-export type WakeFrequency = 'Đêm 1' | 'Mỗi đêm' | 'Bị động' | 'Khi chết';
+export type WakeFrequency =
+  | 'Ngủ suốt đêm'
+  | 'Mỗi đêm'
+  | 'Đêm 1'
+  | 'Khi chết'
+  | 'Sau khi bị cắn';
 
 export type GameRole = {
   id: string;
@@ -10,10 +15,9 @@ export type GameRole = {
   sideLabel: string;
   seerResult: string; // Tiên tri soi ra gì
   wakeFrequency: WakeFrequency; // Tần suất thức dậy
-  tagline: string;
+  winCondition: string; // Điều kiện thắng
   description: string; // 1-2 câu ngắn gọn dễ hiểu
   roomRuleNote: string; // Lưu ý luật phòng thực chiến
-  tacticTip: string; // Mẹo thực chiến
   auraColor: string;
 };
 
@@ -24,12 +28,11 @@ export const gameRoles: GameRole[] = [
     symbol: '🛡️',
     side: 'village',
     sideLabel: 'Phe Dân Làng',
-    seerResult: 'Dân Làng (Thôn Dân)',
-    wakeFrequency: 'Bị động',
-    tagline: 'Thôn dân chân chất, giữ vững niềm tin',
-    description: 'Không có quyền năng trong đêm. Sức mạnh của bạn là quan sát lời ăn tiếng nói và lá phiếu treo cổ vào ban ngày.',
-    roomRuleNote: 'Không thức giấc trong đêm. Không có quyền năng đặc biệt nào.',
-    tacticTip: 'Đừng giữ im lặng. Hãy chủ động đặt câu hỏi và để ý xem ai trả lời ấp úng hoặc đổi giọng khi bị chất vấn.',
+    seerResult: 'Dân Làng',
+    wakeFrequency: 'Ngủ suốt đêm',
+    winCondition: 'Tiêu diệt hết Ma Sói',
+    description: 'Không có quyền năng ban đêm. Sức mạnh của bạn nằm ở ban ngày: quan sát biểu cảm, lắng nghe lập luận và dùng lá phiếu vote để treo cổ kẻ tình nghi.',
+    roomRuleNote: 'Giữ im lặng và úp máy suốt đêm. Khi bị treo cổ hoặc bị cắn chết, người chơi tuyệt đối không được nói hay ra hiệu cho bàn chơi.',
     auraColor: 'var(--forest, #2b583e)',
   },
   {
@@ -38,12 +41,11 @@ export const gameRoles: GameRole[] = [
     symbol: '🔮',
     side: 'village',
     sideLabel: 'Phe Dân Làng',
-    seerResult: 'Dân Làng (Thần Chức)',
+    seerResult: 'Dân Làng',
     wakeFrequency: 'Mỗi đêm',
-    tagline: 'Kẻ thấu thị màn đêm',
-    description: 'Mỗi khi Trời tối, Tiên Tri được gọi dậy để soi danh tính thực sự của một người chơi bất kỳ trên bàn.',
-    roomRuleNote: 'Quản trò chỉ báo phe phái (Dân hay Sói). Soi Kẻ Phản Bội vẫn ra Dân Làng; soi Bán Sói chưa bị cắn vẫn ra Dân Làng.',
-    tacticTip: 'Đừng vội lộ diện ngay ngày 1 nếu chưa soi ra Sói hoặc chưa có Bảo Vệ che chắn, tránh bị bầy Sói thủ tiêu sớm.',
+    winCondition: 'Tiêu diệt hết Ma Sói',
+    description: 'Mỗi đêm được quản trò gọi dậy soi danh tính 1 người chơi. Quản trò sẽ bí mật thông báo người đó thuộc phe Dân hay phe Sói.',
+    roomRuleNote: 'Soi Kẻ Phản Bội hoặc Bán Sói (chưa bị cắn) đều chỉ ra Dân Làng. Quản trò chỉ báo Dân hay Sói, không báo tên chức năng cụ thể.',
     auraColor: 'var(--twilight, #4d476f)',
   },
   {
@@ -52,12 +54,11 @@ export const gameRoles: GameRole[] = [
     symbol: '⚔️',
     side: 'village',
     sideLabel: 'Phe Dân Làng',
-    seerResult: 'Dân Làng (Thần Chức)',
+    seerResult: 'Dân Làng',
     wakeFrequency: 'Mỗi đêm',
-    tagline: 'Tấm khiên thép của thôn bản',
-    description: 'Mỗi đêm được chọn bảo vệ một người khỏi đòn cắn của Ma Sói. Nếu chọn đúng người bị Sói cắn, đêm đó nạn nhân sống sót.',
-    roomRuleNote: 'Không được tự bảo vệ bản thân hai đêm liên tiếp. Khi Phù Thủy ném bình độc, khiên Bảo Vệ không đỡ được thuốc độc.',
-    tacticTip: 'Tự bảo vệ mình đêm đầu thường an toàn. Từ đêm 2 trở đi, hãy quan sát ai có tiếng nói dẫn dắt hoặc nghi là Tiên Tri để bọc lót.',
+    winCondition: 'Tiêu diệt hết Ma Sói',
+    description: 'Mỗi đêm chọn khiên bảo hộ 1 người chơi. Nếu người đó bị Ma Sói chọn cắn trong đêm, đòn cắn bị vô hiệu và nạn nhân sống sót.',
+    roomRuleNote: 'Không được tự bảo vệ bản thân 2 đêm liên tiếp. Khiên Bảo Vệ chỉ đỡ được nanh Sói, không đỡ được thuốc độc của Phù Thủy.',
     auraColor: 'var(--forest, #2b583e)',
   },
   {
@@ -66,12 +67,11 @@ export const gameRoles: GameRole[] = [
     symbol: '🧪',
     side: 'village',
     sideLabel: 'Phe Dân Làng',
-    seerResult: 'Dân Làng (Thần Chức)',
+    seerResult: 'Dân Làng',
     wakeFrequency: 'Mỗi đêm',
-    tagline: 'Người nắm giữ hai bình thuốc sinh tử',
-    description: 'Nắm giữ một Bình Cứu (cứu người bị Sói cắn) và một Bình Độc (hạ sát kẻ nghi ngờ). Mỗi bình chỉ được dùng 1 lần trong cả ván.',
-    roomRuleNote: 'Khi công tắc "Cứu mù mất bình" bật: Nếu bấm cứu khi đêm đó không ai bị cắn trúng, Phù Thủy sẽ mất trắng bình cứu. Không thể tự cứu mình nếu luật phòng cấm.',
-    tacticTip: 'Bình cứu nên dùng sớm ở đêm 1 hoặc 2 để bảo toàn quân số. Bình độc là vũ khí tối thượng, chỉ ném khi chắc chắn trên 80% là Sói.',
+    winCondition: 'Tiêu diệt hết Ma Sói',
+    description: 'Nắm giữ 2 bình thuốc thần: 1 Bình Cứu (cứu người bị Sói cắn) và 1 Bình Độc (hạ sát 1 kẻ tình nghi). Mỗi bình chỉ dùng 1 lần trong cả ván.',
+    roomRuleNote: 'Nếu bật luật "Cứu mù mất bình": bấm cứu khi đêm đó không ai bị cắn sẽ mất trắng bình. Phù Thủy có thể dùng cả 2 bình trong cùng 1 đêm.',
     auraColor: 'var(--twilight, #4d476f)',
   },
   {
@@ -80,12 +80,11 @@ export const gameRoles: GameRole[] = [
     symbol: '🎯',
     side: 'village',
     sideLabel: 'Phe Dân Làng',
-    seerResult: 'Dân Làng (Thần Chức)',
+    seerResult: 'Dân Làng',
     wakeFrequency: 'Khi chết',
-    tagline: 'Phát đạn sau cùng trước khi ngã xuống',
-    description: 'Khi chết do bị Sói cắn hoặc bị Dân làng bỏ phiếu treo cổ, Thợ Săn được quyền nổ phát súng cuối cùng chỉ định một kẻ bất kỳ cùng chết.',
-    roomRuleNote: 'Nếu chết do Phù Thủy đầu độc, Thợ Săn sẽ bị câm lặng và KHÔNG được nổ súng (tùy cài đặt phòng).',
-    tacticTip: 'Thợ Săn có thể chơi cứng rắn, thậm chí cố tình thu hút sự chú ý của Sói để kéo theo một con Sói khi trút hơi thở cuối cùng.',
+    winCondition: 'Tiêu diệt hết Ma Sói',
+    description: 'Khi chết do bị Sói cắn hoặc bị Dân làng bỏ phiếu treo cổ, Thợ Săn được quyền nổ phát súng sau cùng chỉ định 1 người bất kỳ cùng chết.',
+    roomRuleNote: 'Nếu chết do thuốc độc của Phù Thủy, Thợ Săn bị câm lặng và KHÔNG được nổ súng.',
     auraColor: 'var(--lantern, #c98638)',
   },
   {
@@ -96,10 +95,9 @@ export const gameRoles: GameRole[] = [
     sideLabel: 'Phe Ma Sói',
     seerResult: 'Ma Sói',
     wakeFrequency: 'Mỗi đêm',
-    tagline: 'Kẻ săn mồi đội lốt dân lành',
-    description: 'Ban ngày đóng giả dân làng hòa nhã. Khi Trời tối, thức giấc cùng bầy đàn và thống nhất cắn một nạn nhân.',
-    roomRuleNote: 'Nếu bầy Sói không thống nhất được mục tiêu trước khi hết giờ, đêm đó bầy Sói mất lượt cắn.',
-    tacticTip: 'Tránh hùa theo đồng đội quá lộ liễu. Đôi khi bỏ phiếu thuận treo cổ đồng đội ở thế bí là cách tốt nhất để tạo uy tín sống sót tới cuối.',
+    winCondition: 'Số Sói bằng số Dân',
+    description: 'Ban ngày trà trộn vào dân làng. Khi đêm xuống, thức giấc cùng bầy đàn và thống nhất chọn 1 nạn nhân để cắn hạ.',
+    roomRuleNote: 'Nếu bầy Sói không thống nhất được mục tiêu trước khi hết giờ, đêm đó bầy Sói bị mất lượt cắn.',
     auraColor: 'var(--blood, #8e1e24)',
   },
   {
@@ -110,10 +108,9 @@ export const gameRoles: GameRole[] = [
     sideLabel: 'Phe Ma Sói',
     seerResult: 'Ma Sói',
     wakeFrequency: 'Mỗi đêm',
-    tagline: 'Thủ lĩnh bóng đêm hung bạo',
-    description: 'Thủ lĩnh bầy Sói. Có quyền quyết định con mồi khi bầy sói bất đồng ý kiến, dẫn dắt chiến thuật săn mồi.',
-    roomRuleNote: 'Tiếng hú của Sói Đầu Đàn có trọng lượng cao nhất khi bỏ phiếu cắn ban đêm.',
-    tacticTip: 'Hãy giữ hình ảnh là một người chơi logic và đáng tin cậy nhất bàn. Đừng quá im lặng cũng đừng công kích ai quá đà.',
+    winCondition: 'Số Sói bằng số Dân',
+    description: 'Thủ lĩnh bầy Sói, nắm quyền quyết định tối hậu khi đàn Sói bất đồng ý kiến về con mồi trong đêm.',
+    roomRuleNote: 'Tiếng hú của Sói Đầu Đàn có trọng lượng quyết định khi xảy ra hòa phiếu cắn giữa bầy Sói.',
     auraColor: 'var(--blood, #8e1e24)',
   },
   {
@@ -122,12 +119,11 @@ export const gameRoles: GameRole[] = [
     symbol: '🗡️',
     side: 'wolf',
     sideLabel: 'Phe Ma Sói',
-    seerResult: 'Dân Làng (Ẩn danh)',
+    seerResult: 'Dân Làng',
     wakeFrequency: 'Đêm 1',
-    tagline: 'Nội gián đắc lực của loài Sói',
-    description: 'Thức dậy đêm đầu tiên để biết mặt bầy Sói (nhưng Sói không biết bạn). Nhiệm vụ là dẫn dắt dư luận ban ngày giúp Sói chiến thắng.',
-    roomRuleNote: 'Tiên tri soi Kẻ Phản Bội chỉ ra DÂN LÀNG. Kẻ Phản Bội không tham gia cắn người ban đêm và vẫn có thể bị Sói cắn nhầm.',
-    tacticTip: 'Tận dụng vỏ bọc Dân Làng sạch để định hướng treo cổ các chức năng chủ chốt như Tiên Tri và Bảo Vệ.',
+    winCondition: 'Số Sói bằng số Dân',
+    description: 'Nội gián phe Sói. Thức dậy đêm đầu tiên để biết mặt đàn Sói (nhưng Sói không biết bạn). Nhiệm vụ là định hướng dư luận ban ngày giúp Sói thắng.',
+    roomRuleNote: 'Tiên tri soi Kẻ Phản Bội chỉ ra Dân Làng. Kẻ Phản Bội không tham gia cắn người và vẫn có thể bị Sói cắn nhầm.',
     auraColor: '#843d43',
   },
   {
@@ -136,12 +132,11 @@ export const gameRoles: GameRole[] = [
     symbol: '🐾',
     side: 'third',
     sideLabel: 'Phe Thứ 3 / Lai',
-    seerResult: 'Ban đầu: Dân · Sau cắn: Sói',
-    wakeFrequency: 'Bị động',
-    tagline: 'Số phận rẽ lối giữa hai bờ sáng tối',
-    description: 'Ban đầu mang thân phận Dân Làng. Nếu bị Ma Sói cắn vào ban đêm, Bán Sói không chết mà sẽ thức tỉnh dòng máu sói từ đêm kế tiếp.',
-    roomRuleNote: 'Trước khi bị cắn, Tiên tri soi ra Dân Làng. Sau khi bị cắn, Tiên tri soi ra Ma Sói và Bán Sói thức giấc cùng bầy Sói.',
-    tacticTip: 'Khi chưa bị cắn, hãy chơi hết mình vì phe Dân. Khi đã thức tỉnh thành Sói, hãy dùng những thông tin mình có để phản công.',
+    seerResult: 'Dân (trước cắn) · Sói (sau cắn)',
+    wakeFrequency: 'Sau khi bị cắn',
+    winCondition: 'Theo phe Dân (trước cắn) · Theo phe Sói (sau cắn)',
+    description: 'Ban đầu mang thân phận Dân Làng. Nếu bị Ma Sói cắn trong đêm, Bán Sói không chết mà thức tỉnh dòng máu sói từ đêm kế tiếp.',
+    roomRuleNote: 'Trước khi bị cắn, Tiên tri soi ra Dân Làng. Sau khi thức tỉnh, Tiên tri soi ra Ma Sói và Bán Sói thức dậy cắn người cùng đàn Sói.',
     auraColor: '#8a6d4b',
   },
   {
@@ -152,10 +147,9 @@ export const gameRoles: GameRole[] = [
     sideLabel: 'Phe Thứ 3 / Ghép đôi',
     seerResult: 'Dân Làng',
     wakeFrequency: 'Đêm 1',
-    tagline: 'Người kết nối tơ duyên định mệnh',
-    description: 'Đêm đầu tiên thức dậy chỉ định 2 người thành Cặp Đôi. Nếu một trong hai người chết, người kia sẽ đau đớn chết theo.',
-    roomRuleNote: 'Nếu Cặp Đôi gồm 1 Dân + 1 Sói, họ trở thành Phe Thứ 3 riêng biệt: mục tiêu là tiêu diệt tất cả những người còn lại để giành chiến thắng.',
-    tacticTip: 'Nếu bạn vô tình tạo ra cặp Dân - Sói, cuộc chơi sẽ cực kỳ kịch tính vì hai người này sẽ âm thầm bảo vệ nhau bất chấp phe phái.',
+    winCondition: 'Phe Dân thắng (trừ khi tự ghép mình thành cặp Dân-Sói)',
+    description: 'Đêm đầu tiên thức dậy chỉ định 2 người chơi thành Cặp Đôi định mệnh. Nếu 1 trong 2 người chết, người kia sẽ chết theo ngay lập tức.',
+    roomRuleNote: 'Nếu Cặp Đôi gồm 1 Dân + 1 Sói, họ tách thành phe Thứ 3 riêng biệt: mục tiêu là tiêu diệt tất cả những người còn lại để giành chiến thắng.',
     auraColor: '#965a6e',
   },
 ];

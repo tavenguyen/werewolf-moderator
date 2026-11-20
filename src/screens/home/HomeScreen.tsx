@@ -328,7 +328,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
         </div>
       </footer>
 
-      {/* MODAL 1: Vào bàn có sẵn (Join Room) */}
+      {/* MODAL 1: Vào bàn (Join Room) */}
       {activeModal === 'join' && (
         <div
           className="home-modal-backdrop"
@@ -343,7 +343,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
-              <h2 id="modal-join-title">Vào bàn có sẵn</h2>
+              <h2 id="modal-join-title">Vào bàn</h2>
               <button
                 ref={modalCloseBtn}
                 type="button"
@@ -356,19 +356,27 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
             </div>
 
             <div className="home-form">
-              {/* Thẻ Vào lại bàn nếu có phiên lưu dở */}
+              {/* Thanh Bàn đang chơi rút gọn 1 dòng */}
               {activeSession && (
-                <div className="modal-reconnect-card" role="region" aria-label="Bàn đang chơi dở">
-                  <div className="reconnect-card-top">
-                    <div className="reconnect-card-title-group">
-                      <span className="live-pulse-dot" aria-hidden="true" />
-                      <strong className="reconnect-card-title">
-                        Bàn đang chơi #{activeSession.roomCode} ({activeSession.nickname})
-                      </strong>
-                    </div>
+                <div className="join-reconnect-bar" role="region" aria-label="Bàn đang chơi dở">
+                  <div className="reconnect-bar-tag">
+                    <span className="live-pulse-dot" aria-hidden="true" />
+                    <span className="reconnect-bar-text">
+                      #{activeSession.roomCode} · {activeSession.nickname}
+                    </span>
+                  </div>
+                  <div className="reconnect-bar-actions">
                     <button
                       type="button"
-                      className="reconnect-dismiss-btn"
+                      className="reconnect-bar-btn"
+                      onClick={handleReconnect}
+                    >
+                      <span>Vào lại</span>
+                      <span aria-hidden="true">→</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="reconnect-bar-dismiss"
                       onClick={handleDismissSession}
                       title="Bỏ qua bàn này"
                       aria-label="Bỏ qua bàn này"
@@ -376,26 +384,16 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                       ×
                     </button>
                   </div>
-                  <p className="reconnect-card-sub">
-                    Bạn có phiên chơi chưa hoàn tất trên máy này
-                  </p>
-                  <button
-                    type="button"
-                    className="reconnect-quick-btn"
-                    onClick={handleReconnect}
-                  >
-                    <span>Vào lại ngay</span>
-                    <span aria-hidden="true">→</span>
-                  </button>
                 </div>
               )}
 
-              <div className="home-field-heading">
-                <label htmlFor="modal-room-code">Mã bàn 4 số</label>
-              </div>
+              {/* Khu vực Mã bàn */}
+              <div className="join-code-section">
+                <div className="home-field-heading">
+                  <label htmlFor="modal-room-code">Mã bàn</label>
+                </div>
 
-              <div className="home-code-row">
-                <div className="home-code-wrapper">
+                <div className="join-code-boxes-wrapper">
                   <input
                     id="modal-room-code"
                     className="home-code-input"
@@ -404,10 +402,9 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
                     maxLength={4}
                     value={roomCode}
                     onChange={(event) => setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                    aria-describedby="modal-code-help"
                     autoFocus
                   />
-                  <div className="home-code-display" aria-hidden="true">
+                  <div className="home-code-display join-code-grid" aria-hidden="true">
                     {[0, 1, 2, 3].map((idx) => {
                       const digit = roomCode[idx] ?? '';
                       const isCurrent = idx === roomCode.length;
@@ -422,49 +419,45 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
 
                 <button
                   type="button"
-                  className="home-qr-scan-btn"
+                  className="join-qr-outline-btn"
                   onClick={() => setQrScannerOpen(true)}
                   title="Quét mã QR trên màn hình bàn Host"
                 >
                   <span className="qr-scan-glyph" aria-hidden="true">📷</span>
-                  <span>Quét QR</span>
+                  <span>Quét mã QR</span>
                 </button>
               </div>
 
-              <p id="modal-code-help" className="home-helper">
-                <span className="helper-icon" aria-hidden="true">❦</span>
-                Nhập 4 số hoặc quét nhanh QR trên màn hình bàn Host.
-              </p>
+              {/* Khu vực Tên hiển thị */}
+              <div className="join-name-section">
+                <label className="home-label" htmlFor="modal-nickname">Tên hiển thị</label>
+                <input
+                  id="modal-nickname"
+                  className="home-text-input"
+                  value={nickname}
+                  maxLength={24}
+                  onChange={(event) => {
+                    setNickname(event.target.value);
+                    try {
+                      localStorage.setItem('werewolf_nickname', event.target.value);
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  placeholder="Tên của bạn"
+                />
+              </div>
 
-              <label className="home-label" htmlFor="modal-nickname">Biệt danh của bạn</label>
-              <input
-                id="modal-nickname"
-                className="home-text-input"
-                value={nickname}
-                maxLength={24}
-                onChange={(event) => {
-                  setNickname(event.target.value);
-                  try {
-                    localStorage.setItem('werewolf_nickname', event.target.value);
-                  } catch {
-                    // ignore
-                  }
-                }}
-                placeholder="Nhập tên gọi…"
-              />
-
+              {/* Nút hành động chính: Vào chơi */}
               <button
-                className="home-button home-button-primary"
+                className={`home-button home-button-primary join-submit-btn ${
+                  roomCode.length === 4 && nickname.trim().length > 0 ? 'is-ready' : 'is-disabled'
+                }`}
+                disabled={roomCode.length !== 4 || !nickname.trim()}
                 onClick={() => enterLobby('join')}
               >
-                <span>Bước vào bàn chơi</span>
-                <span className="arrow-icon" aria-hidden="true">→</span>
+                <span>Vào chơi</span>
               </button>
-
-              <div className="home-pre-room-tip">
-                <span className="tip-bulb" aria-hidden="true">💡</span>
-                <span>Mẹo: Bật im lặng thông báo và giảm độ sáng màn hình trước khi Đêm 1 bắt đầu.</span>
-              </div>
 
               {notice && <p className="home-notice" role="status">{notice}</p>}
             </div>
@@ -472,7 +465,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
         </div>
       )}
 
-      {/* MODAL 2: Lập bàn đấu mới (Create Room) */}
+      {/* MODAL 2: Lập bàn (Create Room) */}
       {activeModal === 'create' && (
         <div
           className="home-modal-backdrop"
@@ -487,7 +480,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-head">
-              <h2 id="modal-create-title">Lập bàn đấu mới</h2>
+              <h2 id="modal-create-title">Lập bàn</h2>
               <button
                 type="button"
                 className="modal-close-btn"
@@ -499,89 +492,76 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
             </div>
 
             <div className="home-form">
-              <p className="home-label">Chọn phương thức đặt máy</p>
+              {/* Khu vực Chế độ chơi */}
+              <div className="create-mode-section">
+                <div className="home-field-heading">
+                  <label>Chế độ chơi</label>
+                </div>
+                <div className="create-mode-grid" role="radiogroup" aria-label="Chế độ chơi">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={deviceMode === 'multi'}
+                    className={`create-mode-btn ${deviceMode === 'multi' ? 'is-active' : ''}`}
+                    onClick={() => setDeviceMode('multi')}
+                  >
+                    <span className="mode-btn-title">Mỗi người 1 máy</span>
+                    <span className="mode-btn-sub">Quét mã vào bàn</span>
+                  </button>
 
-              <button
-                type="button"
-                className={`home-device-option ${deviceMode === 'shared' ? 'active' : ''}`}
-                onClick={() => setDeviceMode('shared')}
-                aria-pressed={deviceMode === 'shared'}
-              >
-                <div className="device-icon-wrap" aria-hidden="true">
-                  <span className="device-folk-icon">🪵</span>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={deviceMode === 'shared'}
+                    className={`create-mode-btn ${deviceMode === 'shared' ? 'is-active' : ''}`}
+                    onClick={() => setDeviceMode('shared')}
+                  >
+                    <span className="mode-btn-title">1 máy chung</span>
+                    <span className="mode-btn-sub">Đặt giữa bàn</span>
+                  </button>
                 </div>
-                <div className="device-info">
-                  <strong>Một máy đặt giữa bàn</strong>
-                  <small>Một điện thoại hoặc iPad đặt giữa bàn, tự động phát âm thanh và quản trò cho cả làng.</small>
-                </div>
-                <span className="home-radio" aria-hidden="true" />
-              </button>
 
-              <button
-                type="button"
-                className={`home-device-option ${deviceMode === 'multi' ? 'active' : ''}`}
-                onClick={() => setDeviceMode('multi')}
-                aria-pressed={deviceMode === 'multi'}
-              >
-                <div className="device-icon-wrap" aria-hidden="true">
-                  <span className="device-folk-icon">🎴</span>
-                </div>
-                <div className="device-info">
-                  <strong>Mỗi người một điện thoại riêng</strong>
-                  <small>Từng người chơi quét mã vào bàn trên máy riêng để nhận vai và thao tác kín đáo khi Trời tối.</small>
-                </div>
-                <span className="home-radio" aria-hidden="true" />
-              </button>
-
-              {/* Nút Test Loa Quản Trò */}
-              <div className="home-test-speaker-card">
-                <div className="test-speaker-meta">
-                  <span className="speaker-icon" aria-hidden="true">
-                    {isTestingSpeaker ? '🔊' : '🔈'}
-                  </span>
-                  <div>
-                    <strong>Thử loa quản trò</strong>
-                    <small>Kiểm tra âm lượng loa ngoài và mở khóa quyền phát âm thanh</small>
-                  </div>
-                </div>
                 <button
                   type="button"
-                  className={`test-speaker-btn ${isTestingSpeaker ? 'is-testing' : ''}`}
+                  className={`create-speaker-outline-btn ${isTestingSpeaker ? 'is-testing' : ''}`}
                   onClick={handleTestSpeaker}
+                  title="Kiểm tra âm lượng loa ngoài"
                 >
-                  {isTestingSpeaker ? 'Đang phát thử...' : 'Thử âm lượng'}
+                  <span className="speaker-glyph" aria-hidden="true">{isTestingSpeaker ? '🔊' : '🔈'}</span>
+                  <span>{isTestingSpeaker ? 'Đang phát thử âm thanh...' : 'Thử loa quản trò'}</span>
                 </button>
               </div>
 
-              <label className="home-label" htmlFor="modal-host-name">Tên người lập bàn</label>
-              <input
-                id="modal-host-name"
-                className="home-text-input"
-                value={nickname}
-                maxLength={24}
-                onChange={(event) => {
-                  setNickname(event.target.value);
-                  try {
-                    localStorage.setItem('werewolf_nickname', event.target.value);
-                  } catch {
-                    // ignore
-                  }
-                }}
-                placeholder="Nhập tên gọi…"
-              />
+              {/* Khu vực Tên hiển thị */}
+              <div className="join-name-section">
+                <label className="home-label" htmlFor="modal-host-name">Tên hiển thị</label>
+                <input
+                  id="modal-host-name"
+                  className="home-text-input"
+                  value={nickname}
+                  maxLength={24}
+                  onChange={(event) => {
+                    setNickname(event.target.value);
+                    try {
+                      localStorage.setItem('werewolf_nickname', event.target.value);
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  placeholder="Tên của bạn"
+                />
+              </div>
 
+              {/* Nút hành động chính: Tạo bàn */}
               <button
-                className="home-button home-button-primary"
+                className={`home-button home-button-primary create-submit-btn ${
+                  nickname.trim().length > 0 ? 'is-ready' : 'is-disabled'
+                }`}
+                disabled={!nickname.trim()}
                 onClick={() => enterLobby('create')}
               >
-                <span>Khởi tạo bàn đấu</span>
-                <span className="arrow-icon" aria-hidden="true">✦</span>
+                <span>Tạo bàn</span>
               </button>
-
-              <div className="home-pre-room-tip">
-                <span className="tip-bulb" aria-hidden="true">💡</span>
-                <span>Mẹo: Bật im lặng thông báo và giảm độ sáng màn hình trước khi Đêm 1 bắt đầu.</span>
-              </div>
 
               {notice && <p className="home-notice" role="status">{notice}</p>}
             </div>

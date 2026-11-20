@@ -97,7 +97,7 @@ export default function App() {
         </nav>
       </div>
 
-      <div key={screen} className="screen-container">
+      <div key={screen} className={`screen-container screen-${screen}`}>
         {screen === 'home' && (
           <HomeScreen
             onNavigate={navigate}

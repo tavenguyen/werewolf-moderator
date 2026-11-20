@@ -163,40 +163,54 @@
   line-height: 1.5;
 }
 
-/* Woodcut stamp QR container */
-.lobby-qr-container {
+/* Interactive QR code preview trigger button */
+.lobby-qr-preview-btn {
   position: relative;
-  width: 106px;
-  height: 106px;
-  border: 2px dashed rgba(201, 134, 56, 0.45);
+  width: 104px;
+  height: 104px;
+  border: 1.5px dashed rgba(201, 134, 56, 0.45);
   border-radius: 8px;
   background: #11141a;
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  cursor: pointer;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: inherit;
 }
 
-.qr-woodcut-frame {
-  position: absolute;
-  inset: 2px;
-  border: 1px solid rgba(237, 231, 220, 0.1);
-  pointer-events: none;
-  border-radius: 6px;
+.lobby-qr-preview-btn:hover {
+  border-color: var(--lantern);
+  border-style: solid;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201, 134, 56, 0.2);
+  background: #151922;
+}
+
+.qr-preview-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .lobby-qr-svg {
-  width: 70px;
-  height: 70px;
+  width: 62px;
+  height: 62px;
+  border-radius: 4px;
 }
 
-.qr-badge {
-  font: 700 8px var(--headline);
-  letter-spacing: 0.1em;
+.qr-preview-label {
+  font: 700 9px var(--headline);
+  letter-spacing: 0.06em;
   color: var(--lantern);
-  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  text-transform: uppercase;
 }
 
 /* Players Card */
@@ -284,6 +298,7 @@
   align-items: center;
   gap: 9px;
   min-width: 0;
+  flex: 1;
 }
 
 .player-seat {
@@ -292,34 +307,32 @@
   background: rgba(237, 231, 220, 0.05);
   padding: 2px 6px;
   border-radius: 3px;
+  flex: none;
 }
 
-.lobby-candle-dot {
-  width: 7px;
-  height: 7px;
+.player-status-dot {
+  width: 7.5px;
+  height: 7.5px;
   flex: none;
   border-radius: 50%;
-  background: var(--lantern);
-  box-shadow: 0 0 6px var(--lantern);
-  animation: candleFlicker 2.5s infinite;
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.85);
+  animation: livePulse 2s infinite ease-in-out;
 }
 
 .player-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--parchment);
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.badge-online {
-  font: 700 9px var(--headline);
-  letter-spacing: 0.05em;
-  color: var(--parchment);
-  background: rgba(237, 231, 220, 0.08);
-  padding: 3px 6px;
-  border-radius: 3px;
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
 }
 
@@ -329,64 +342,79 @@
 }
 
 .badge-host {
-  font: 800 9px var(--headline);
+  font: 800 9.5px var(--headline);
   letter-spacing: 0.05em;
   color: #11141a;
   background: var(--lantern);
-  padding: 3px 7px;
+  padding: 3px 8px;
   border-radius: 3px;
   flex: none;
   box-shadow: 0 0 10px rgba(201, 134, 56, 0.35);
 }
 
-.lobby-player-controls {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.lobby-add-player {
-  flex: 1;
+.player-kick-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: transparent;
+  color: #717885;
+  font-size: 15px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  border: 1px dashed rgba(201, 134, 56, 0.35);
-  border-radius: 6px;
-  background: rgba(201, 134, 56, 0.03);
-  color: var(--muted);
-  font: 600 12px var(--font-body);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.16s ease;
+  padding: 0;
 }
 
-.lobby-add-player:hover {
-  border-color: var(--lantern);
-  color: var(--parchment);
-  background: rgba(201, 134, 56, 0.08);
-}
-
-.lobby-add-player span:first-child {
-  color: var(--lantern);
-  font-size: 16px;
-}
-
-.lobby-remove-player {
-  padding: 0 16px;
-  min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: rgba(142, 30, 36, 0.1);
+.player-kick-btn:hover {
+  background: rgba(142, 30, 36, 0.25);
+  border-color: rgba(142, 30, 36, 0.6);
   color: #fca5a5;
-  font: 600 12px var(--font-body);
+  transform: scale(1.08);
+}
+
+/* Discreet Host Bot Testing Bar */
+.lobby-bot-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bot-tools-label {
+  font-size: 11px;
+  color: #636a77;
+  font-style: italic;
+}
+
+.bot-tools-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lobby-btn-bot {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a39b8e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.16s ease;
 }
 
-.lobby-remove-player:hover {
-  background: rgba(142, 30, 36, 0.22);
-  border-color: var(--blood);
+.lobby-btn-bot:hover {
+  background: rgba(201, 134, 56, 0.12);
+  border-color: rgba(201, 134, 56, 0.4);
+  color: var(--lantern);
 }
 
 .lobby-notice {
@@ -651,17 +679,97 @@
   cursor: pointer;
 }
 
-.lobby-demo-note {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  color: var(--subtle);
-  font: 11.5px var(--font-body);
-  line-height: 1.5;
+/* Expected Role Deck Breakdown (Fills dead space with tactical value) */
+.lobby-deck-roster {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: #0a0d13;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
 }
 
-.lobby-demo-note span {
-  color: var(--lantern);
+.deck-roster-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.deck-roster-title {
+  font-family: var(--font-title);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--lantern, #c98638);
+  text-transform: uppercase;
+}
+
+.deck-roster-subtitle {
+  font-size: 11px;
+  color: #636a77;
+  font-style: italic;
+}
+
+.deck-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.deck-role-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #11141b;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 0;
+}
+
+.deck-role-pill.side-village {
+  border-color: rgba(61, 110, 82, 0.35);
+  background: rgba(61, 110, 82, 0.08);
+}
+
+.deck-role-pill.side-wolf {
+  border-color: rgba(139, 38, 42, 0.35);
+  background: rgba(139, 38, 42, 0.08);
+}
+
+.deck-role-pill.side-third {
+  border-color: rgba(130, 105, 75, 0.35);
+  background: rgba(130, 105, 75, 0.08);
+}
+
+.deck-role-badge {
+  font-family: var(--font-title);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--lantern, #c98638);
+  flex: none;
+}
+
+.deck-role-icon {
+  font-size: 16px;
+  flex: none;
+}
+
+.deck-role-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #ede7dc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.deck-role-side-tag {
+  display: none;
 }
 
 /* Start Game Card */
@@ -768,4 +876,128 @@
     width: 100%;
     justify-content: center;
   }
+}
+
+/* ==========================================================================
+   LOBBY QR MAGNIFIED MODAL
+   ========================================================================== */
+.lobby-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 12, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+  animation: screenFadeIn 0.18s ease-out;
+}
+
+.lobby-qr-modal {
+  width: min(100%, 360px);
+  background: #11141b;
+  border: 1px solid rgba(201, 134, 56, 0.45);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8), 0 0 30px rgba(201, 134, 56, 0.15);
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: screenFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qr-modal-head {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.qr-modal-kicker {
+  font-family: var(--font-title);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--lantern, #c98638);
+  text-transform: uppercase;
+}
+
+.qr-modal-head h3 {
+  margin: 3px 0 0;
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 800;
+  color: #ede7dc;
+  letter-spacing: 0.08em;
+}
+
+.qr-modal-close {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a39b8e;
+  font-size: 20px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all 0.16s ease;
+}
+
+.qr-modal-close:hover {
+  color: #ffffff;
+  border-color: rgba(201, 134, 56, 0.5);
+  background: rgba(201, 134, 56, 0.1);
+}
+
+.qr-modal-canvas-wrap {
+  width: 220px;
+  height: 220px;
+  background: #0d1017;
+  border: 2px solid rgba(201, 134, 56, 0.5);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-modal-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.qr-modal-hint {
+  margin: 14px 0 16px;
+  font-size: 13px;
+  color: #a39b8e;
+  line-height: 1.5;
+}
+
+.qr-modal-done-btn {
+  width: 100%;
+  height: 42px;
+  background: rgba(201, 134, 56, 0.15);
+  border: 1px solid rgba(201, 134, 56, 0.4);
+  color: #ede7dc;
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.qr-modal-done-btn:hover {
+  background: var(--lantern, #c98638);
+  color: #0d1017;
 }

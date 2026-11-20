@@ -53,7 +53,6 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
       const matchSearch =
         !q ||
         role.name.toLowerCase().includes(q) ||
-        role.tagline.toLowerCase().includes(q) ||
         role.description.toLowerCase().includes(q) ||
         role.seerResult.toLowerCase().includes(q) ||
         role.roomRuleNote.toLowerCase().includes(q);
@@ -125,7 +124,7 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
             aria-label="Đóng bảng tra cứu"
             onClick={onClose}
           >
-            ĐÓNG [×]
+            ×
           </button>
         </header>
 
@@ -135,10 +134,9 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
             /* Minimalist Rules View */
             <div className="masa-rules-wrap">
               <div className="masa-rules-intro">
-                <span className="masa-meta-label">QUY TẮC BÀN ĐẤU</span>
-                <h2 className="masa-editorial-title">Trật tự ba hồi trong đêm Ma Sói</h2>
+                <h2 className="masa-editorial-title">Cách chơi một ván Ma Sói</h2>
                 <p className="masa-editorial-lede">
-                  Trò chơi vận hành hoàn toàn tự động qua giọng quản trò và thiết bị cá nhân. Người chơi tập trung đối thoại trực tiếp, không nhìn màn hình của nhau.
+                  Quản trò tự động dẫn truyện qua loa. Mọi người tập trung nói chuyện trực tiếp, không nhìn màn hình của nhau.
                 </p>
               </div>
 
@@ -146,9 +144,9 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                 <article className="masa-rule-step">
                   <div className="masa-step-index">HỒI I</div>
                   <div className="masa-step-content">
-                    <h3>Trời tối · Thổi nến và úp máy xuống bàn</h3>
+                    <h3>Đêm xuống</h3>
                     <p>
-                      Tất cả người chơi úp điện thoại xuống mặt bàn. Loa quản trò cất tiếng gọi từng vai trò, ai được gọi thì nhẹ nhàng mở mắt thao tác kín trên máy cá nhân rồi nhắm mắt lại. Tuyệt đối không chuyền điện thoại trong đêm.
+                      Úp điện thoại xuống bàn và nhắm mắt. Khi loa gọi tới vai trò của mình, chỉ người đó mở mắt thao tác trên máy rồi nhắm lại ngay. Không chuyền tay điện thoại.
                     </p>
                   </div>
                 </article>
@@ -156,9 +154,9 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                 <article className="masa-rule-step">
                   <div className="masa-step-index">HỒI II</div>
                   <div className="masa-step-content">
-                    <h3>Trời sáng · Mở mắt và luận tội</h3>
+                    <h3>Trời sáng</h3>
                     <p>
-                      Cả làng thức giấc thảo luận tự do. Đồng hồ khóa nút biểu quyết 60 giây đầu tiên để đảm bảo mọi người tập trung nhìn thẳng vào mắt nhau tranh luận trước khi bỏ phiếu treo cổ.
+                      Cả làng mở mắt thảo luận. Nút bỏ phiếu sẽ khóa trong 60 giây đầu để mọi người tranh luận trực tiếp trước khi treo cổ.
                     </p>
                   </div>
                 </article>
@@ -166,9 +164,9 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                 <article className="masa-rule-step">
                   <div className="masa-step-index">HỒI III</div>
                   <div className="masa-step-content">
-                    <h3>Hạ màn · Lật bài và điểm lại ván đấu</h3>
+                    <h3>Lật bài</h3>
                     <p>
-                      Khi một phe đạt điều kiện toàn thắng, toàn bộ thẻ bài thực sự của người chơi sẽ được lật mở kèm nhật ký từng đêm để cùng giải mã ván đấu trước khi bắt đầu ván mới.
+                      Khi một phe thắng, toàn bộ vai trò thật và diễn biến từng đêm sẽ mở công khai để cả bàn cùng xem lại.
                     </p>
                   </div>
                 </article>
@@ -177,7 +175,7 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
               <div className="masa-rules-footnote">
                 <span className="masa-footnote-mark">§</span>
                 <p>
-                  Không yêu cầu đăng ký tài khoản. Danh tính vai trò và phiếu biểu quyết kín được Game Engine mã hóa và bảo mật trên thiết bị.
+                  Không cần tạo tài khoản. Vai trò và phiếu bầu của từng người được giữ kín hoàn toàn trên máy cá nhân.
                 </p>
               </div>
             </div>
@@ -206,20 +204,26 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                     </span>
                   </div>
 
-                  {/* Main Role Title Block */}
+                  {/* Main Role Title Block with Visual Anchor Seal */}
                   <header className="masa-detail-hero">
-                    <span className="masa-role-index">
-                      NO. {String(selectedRoleIndex + 1).padStart(2, '0')}
-                    </span>
-                    <h2 className="masa-role-large-name">{selectedRole.name}</h2>
-                    <p className="masa-role-quote">“{selectedRole.tagline}”</p>
+                    <div className="masa-hero-identity">
+                      <div className={`masa-role-avatar-seal side-${selectedRole.side}`} aria-hidden="true">
+                        <span>{selectedRole.symbol}</span>
+                      </div>
+                      <div className="masa-hero-titles">
+                        <span className="masa-role-index">
+                          NO. {String(selectedRoleIndex + 1).padStart(2, '0')}
+                        </span>
+                        <h2 className="masa-role-large-name">{selectedRole.name}</h2>
+                      </div>
+                    </div>
                   </header>
 
-                  {/* Spec Strip - Typographic & Minimalist (No emojis) */}
+                  {/* Spec Strip - High Value Tactical Specs (No duplicate faction) */}
                   <div className="masa-spec-strip" role="list">
                     <div className="masa-spec-col" role="listitem">
-                      <span className="masa-spec-label">PHE PHÁI</span>
-                      <strong className="masa-spec-val">{selectedRole.sideLabel}</strong>
+                      <span className="masa-spec-label">THỨC DẬY</span>
+                      <strong className="masa-spec-val">{selectedRole.wakeFrequency}</strong>
                     </div>
 
                     <div className="masa-spec-col" role="listitem">
@@ -228,17 +232,17 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                     </div>
 
                     <div className="masa-spec-col" role="listitem">
-                      <span className="masa-spec-label">TẦN SUẤT THỨC DẬY</span>
-                      <strong className="masa-spec-val">{selectedRole.wakeFrequency}</strong>
+                      <span className="masa-spec-label">ĐIỀU KIỆN THẮNG</span>
+                      <strong className="masa-spec-val">{selectedRole.winCondition}</strong>
                     </div>
                   </div>
 
-                  {/* Editorial Content Sections */}
+                  {/* Editorial Content Sections (Differentiated & Practical) */}
                   <div className="masa-sections-wrap">
                     <section className="masa-section">
                       <h3 className="masa-section-title">
                         <span className="masa-section-num">01</span>
-                        <span>NĂNG LỰC ĐẶC BIỆT</span>
+                        <span>NĂNG LỰC CỐT LÕI</span>
                       </h3>
                       <p className="masa-section-body">{selectedRole.description}</p>
                     </section>
@@ -246,23 +250,15 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                     <section className="masa-section">
                       <h3 className="masa-section-title">
                         <span className="masa-section-num">02</span>
-                        <span>QUY TẮC THỰC CHIẾN TẠI BÀN</span>
+                        <span>LƯU Ý LUẬT TẠI BÀN</span>
                       </h3>
                       <p className="masa-section-body rule-note">{selectedRole.roomRuleNote}</p>
                     </section>
-
-                    <section className="masa-section">
-                      <h3 className="masa-section-title">
-                        <span className="masa-section-num">03</span>
-                        <span>CHIẾN THUẬT &amp; TÂM LÝ</span>
-                      </h3>
-                      <p className="masa-section-body tactic-tip">{selectedRole.tacticTip}</p>
-                    </section>
                   </div>
 
-                  {/* Role Pager Footer */}
+                  {/* Role Pager Footer (Safe Prev/Next - No accidental close) */}
                   <footer className="masa-detail-footer">
-                    {prevRole && (
+                    {prevRole ? (
                       <button
                         type="button"
                         className="masa-pager-btn prev"
@@ -275,17 +271,11 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                           <span>{prevRole.name}</span>
                         </div>
                       </button>
+                    ) : (
+                      <div className="masa-pager-spacer" aria-hidden="true" />
                     )}
 
-                    <button
-                      type="button"
-                      className="masa-return-btn"
-                      onClick={() => setSelectedRole(null)}
-                    >
-                      ĐÓNG CHI TIẾT
-                    </button>
-
-                    {nextRole && (
+                    {nextRole ? (
                       <button
                         type="button"
                         className="masa-pager-btn next"
@@ -298,6 +288,8 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                         </div>
                         <span className="pager-arrow">→</span>
                       </button>
+                    ) : (
+                      <div className="masa-pager-spacer" aria-hidden="true" />
                     )}
                   </footer>
                 </article>
@@ -387,9 +379,11 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                           >
                             <div className="masa-item-left">
                               <span className="masa-item-num">{roleNum}</span>
+                              <span className={`masa-item-seal side-${role.side}`} aria-hidden="true">
+                                {role.symbol}
+                              </span>
                               <div className="masa-item-name-block">
                                 <h3 className="masa-item-name">{role.name}</h3>
-                                <p className="masa-item-tagline">{role.tagline}</p>
                               </div>
                             </div>
 

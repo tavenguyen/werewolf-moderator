@@ -67,6 +67,12 @@ body {
   selection-color: #0d0f13;
 }
 
+body:has(.screen-home) {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 button, input, select {
   font: inherit;
 }
@@ -91,6 +97,16 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   will-change: opacity, transform;
 }
 
+.screen-container.screen-home {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.screen-container:not(.screen-home) {
+  padding-top: 52px;
+}
+
 @keyframes screenFadeIn {
   from {
     opacity: 0;
@@ -104,8 +120,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 /* Antique Brass & Leather Floating Moderator Bar */
 .demo-nav-wrapper {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 60;
   width: 100%;
   display: flex;
@@ -119,14 +137,21 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 8px;
-  border: 1px solid var(--border-strong);
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
-  background: rgba(18, 20, 26, 0.92);
+  background: rgba(14, 17, 23, 0.82);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 134, 56, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  opacity: 0.7;
   transition: all 0.2s ease;
+}
+
+.demo-nav:hover {
+  opacity: 1;
+  background: rgba(18, 20, 26, 0.96);
+  border-color: var(--border-strong);
 }
 
 .demo-nav-label {
