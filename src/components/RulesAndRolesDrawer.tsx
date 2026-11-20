@@ -254,6 +254,22 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                       </h3>
                       <p className="masa-section-body rule-note">{selectedRole.roomRuleNote}</p>
                     </section>
+
+                    {selectedRole.edgeCases && selectedRole.edgeCases.length > 0 && (
+                      <section className="masa-section">
+                        <h3 className="masa-section-title">
+                          <span className="masa-section-num">03</span>
+                          <span>TÌNH HUỐNG TRANH CHẤP &amp; ENGINE RULE</span>
+                        </h3>
+                        <ul className="masa-edge-case-list">
+                          {selectedRole.edgeCases.map((ec, idx) => (
+                            <li key={idx} className="masa-edge-case-item">
+                              {ec}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    )}
                   </div>
 
                   {/* Role Pager Footer (Safe Prev/Next - No accidental close) */}
@@ -394,6 +410,9 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                                 </span>
                                 <span className="masa-item-wake-pill">
                                   {role.wakeFrequency}
+                                </span>
+                                <span className={`masa-item-balance-pill ${role.balanceWeight > 0 ? 'pos' : role.balanceWeight < 0 ? 'neg' : 'neu'}`}>
+                                  {role.balanceWeight > 0 ? `+${role.balanceWeight}` : role.balanceWeight}
                                 </span>
                               </div>
                               <span className="masa-item-reveal-arrow" aria-hidden="true">→</span>
