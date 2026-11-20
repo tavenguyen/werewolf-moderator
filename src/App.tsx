@@ -103,6 +103,7 @@ export default function App() {
             onNavigate={navigate}
             onPlayerJoined={handleHostJoined}
             onOpenRules={handleOpenRules}
+            isRulesOpen={rulesDrawerOpen}
           />
         )}
         {screen === 'lobby' && (

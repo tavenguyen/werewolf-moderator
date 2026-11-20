@@ -9,6 +9,7 @@ type Props = {
   onNavigate?: (screen: ScreenName) => void;
   onPlayerJoined?: (name: string) => void;
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
+  isRulesOpen?: boolean;
 };
 
 type ActiveSession = {
@@ -26,19 +27,27 @@ function sanitizeNickname(raw: string): string {
     .slice(0, 24);
 }
 
-export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: Props) {
+export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, isRulesOpen }: Props) {
   const [activeModal, setActiveModal] = useState<'join' | 'create' | null>(null);
   const [fallbackDrawerOpen, setFallbackDrawerOpen] = useState(false);
   const [qrScannerOpen, setQrScannerOpen] = useState(false);
   const [isTestingSpeaker, setIsTestingSpeaker] = useState(false);
 
-  // Day / Night Atmosphere State (0.0 = Sáng / Bình Minh, 1.0 = Tối / Nửa Đêm)
-  const [dayNightFactor, setDayNightFactor] = useState(0.85); // Mặc định đêm
+  // Camera Dolly-in transition state (Zoom xuyên rừng vào sảnh chờ)
+  const [isDollyIn, setIsDollyIn] = useState(false);
+
+  // Day / Night Atmosphere Factor (0.0 = Sáng nắng ấm, 1.0 = Đêm trăng lạnh)
+  const [dayNightFactor, setDayNightFactor] = useState(0.88);
+
+  // Cursor & Parallax Coordinates
   const [cursorPos, setCursorPos] = useState({
-    x: typeof window !== 'undefined' ? window.innerWidth * 0.75 : 800,
-    y: typeof window !== 'undefined' ? window.innerHeight * 0.35 : 400,
+    x: typeof window !== 'undefined' ? window.innerWidth * 0.5 : 800,
+    y: typeof window !== 'undefined' ? window.innerHeight * 0.45 : 400,
     active: false,
   });
+
+  // Normalized Parallax Offset [-1, 1] for 3-layer depth (mouse + gyroscope)
+  const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
 
   // Auto-Reconnect Session from localStorage
@@ -46,7 +55,6 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     try {
       const saved = localStorage.getItem('werewolf_active_session');
       if (saved) return JSON.parse(saved);
-      // Sample active session if none yet so user can immediately experience the reconnect banner
       return {
         roomCode: '7290',
         nickname: 'Minh Khang',
@@ -67,9 +75,8 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     }
   });
 
-  const rulesTrigger = useRef<HTMLButtonElement>(null);
-  const qrCloseBtn = useRef<HTMLButtonElement>(null);
   const modalCloseBtn = useRef<HTMLButtonElement>(null);
+  const qrCloseBtn = useRef<HTMLButtonElement>(null);
   const navigationTimer = useRef<number | undefined>(undefined);
   const [roomCode, setRoomCode] = useState('7290');
   const [notice, setNotice] = useState('');
@@ -82,6 +89,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     }
   }, []);
 
+  // Keyboard shortcut listener (Escape closes modals)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -96,7 +104,33 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [qrScannerOpen, activeModal]);
 
-  // Pointer movement tracking (myshaky style interaction)
+  // Mobile Gyroscope Parallax (DeviceOrientationEvent)
+  useEffect(() => {
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      if (e.gamma !== null && e.beta !== null) {
+        // gamma: left-to-right tilt [-90, 90] -> normalized [-1, 1]
+        // beta: front-to-back tilt [0, 90] (neutral holding angle ~45deg)
+        const nx = Math.max(-1, Math.min(1, e.gamma / 22));
+        const ny = Math.max(-1, Math.min(1, (e.beta - 42) / 22));
+        setParallaxOffset({ x: nx, y: ny });
+        setTilt({ rotateX: -ny * 5, rotateY: nx * 6 });
+        // Tilt phone left -> Day (0.0), Tilt phone right -> Night (1.0)
+        const gyroFactor = Math.min(Math.max((nx + 1) / 2, 0), 1);
+        setDayNightFactor(gyroFactor);
+      }
+    };
+
+    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+      window.addEventListener('deviceorientation', handleOrientation);
+    }
+    return () => {
+      if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+        window.removeEventListener('deviceorientation', handleOrientation);
+      }
+    };
+  }, []);
+
+  // Desktop Pointer Parallax & Torch Tracking (Myshaky Day/Night Continuum)
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const x = e.clientX;
     const y = e.clientY;
@@ -105,22 +139,47 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
 
     setCursorPos({ x, y, active: true });
 
-    // Move left -> Day (0), Move right -> Night (1)
-    const factor = Math.min(Math.max((x - w * 0.08) / (w * 0.84), 0), 1);
-    setDayNightFactor(factor);
+    // Normalized [-1, 1] offset
+    const nx = (x / w - 0.5) * 2;
+    const ny = (y / h - 0.5) * 2;
+    setParallaxOffset({ x: nx, y: ny });
 
     // Subtle 3D card tilt
-    const rx = -((y / h) - 0.5) * 6;
-    const ry = ((x / w) - 0.5) * 8;
-    setTilt({ rotateX: rx, rotateY: ry });
+    setTilt({ rotateX: -ny * 4.5, rotateY: nx * 5.5 });
+
+    // Day/Night continuum: Move left -> Day (0.0), Move right -> Night (1.0)
+    const factor = Math.min(Math.max((x - w * 0.12) / (w * 0.76), 0), 1);
+    setDayNightFactor(factor);
   };
 
   const handlePointerLeave = () => {
     setCursorPos((prev) => ({ ...prev, active: false }));
+    setParallaxOffset({ x: 0, y: 0 });
     setTilt({ rotateX: 0, rotateY: 0 });
   };
 
+  // Micro-interaction: Spotlight cursor tracker on action buttons
+  const handleButtonPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const bx = e.clientX - rect.left;
+    const by = e.clientY - rect.top;
+    e.currentTarget.style.setProperty('--spotlight-x', `${bx}px`);
+    e.currentTarget.style.setProperty('--spotlight-y', `${by}px`);
+  };
+
+  // Micro-interaction: Tactile Haptic Vibration on Touch Devices
+  const triggerHaptic = () => {
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(12);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   const handleOpenRules = () => {
+    triggerHaptic();
     if (onOpenRules) {
       onOpenRules('roles');
     } else {
@@ -134,13 +193,17 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     setQrScannerOpen(false);
   };
 
-  // Reconnect immediately to active game session
+  // Reconnect immediately to active game session with Camera Dolly-in
   const handleReconnect = () => {
     if (!activeSession) return;
+    triggerHaptic();
     onPlayerJoined?.(activeSession.nickname);
-    setNotice(`Đang vào lại bàn #${activeSession.roomCode}...`);
+    setActiveModal(null);
+    setIsDollyIn(true);
     window.clearTimeout(navigationTimer.current);
-    navigationTimer.current = window.setTimeout(() => onNavigate?.(activeSession.screen || 'lobby'), 200);
+    navigationTimer.current = window.setTimeout(() => {
+      onNavigate?.(activeSession.screen || 'lobby');
+    }, 580);
   };
 
   // Dismiss / Clear active session
@@ -151,13 +214,11 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
       // ignore
     }
     setActiveSession(null);
-    if (activeModal === 'reconnect') {
-      setActiveModal(null);
-    }
   };
 
   // Test Speaker button logic (SpeechSynthesis + Web Audio fallback)
   const handleTestSpeaker = () => {
+    triggerHaptic();
     if (isTestingSpeaker) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -197,7 +258,9 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     }
   };
 
+  // Enter lobby with cinematic Camera Dolly-in (Zoom xuyên rừng)
   const enterLobby = (action: 'join' | 'create') => {
+    triggerHaptic();
     const cleanCode = roomCode.replace(/\D/g, '').slice(0, 4);
     if (action === 'join' && cleanCode.length !== 4) {
       setNotice('Mã phòng cần có đúng 4 chữ số.');
@@ -226,38 +289,30 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
     }
 
     onPlayerJoined?.(cleanName);
-    setNotice(action === 'join' ? 'Đang vào sảnh chờ...' : 'Đã lập bàn chơi mới.');
+    setActiveModal(null);
+    setIsDollyIn(true);
     window.clearTimeout(navigationTimer.current);
-    navigationTimer.current = window.setTimeout(() => onNavigate?.('lobby'), 250);
+    navigationTimer.current = window.setTimeout(() => {
+      onNavigate?.('lobby');
+    }, 580);
   };
 
-  // Determine Atmosphere Stage
-  let celestialStage: 'day' | 'twilight' | 'night' = 'night';
-  if (dayNightFactor < 0.35) {
-    celestialStage = 'day';
-  } else if (dayNightFactor < 0.65) {
-    celestialStage = 'twilight';
-  }
+  const isModalOpen = activeModal !== null || qrScannerOpen || fallbackDrawerOpen || Boolean(isRulesOpen);
+  const atmosphereClass = dayNightFactor < 0.5 ? 'atmosphere-day' : 'atmosphere-night';
 
   return (
     <div
-      className={`home-page atmosphere-${celestialStage}`}
+      className={`home-page ${atmosphereClass} ${isModalOpen ? 'is-modal-active' : ''} ${
+        isDollyIn ? 'is-dolly-in' : ''
+      }`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
-      {/* Dark Forest Photo Background with Parallax */}
+      {/* LAYER 2: Midground Forest Backdrop with Parallax */}
       <div
         className="home-forest-backdrop"
         style={{
-          transform: `scale(1.06) translate(${
-            cursorPos.active
-              ? (cursorPos.x / (typeof window !== 'undefined' ? window.innerWidth : 1) - 0.5) * -16
-              : 0
-          }px, ${
-            cursorPos.active
-              ? (cursorPos.y / (typeof window !== 'undefined' ? window.innerHeight : 1) - 0.5) * -10
-              : 0
-          }px)`,
+          transform: `scale(1.08) translate(${parallaxOffset.x * -20}px, ${parallaxOffset.y * -14}px)`,
         }}
         aria-hidden="true"
       >
@@ -269,62 +324,120 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules }: 
         <div className="home-forest-vignette" />
       </div>
 
-      {/* Interactive Background Atmosphere Canvas */}
+      {/* LAYER 1 & 3: Distant Celestial (Moon/Sun) & Foreground Ambient Mist/Particles */}
       <DayNightAtmosphereCanvas
         dayNightFactor={dayNightFactor}
         cursorPos={cursorPos}
+        parallaxOffset={parallaxOffset}
       />
 
-      {/* Central Interactive Screen (myshaky style) */}
+      {/* Camera Dolly-in curtain for cinematic fade into village */}
+      <div className="home-dolly-curtain" aria-hidden="true" />
+
+      {/* Central Interactive Screen (Vietnamese Folk Horror Editorial) */}
       <main className="home-main home-main-stage">
-        {/* Shaky-Inspired Nav Dock */}
-        <nav className="home-shaky-nav" aria-label="Menu chức năng chính">
-          <button
-            type="button"
-            className={`shaky-nav-item ${activeModal === 'join' ? 'is-active' : ''}`}
-            onClick={() => { setActiveModal('join'); setNotice(''); }}
-          >
-            <span className="shaky-nav-text">Vào bàn</span>
-            {activeSession && <span className="shaky-nav-dot" title="Có bàn đang chơi" aria-hidden="true" />}
-          </button>
-
-          <button
-            type="button"
-            className={`shaky-nav-item ${activeModal === 'create' ? 'is-active' : ''}`}
-            onClick={() => { setActiveModal('create'); setNotice(''); }}
-          >
-            <span className="shaky-nav-text">Lập bàn</span>
-          </button>
-
-          <button
-            type="button"
-            className="shaky-nav-item"
-            onClick={handleOpenRules}
-            title="Tra cứu luật làng và 10 vai trò thực chiến"
-          >
-            <span className="shaky-nav-text">Luật &amp; Vai trò</span>
-          </button>
-        </nav>
-
-        {/* Centerpiece: ONLY WEREWOLF MODERATOR Typography with 3D Tilt */}
+        {/* Centerpiece: Pure, Minimalist Folk Horror Layout */}
         <div
           className="home-center-stage"
           style={{
             transform: `perspective(900px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
           }}
         >
-          <h1 className="center-hero-title">
-            <span className="title-word title-werewolf">WEREWOLF</span>
-            <span className="title-word title-moderator">MODERATOR</span>
+          {/* Staggered Mist Title: MA SÓI */}
+          <h1 className="center-hero-title" aria-label="MA SÓI">
+            {['M', 'A', ' ', 'S', 'Ó', 'I'].map((char, index) =>
+              char === ' ' ? (
+                <span key={index} className="stagger-space" aria-hidden="true">&nbsp;</span>
+              ) : (
+                <span
+                  key={index}
+                  className="stagger-char"
+                  style={{ animationDelay: `${0.08 + index * 0.08}s` }}
+                  aria-hidden="true"
+                >
+                  {char}
+                </span>
+              )
+            )}
           </h1>
+
+          {/* Atmospheric Subtitle */}
+          <p className="home-hero-subtitle">
+            Đêm xuống, ai là người còn sống?
+          </p>
+
+          {/* Central Hero Actions: Pure Action Buttons (No Icons, No Descriptions) */}
+          <div className="home-hero-actions-container">
+            {/* Primary Action Buttons: "Vào bàn" and "Lập bàn" */}
+            <div className="home-hero-actions-primary">
+              {/* Vào bàn */}
+              <button
+                type="button"
+                className={`hero-action-btn btn-join-hero ${activeModal === 'join' ? 'is-active' : ''}`}
+                onPointerMove={handleButtonPointerMove}
+                onClick={() => {
+                  triggerHaptic();
+                  setActiveModal('join');
+                  setNotice('');
+                }}
+              >
+                <span className="btn-text">Vào bàn</span>
+                {activeSession && (
+                  <span className="btn-reconnect-badge" title={`Đang chơi dở bàn #${activeSession.roomCode}`}>
+                    #{activeSession.roomCode}
+                  </span>
+                )}
+              </button>
+
+              {/* Lập bàn */}
+              <button
+                type="button"
+                className={`hero-action-btn btn-create-hero ${activeModal === 'create' ? 'is-active' : ''}`}
+                onPointerMove={handleButtonPointerMove}
+                onClick={() => {
+                  triggerHaptic();
+                  setActiveModal('create');
+                  setNotice('');
+                }}
+              >
+                <span className="btn-text">Lập bàn</span>
+              </button>
+            </div>
+
+            {/* Auxiliary Action Button: "Luật và vai trò" */}
+            <button
+              type="button"
+              className="hero-action-sub-btn"
+              onClick={handleOpenRules}
+              title="Tra cứu luật và vai trò thực chiến"
+            >
+              <span>Luật và vai trò</span>
+            </button>
+          </div>
         </div>
       </main>
 
-      {/* Footer */}
+      {/* Footer: Live Status & Day/Night Celestial Switch */}
       <footer className="home-footer">
         <div className="home-status-live">
           <span className="live-pulse-dot" aria-hidden="true" />
           <span>Máy chủ trực tiếp</span>
+        </div>
+
+        {/* Day/Night Celestial Preview Pill */}
+        <div className="home-ambient-controls">
+          <button
+            type="button"
+            className="home-ambient-pill"
+            onClick={() => {
+              triggerHaptic();
+              setDayNightFactor((prev) => (prev > 0.5 ? 0.08 : 0.92));
+            }}
+            title={dayNightFactor > 0.5 ? 'Chuyển sang Ban Ngày (Nắng vàng ấm)' : 'Chuyển sang Ban Đêm (Trăng xanh lạnh)'}
+          >
+            <span className="ambient-icon" aria-hidden="true">{dayNightFactor > 0.5 ? '🌙' : '☀️'}</span>
+            <span>{dayNightFactor > 0.5 ? 'Ban Đêm' : 'Ban Ngày'}</span>
+          </button>
         </div>
       </footer>
 
