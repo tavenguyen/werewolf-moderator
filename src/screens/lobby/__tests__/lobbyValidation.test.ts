@@ -3,8 +3,12 @@ import {
   DEFAULT_INITIAL_ROLES,
   computeDeckMetrics,
   convertSelectionToRoleIds,
+  formatDeckSummaryText,
+  getPresetRoleSelection,
+  removeVietnameseTones,
   type RoleSelectionMap,
 } from '../lobbyValidation';
+import { CORE_ROLE_IDS, ROLES, ROLES_BY_ID } from '../../../engine/roles';
 import type { PublicPlayerView } from '../../../server/types';
 
 function createMockPlayers(count: number): PublicPlayerView[] {
@@ -150,5 +154,78 @@ describe('lobbyValidation - Deck & Balance Computation', () => {
     expect(roleIds.filter((id) => id === 'werewolf').length).toBe(2);
     expect(roleIds.filter((id) => id === 'seer').length).toBe(1);
     expect(roleIds.filter((id) => id === 'villager').length).toBe(3);
+  });
+});
+
+describe('lobbyValidation - removeVietnameseTones (Instant Search)', () => {
+  it('loại bỏ chuẩn xác các dấu tiếng Việt cho tìm kiếm tức thì', () => {
+    expect(removeVietnameseTones('Sói chiêm bao')).toBe('soi chiem bao');
+    expect(removeVietnameseTones('Phù thủy')).toBe('phu thuy');
+    expect(removeVietnameseTones('Kẻ chán đời')).toBe('ke chan doi');
+    expect(removeVietnameseTones('Đạo tặc')).toBe('dao tac');
+    expect(removeVietnameseTones('Thợ săn')).toBe('tho san');
+    expect(removeVietnameseTones('Bảo vệ')).toBe('bao ve');
+    expect(removeVietnameseTones('Thần tình yêu')).toBe('than tinh yeu');
+  });
+
+  it('xử lý chữ hoa, khoảng trắng thừa và ký tự đặc biệt', () => {
+    expect(removeVietnameseTones('  MA SÓI  ')).toBe('ma soi');
+    expect(removeVietnameseTones('ĐIÊU NGOA')).toBe('dieu ngoa');
+    expect(removeVietnameseTones('')).toBe('');
+    expect(removeVietnameseTones('   ')).toBe('');
+  });
+});
+
+describe('lobbyValidation - getPresetRoleSelection (Auto-fill)', () => {
+  it('tạo bộ bài chuẩn từ 6 đến 16 người chơi', () => {
+    for (let count = 6; count <= 16; count++) {
+      const selection = getPresetRoleSelection(count);
+      const totalCards = Object.values(selection).reduce((sum, n) => sum + n, 0);
+      expect(totalCards).toBe(count);
+
+      // Luôn có ít nhất 1 Sói săn đêm
+      const nightWolves =
+        (selection.werewolf || 0) + (selection.wolf_cub || 0) + (selection.dream_wolf || 0);
+      expect(nightWolves).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('xử lý cận dưới (< 6) và cận trên (> 16)', () => {
+    // Nhỏ hơn 6 tự động rơi về 6
+    const under = getPresetRoleSelection(4);
+    const totalUnder = Object.values(under).reduce((sum, n) => sum + n, 0);
+    expect(totalUnder).toBe(6);
+
+    // Lớn hơn 16 tự động rơi về 16
+    const over = getPresetRoleSelection(20);
+    const totalOver = Object.values(over).reduce((sum, n) => sum + n, 0);
+    expect(totalOver).toBe(16);
+  });
+});
+
+describe('lobbyValidation - Progressive Disclosure Role Tiers', () => {
+  it('phân loại đúng 8 vai trò cơ bản (tier = core) và còn lại là nâng cao (tier = advanced)', () => {
+    expect(CORE_ROLE_IDS.length).toBe(8);
+
+    for (const roleId of CORE_ROLE_IDS) {
+      const def = ROLES_BY_ID[roleId];
+      expect(def).toBeDefined();
+      expect(def.tier).toBe('core');
+    }
+
+    const coreRolesInList = ROLES.filter((r) => r.tier === 'core');
+    expect(coreRolesInList.length).toBe(8);
+
+    const advancedRolesInList = ROLES.filter((r) => r.tier === 'advanced');
+    expect(advancedRolesInList.length).toBe(ROLES.length - 8);
+  });
+});
+
+describe('lobbyValidation - formatDeckSummaryText', () => {
+  it('định dạng tóm tắt 1 dòng chính xác', () => {
+    const players = createMockPlayers(6);
+    const metrics = computeDeckMetrics(DEFAULT_INITIAL_ROLES, players, true);
+    const summary = formatDeckSummaryText(metrics);
+    expect(summary).toBe('6 lá · Sói 2 · Dân 4 · Cân bằng (0)');
   });
 });

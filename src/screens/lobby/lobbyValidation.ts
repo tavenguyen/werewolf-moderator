@@ -1,4 +1,5 @@
 import { ROLES, ROLES_BY_ID, type Faction, type RolePack } from '../../engine/roles';
+import { getSmartPreset } from '../../engine/presets';
 import type { PublicPlayerView } from '../../server/types';
 
 export type RoleSelectionMap = Record<string, number>;
@@ -167,4 +168,44 @@ export function getFactionLabel(faction: Faction): string {
     default:
       return faction;
   }
+}
+
+export function formatDeckSummaryText(metrics: DeckMetrics): string {
+  const parts = [`${metrics.totalCards} lá`, `Sói ${metrics.wolvesCount}`, `Dân ${metrics.villagersCount}`];
+  if (metrics.thirdPartyCount > 0) {
+    parts.push(`Thứ 3 ${metrics.thirdPartyCount}`);
+  }
+  let balText = '';
+  if (metrics.balanceScore === 0) {
+    balText = 'Cân bằng (0)';
+  } else if (metrics.balanceStatus === 'BALANCED') {
+    balText = `Cân bằng (${metrics.balanceScore > 0 ? `+${metrics.balanceScore}` : metrics.balanceScore})`;
+  } else if (metrics.balanceStatus === 'LEAN_VILLAGE') {
+    balText = `Nghiêng Dân (+${metrics.balanceScore})`;
+  } else {
+    balText = `Nghiêng Sói (${metrics.balanceScore})`;
+  }
+  parts.push(balText);
+  return parts.join(' · ');
+}
+
+export function removeVietnameseTones(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
+export function getPresetRoleSelection(playerCount: number): RoleSelectionMap {
+  const count = Math.max(6, Math.min(16, playerCount));
+  const preset = getSmartPreset(count);
+  if (!preset) return { ...DEFAULT_INITIAL_ROLES };
+  const map: RoleSelectionMap = {};
+  for (const rId of preset.roles) {
+    map[rId] = (map[rId] ?? 0) + 1;
+  }
+  return map;
 }

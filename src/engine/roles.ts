@@ -12,6 +12,8 @@ export type WakeFrequency =
 
 export type RolePack = 'BASIC' | 'DEDUCTION' | 'CHAOS';
 
+export type RoleTier = 'core' | 'advanced';
+
 export interface RoleDefinition {
   id: string;
   nameVi: string;
@@ -26,6 +28,24 @@ export interface RoleDefinition {
   shortDesc: string;
   edgeCases: string[];
   implementedInEngine: boolean;
+  tier: RoleTier;
+}
+
+export const CORE_ROLE_IDS = [
+  'villager',
+  'werewolf',
+  'seer',
+  'bodyguard',
+  'witch',
+  'hunter',
+  'cupid',
+  'wolf_cub',
+] as const;
+
+export type CoreRoleId = (typeof CORE_ROLE_IDS)[number];
+
+export function isCoreRole(roleId: string): roleId is CoreRoleId {
+  return (CORE_ROLE_IDS as readonly string[]).includes(roleId);
 }
 
 export const MVP_ROLE_IDS = [
@@ -53,7 +73,7 @@ export function isMvpRole(roleId: string): roleId is MvpRoleId {
   return (MVP_ROLE_IDS as readonly string[]).includes(roleId);
 }
 
-export const ROLES: RoleDefinition[] = [
+export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
   // =========================================================================
   // 1. GÓI CƠ BẢN (BASIC - 9 ROLES)
   // =========================================================================
@@ -815,6 +835,11 @@ export const ROLES: RoleDefinition[] = [
     implementedInEngine: false,
   },
 ];
+
+export const ROLES: RoleDefinition[] = RAW_ROLES.map((role) => ({
+  ...role,
+  tier: isCoreRole(role.id) ? 'core' : 'advanced',
+}));
 
 export const ROLES_BY_ID: Record<string, RoleDefinition> = Object.fromEntries(
   ROLES.map((role) => [role.id, role])
