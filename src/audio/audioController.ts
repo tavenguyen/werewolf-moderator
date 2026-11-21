@@ -1,5 +1,7 @@
 import { Howl, Howler } from 'howler';
 
+export type AudioStatus = 'unlocked' | 'blocked' | 'interrupted';
+
 export interface NarrationPrompt {
   audioKey: string;
   subtitle: string;
@@ -87,15 +89,46 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
 export class AudioController {
   private bgmHowl: Howl | null = null;
   private currentVoiceHowl: Howl | null = null;
-  private isUnlocked: boolean = false;
+  private audioStatus: AudioStatus = 'unlocked';
   private isMuted: boolean = false;
   private bgmVolume: number = 0.2;
   private voiceVolume: number = 0.9;
+  private isDucked: boolean = false;
   private currentSubtitle: string = '';
+  private lastPlayedTurnKey: string | null = null;
+  private voiceSafetyTimer: ReturnType<typeof setTimeout> | null = null;
   private subtitleListeners: Set<(sub: string) => void> = new Set();
+  private statusListeners: Set<(status: AudioStatus) => void> = new Set();
 
   constructor() {
     this.setupAutoplayUnlock();
+  }
+
+  /**
+   * Theo dõi và thông báo trạng thái âm thanh tới UI (Host).
+   */
+  public getAudioStatus(): AudioStatus {
+    return this.audioStatus;
+  }
+
+  public subscribeAudioStatus(listener: (status: AudioStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    listener(this.audioStatus);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  public setAudioStatus(status: AudioStatus): void {
+    if (this.audioStatus === status) return;
+    this.audioStatus = status;
+    for (const listener of this.statusListeners) {
+      try {
+        listener(status);
+      } catch {
+        // ignore listener errors
+      }
+    }
   }
 
   /**
@@ -104,8 +137,16 @@ export class AudioController {
   public setupAutoplayUnlock(): void {
     if (typeof window === 'undefined') return;
 
+    // Kiểm tra trạng thái khởi tạo của AudioContext nếu Howler đã sinh
+    if (Howler.ctx) {
+      this.attachContextListener();
+      if (Howler.ctx.state === 'suspended') {
+        this.setAudioStatus('blocked');
+      }
+    }
+
     const unlockHandler = () => {
-      this.unlockAudio();
+      void this.unlockAudio();
       window.removeEventListener('click', unlockHandler);
       window.removeEventListener('touchstart', unlockHandler);
       window.removeEventListener('keydown', unlockHandler);
@@ -116,12 +157,47 @@ export class AudioController {
     window.addEventListener('keydown', unlockHandler, { once: true });
   }
 
-  public unlockAudio(): void {
-    if (this.isUnlocked) return;
-    this.isUnlocked = true;
+  /**
+   * Lắng nghe trạng thái AudioContext (hỗ trợ phát hiện gián đoạn trên iOS Safari / Android).
+   */
+  private attachContextListener(): void {
+    if (typeof window === 'undefined') return;
+    const ctx = Howler.ctx;
+    if (ctx && !ctx.onstatechange) {
+      ctx.onstatechange = () => {
+        if (ctx.state === 'running') {
+          this.setAudioStatus('unlocked');
+        } else if (ctx.state === 'suspended') {
+          this.setAudioStatus('blocked');
+        } else if ((ctx.state as string) === 'interrupted') {
+          this.setAudioStatus('interrupted');
+        }
+      };
+    }
+  }
 
-    if (Howler.ctx && Howler.ctx.state === 'suspended') {
-      void Howler.ctx.resume();
+  /**
+   * Mở khóa AudioContext chủ động khi Host bấm nút phục hồi trên giao diện.
+   */
+  public async unlockAudio(): Promise<boolean> {
+    if (typeof window === 'undefined') return true;
+
+    try {
+      if (Howler.ctx) {
+        if (Howler.ctx.state === 'suspended' || (Howler.ctx.state as string) === 'interrupted') {
+          await Howler.ctx.resume();
+        }
+        this.attachContextListener();
+        if (Howler.ctx.state === 'running') {
+          this.setAudioStatus('unlocked');
+          return true;
+        }
+      }
+      this.setAudioStatus('unlocked');
+      return true;
+    } catch {
+      this.setAudioStatus('blocked');
+      return false;
     }
   }
 
@@ -156,7 +232,11 @@ export class AudioController {
     this.isMuted = !this.isMuted;
     Howler.mute(this.isMuted);
     if (this.isMuted && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // ignore
+      }
     }
     return this.isMuted;
   }
@@ -172,7 +252,6 @@ export class AudioController {
     if (this.isMuted || typeof window === 'undefined') return;
 
     try {
-      // Ưu tiên tái sử dụng Howler.ctx nếu đã có sẵn để tránh tạo nhiều AudioContext
       const isReused = Boolean(Howler.ctx);
       const AudioCtx =
         window.AudioContext ||
@@ -209,12 +288,31 @@ export class AudioController {
 
   /**
    * Đọc câu lệnh bằng Web Speech API TTS tiếng Việt (fallback khi thiếu mp3).
+   * Đi kèm Safety Fallback Timer để tránh treo nếu browser nuốt onend/onerror.
    */
-  public speakTTS(text: string, onEnd?: () => void): void {
+  public speakTTS(text: string, onEnd?: () => void, durationMs?: number): void {
     if (this.isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
       onEnd?.();
       return;
     }
+
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      onEnd?.();
+    };
+
+    // Safety fallback: Mobile browser WebKit hay nuốt mất sự kiện onend.
+    // Đảm bảo luôn hoàn tất trong khoảng durationMs hoặc tối đa 6s.
+    const maxWaitMs = Math.max(3000, (durationMs ?? 6000));
+    timer = setTimeout(finish, maxWaitMs);
 
     try {
       window.speechSynthesis.cancel();
@@ -223,16 +321,12 @@ export class AudioController {
       utterance.rate = 0.95;
       utterance.volume = this.voiceVolume;
 
-      utterance.onend = () => {
-        onEnd?.();
-      };
-      utterance.onerror = () => {
-        onEnd?.();
-      };
+      utterance.onend = finish;
+      utterance.onerror = finish;
 
       window.speechSynthesis.speak(utterance);
     } catch {
-      onEnd?.();
+      finish();
     }
   }
 
@@ -245,7 +339,11 @@ export class AudioController {
 
     if (this.bgmHowl) {
       if (!this.bgmHowl.playing()) {
-        this.bgmHowl.play();
+        try {
+          this.bgmHowl.play();
+        } catch {
+          this.setAudioStatus('blocked');
+        }
       }
       return;
     }
@@ -254,16 +352,20 @@ export class AudioController {
       this.bgmHowl = new Howl({
         src: ['/audio/bgm_night.mp3'],
         loop: true,
-        volume: this.bgmVolume,
+        volume: this.isDucked ? 0.05 : this.bgmVolume,
         html5: true,
         onloaderror: () => {
           this.bgmHowl = null;
+        },
+        onplayerror: () => {
+          this.setAudioStatus('blocked');
         },
       });
 
       this.bgmHowl.play();
     } catch {
       this.bgmHowl = null;
+      this.setAudioStatus('blocked');
     }
   }
 
@@ -277,26 +379,39 @@ export class AudioController {
       }
       this.bgmHowl = null;
     }
+    this.isDucked = false;
   }
 
   /**
-   * Giảm âm lượng BGM (audio ducking) khi có voice đọc.
+   * Giảm âm lượng BGM (audio ducking) khi có voice đọc và khôi phục an toàn.
    */
-  private duckBGM(duck: boolean): void {
+  public duckBGM(duck: boolean): void {
     if (!this.bgmHowl) return;
+    if (this.isDucked === duck) return;
+    this.isDucked = duck;
     const targetVol = duck ? 0.05 : this.bgmVolume;
-    this.bgmHowl.fade(this.bgmHowl.volume(), targetVol, 300);
+    try {
+      this.bgmHowl.fade(this.bgmHowl.volume(), targetVol, 300);
+    } catch {
+      // ignore fade error
+    }
+  }
+
+  public resetLastPlayedTurn(): void {
+    this.lastPlayedTurnKey = null;
   }
 
   /**
    * Điều phối phát câu lệnh âm thanh theo turnKey:
    * 1. Cập nhật phụ đề câu lệnh hiển thị trên màn hình.
-   * 2. Phát transition chime báo hiệu đổi lượt.
-   * 3. Thử tải file MP3 `/audio/<audioKey>.mp3` qua Howler.
-   * 4. Nếu file MP3 load lỗi (404/thiếu file) -> Fallback sang Web Speech API (TTS).
+   * 2. Chống phát đúp sau khi Host reconnect hoặc socket gửi snapshot lặp.
+   * 3. Phát transition chime báo hiệu đổi lượt.
+   * 4. Thử tải file MP3 `/audio/<audioKey>.mp3` qua Howler.
+   * 5. Nếu file MP3 load lỗi (404/thiếu file) -> Fallback sang Web Speech API (TTS).
+   * 6. Luôn có Safety Fallback Timer để bảo đảm duckBGM(false) và onComplete được gọi.
    */
-  public playTurnNarration(turnKey: string, onComplete?: () => void): void {
-    this.unlockAudio();
+  public playTurnNarration(turnKey: string, onComplete?: () => void, force = false): void {
+    void this.unlockAudio();
 
     const prompt = NARRATION_PROMPTS[turnKey];
     if (!prompt) {
@@ -307,16 +422,28 @@ export class AudioController {
     // 1. Phụ đề trực quan
     this.setSubtitle(prompt.subtitle);
 
-    // 2. Chime báo hiệu
+    // 2. Chống đọc đúp nếu cùng 1 lượt và không phải thao tác bấm ép 'Phát lại' (force)
+    if (!force && this.lastPlayedTurnKey === turnKey) {
+      onComplete?.();
+      return;
+    }
+    this.lastPlayedTurnKey = turnKey;
+
+    // 3. Chime báo hiệu
     this.playTransitionChime();
 
-    // Dừng voice trước đó nếu còn
+    // Dừng voice trước đó và timer nếu có
+    if (this.voiceSafetyTimer) {
+      clearTimeout(this.voiceSafetyTimer);
+      this.voiceSafetyTimer = null;
+    }
+
     if (this.currentVoiceHowl) {
       try {
         this.currentVoiceHowl.stop();
         this.currentVoiceHowl.unload();
       } catch {
-        // ignore headless test unload error
+        // ignore
       }
       this.currentVoiceHowl = null;
     }
@@ -330,12 +457,14 @@ export class AudioController {
     }
 
     if (this.isMuted) {
+      this.duckBGM(false);
       onComplete?.();
       return;
     }
 
     // Nếu môi trường không có HTMLAudioElement (như bun test / node), dừng ở đây và hoàn tất
     if (typeof window === 'undefined' || typeof window.Audio === 'undefined') {
+      this.duckBGM(false);
       onComplete?.();
       return;
     }
@@ -343,22 +472,33 @@ export class AudioController {
     // Hạ BGM khi đọc voice
     this.duckBGM(true);
 
+    let finished = false;
     const finishVoice = () => {
+      if (finished) return;
+      finished = true;
+      if (this.voiceSafetyTimer) {
+        clearTimeout(this.voiceSafetyTimer);
+        this.voiceSafetyTimer = null;
+      }
       this.duckBGM(false);
       onComplete?.();
     };
 
+    // Safety timer: Đảm bảo 100% kết thúc lượt và trả BGM volume bình thường
+    const maxSafetyMs = Math.max(4000, (prompt.durationMs ?? 6000) + 2000);
+    this.voiceSafetyTimer = setTimeout(finishVoice, maxSafetyMs);
+
     try {
-      // 3. Thử tải MP3
+      // 4. Thử tải MP3
       const sound = new Howl({
         src: [`/audio/${prompt.audioKey}.mp3`],
         volume: this.voiceVolume,
         onloaderror: () => {
-          // 4. Fallback 1: Web Speech API TTS
-          this.speakTTS(prompt.subtitle, finishVoice);
+          this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
         },
         onplayerror: () => {
-          this.speakTTS(prompt.subtitle, finishVoice);
+          this.setAudioStatus('blocked');
+          this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
         },
         onend: () => {
           finishVoice();
@@ -368,11 +508,18 @@ export class AudioController {
       this.currentVoiceHowl = sound;
       sound.play();
     } catch {
-      this.speakTTS(prompt.subtitle, finishVoice);
+      this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
     }
   }
 
+  /**
+   * Dọn sạch toàn bộ âm thanh và giải phóng tài nguyên (dùng khi Rời phòng hoặc Rematch).
+   */
   public stopAll(): void {
+    if (this.voiceSafetyTimer) {
+      clearTimeout(this.voiceSafetyTimer);
+      this.voiceSafetyTimer = null;
+    }
     if (this.currentVoiceHowl) {
       try {
         this.currentVoiceHowl.stop();
@@ -382,6 +529,7 @@ export class AudioController {
       }
       this.currentVoiceHowl = null;
     }
+    this.duckBGM(false);
     this.stopNightBGM();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -391,6 +539,7 @@ export class AudioController {
       }
     }
     this.clearSubtitle();
+    this.resetLastPlayedTurn();
   }
 }
 

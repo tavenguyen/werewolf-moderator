@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
-import { audioController } from '../../audio/audioController';
+import { audioController, type AudioStatus } from '../../audio/audioController';
 import { formatTime } from '../../utils/formatTime';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
 import type { PlayerId } from '../../engine/types';
@@ -28,15 +28,22 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
   const [announcement, setAnnouncement] = useState('');
   const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
   const [isMuted, setIsMuted] = useState(() => audioController.getIsMuted());
+  const [audioStatus, setAudioStatus] = useState<AudioStatus>(() => audioController.getAudioStatus());
 
   const qrTrigger = useRef<HTMLButtonElement>(null);
   const qrClose = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    const unsub = audioController.subscribeSubtitle((sub) => {
+    const unsubSubtitle = audioController.subscribeSubtitle((sub) => {
       setSubtitle(sub);
     });
-    return unsub;
+    const unsubStatus = audioController.subscribeAudioStatus((status) => {
+      setAudioStatus(status);
+    });
+    return () => {
+      unsubSubtitle();
+      unsubStatus();
+    };
   }, []);
 
   useEffect(() => {
@@ -252,6 +259,23 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             </div>
           </div>
 
+          {/* Cảnh báo âm thanh bị chặn bởi Autoplay chính sách trình duyệt di động */}
+          {audioStatus !== 'unlocked' && (
+            <button
+              type="button"
+              className="host-audio-unblock-banner"
+              onClick={() => {
+                void audioController.unlockAudio();
+              }}
+              title="Nhấn để kích hoạt phát loa Quản trò"
+            >
+              <span className="unblock-icon" aria-hidden="true">⚠️</span>
+              <span className="unblock-text">
+                Trình duyệt đang chặn âm thanh tự động · <strong>Nhấn vào đây để bật loa Quản trò</strong>
+              </span>
+            </button>
+          )}
+
           {/* Script / Subtitle từ AudioController */}
           <div className="host-script">
             <div className="host-script-icon-wrap" aria-hidden="true">
@@ -276,7 +300,7 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
               className="host-button host-speaker"
               onClick={() => {
                 if (publicView?.currentTurnInfo?.turnKey) {
-                  audioController.playTurnNarration(publicView.currentTurnInfo.turnKey);
+                  audioController.playTurnNarration(publicView.currentTurnInfo.turnKey, undefined, true);
                 }
               }}
               aria-label="Phát lại lời thoại"

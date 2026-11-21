@@ -10,6 +10,7 @@ import { SocketAdapter } from './socketAdapter';
 import { LocalEngineAdapter } from './localEngineAdapter';
 import type { PlayerId, RoomSettings } from '../engine/types';
 import { requestWakeLock, releaseWakeLock } from '../utils/wakeLock';
+import { audioController } from '../audio/audioController';
 
 export interface GameSessionContextValue {
   state: GameSessionState;
@@ -79,8 +80,43 @@ export function GameSessionProvider({
       void requestWakeLock();
     } else {
       void releaseWakeLock();
+      if (phase === 'GAME_OVER') {
+        audioController.stopAll();
+      }
     }
   }, [state.publicView?.phase]);
+
+  // Điều phối âm thanh tự động cho Host trong chế độ nhiều máy (MULTI_DEVICE)
+  // Quy tắc SKILL: Chỉ Host mới được phát loa công cộng, máy người chơi tuyệt đối im lặng
+  useEffect(() => {
+    if (deviceMode !== 'MULTI_DEVICE' || !state.isHost) {
+      return;
+    }
+
+    const phase = state.publicView?.phase;
+    if (!phase) return;
+
+    if (phase === 'NIGHT') {
+      audioController.playNightBGM();
+      const currentTurn = state.publicView?.currentTurnInfo?.turnKey;
+      if (currentTurn) {
+        audioController.playTurnNarration(currentTurn);
+      }
+    } else if (phase === 'DAY_DISCUSS') {
+      audioController.stopNightBGM();
+      // Hiệu lệnh sáng dậy và thảo luận
+      audioController.playTurnNarration('night_end', () => {
+        audioController.playTurnNarration('day_discuss');
+      });
+    } else if (phase === 'GAME_OVER') {
+      audioController.stopAll();
+    }
+  }, [
+    deviceMode,
+    state.isHost,
+    state.publicView?.phase,
+    state.publicView?.currentTurnInfo?.turnKey,
+  ]);
 
   const setDeviceMode = (mode: DeviceMode) => {
     setDeviceModeState(mode);
@@ -114,6 +150,7 @@ export function GameSessionProvider({
         return false;
       },
       leaveRoom: async () => {
+        audioController.stopAll();
         await activeAdapter.leaveRoom();
         await releaseWakeLock();
       },
@@ -154,6 +191,7 @@ export function GameSessionProvider({
         return activeAdapter.hostEmergencyEliminate(targetPlayerId);
       },
       hostRematch: async () => {
+        audioController.stopAll();
         return activeAdapter.hostRematch();
       },
       setLocalActivePlayer: (playerId: PlayerId) => {

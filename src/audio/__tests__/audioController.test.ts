@@ -49,6 +49,49 @@ describe('AudioController & Fallbacks', () => {
   it('phát transition chime an toàn không crash khi thiếu Web Audio', () => {
     expect(() => audioController.playTransitionChime()).not.toThrow();
   });
+
+  it('theo dõi và phát thông báo trạng thái AudioStatus (blocked, unlocked, interrupted)', () => {
+    let currentStatus = audioController.getAudioStatus();
+    const unsub = audioController.subscribeAudioStatus((status) => {
+      currentStatus = status;
+    });
+
+    audioController.setAudioStatus('blocked');
+    expect(currentStatus).toBe('blocked');
+
+    audioController.setAudioStatus('unlocked');
+    expect(currentStatus).toBe('unlocked');
+
+    unsub();
+  });
+
+  it('chống phát đúp câu lệnh khi cùng một turnKey được gọi nhiều lần và cho phép force replay', () => {
+    let callCount = 0;
+    audioController.playTurnNarration('cupid', () => {
+      callCount += 1;
+    });
+    expect(callCount).toBe(1);
+
+    // Lần gọi thứ 2 với cùng turnKey mà không force -> không đọc đúp
+    audioController.playTurnNarration('cupid', () => {
+      callCount += 1;
+    });
+    expect(callCount).toBe(2);
+
+    // Lần gọi thứ 3 với force = true -> chấp nhận replay
+    audioController.playTurnNarration('cupid', () => {
+      callCount += 1;
+    }, true);
+    expect(callCount).toBe(3);
+  });
+
+  it('dọn sạch toàn bộ âm thanh và reset cờ khi gọi stopAll()', () => {
+    audioController.playNightBGM();
+    audioController.duckBGM(true);
+    audioController.stopAll();
+
+    expect(audioController.getCurrentSubtitle()).toBe('');
+  });
 });
 
 describe('Screen Wake Lock Utility', () => {

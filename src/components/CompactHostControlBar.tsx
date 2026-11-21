@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameSession } from '../adapters/useGameSession';
-import { audioController } from '../audio/audioController';
+import { audioController, type AudioStatus } from '../audio/audioController';
 import type { PlayerId } from '../engine/types';
 import './compactHostControlBar.css';
 
@@ -8,13 +8,20 @@ export default function CompactHostControlBar() {
   const { state, actions } = useGameSession();
   const [isMuted, setIsMuted] = useState(() => audioController.getIsMuted());
   const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
+  const [audioStatus, setAudioStatus] = useState<AudioStatus>(() => audioController.getAudioStatus());
   const [emergencyOpen, setEmergencyOpen] = useState(false);
 
   useEffect(() => {
-    const unsub = audioController.subscribeSubtitle((sub) => {
+    const unsubSub = audioController.subscribeSubtitle((sub) => {
       setSubtitle(sub);
     });
-    return unsub;
+    const unsubStatus = audioController.subscribeAudioStatus((status) => {
+      setAudioStatus(status);
+    });
+    return () => {
+      unsubSub();
+      unsubStatus();
+    };
   }, []);
 
   const handleToggleMute = () => {
@@ -67,6 +74,22 @@ export default function CompactHostControlBar() {
 
         {/* Action Controls */}
         <div className="compact-host-actions">
+          {/* Nút phục hồi khi Autoplay bị chặn */}
+          {audioStatus !== 'unlocked' && (
+            <button
+              type="button"
+              className="compact-btn compact-btn-unblock"
+              onClick={() => {
+                void audioController.unlockAudio();
+              }}
+              title="Trình duyệt đang chặn âm thanh · Bấm để kích hoạt loa"
+              aria-label="Kích hoạt loa Quản trò"
+            >
+              <span className="unblock-pulse-dot" aria-hidden="true" />
+              <span>Bật loa</span>
+            </button>
+          )}
+
           {/* Loa âm thanh */}
           <button
             type="button"
