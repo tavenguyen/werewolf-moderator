@@ -21,6 +21,7 @@ export interface GameSessionContextValue {
     createRoom: (options: CreateRoomOptions) => Promise<{ roomCode: string }>;
     joinRoom: (roomCode: string, username: string) => Promise<{ playerId: PlayerId; seatIndex: number }>;
     resumeSession: () => Promise<boolean>;
+    hasRecoverableSession: () => boolean;
     leaveRoom: () => Promise<void>;
     updateSettings: (settings: Partial<RoomSettings>) => Promise<void>;
     startGame: (customRoleIds?: string[]) => Promise<void>;
@@ -148,6 +149,9 @@ export function GameSessionProvider({
           return true;
         }
         return false;
+      },
+      hasRecoverableSession: () => {
+        return localEngineAdapter.hasRecoverableSession() || socketAdapter.hasRecoverableSession();
       },
       leaveRoom: async () => {
         audioController.stopAll();

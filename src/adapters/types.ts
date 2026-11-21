@@ -52,6 +52,7 @@ export interface GameSessionAdapter {
   createRoom(options: CreateRoomOptions): Promise<{ roomCode: string }>;
   joinRoom(roomCode: string, username: string): Promise<{ playerId: PlayerId; seatIndex: number }>;
   resumeSession(): Promise<boolean>;
+  hasRecoverableSession?(): boolean;
   leaveRoom(): Promise<void>;
 
   updateSettings(settings: Partial<RoomSettings>): Promise<void>;

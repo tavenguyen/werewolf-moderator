@@ -37,6 +37,8 @@ interface StoredSession {
   hostMode: HostMode;
   playerId?: PlayerId;
   mySeatIndex?: number;
+  savedAt?: number;
+  expiresAt?: number;
 }
 
 export class SocketAdapter implements GameSessionAdapter {
@@ -166,30 +168,45 @@ export class SocketAdapter implements GameSessionAdapter {
     return this.socket;
   }
 
-  private async emitWithAck<T>(event: string, payload: unknown, timeoutMs = 4000): Promise<T> {
+  private async emitWithAck<T>(
+    event: string,
+    payload: unknown,
+    timeoutMs = 15000,
+    onProgress?: (msg: string) => void
+  ): Promise<T> {
     const socket = this.ensureSocket();
 
-    // Nếu socket chưa kết nối, chờ kết nối tối đa 2500ms
+    // Nếu socket chưa kết nối, chờ kết nối với thông báo tiến trình (hỗ trợ cold-start Render)
     if (!socket.connected) {
       if (socket.disconnected) {
         socket.connect();
       }
       await new Promise<void>((resolve, reject) => {
+        let progressiveTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+          const msg = 'Đang đánh thức máy chủ, vui lòng đợi trong giây lát...';
+          this.updateState({ error: { code: 'COLD_START_WAKING', message: msg } });
+          onProgress?.(msg);
+        }, 3200);
+
         const connectTimer = setTimeout(() => {
+          if (progressiveTimer) clearTimeout(progressiveTimer);
           socket.off('connect', onConnect);
           socket.off('connect_error', onError);
-          const errMsg = 'Bàn chưa tồn tại hoặc không thể kết nối đến máy chủ.';
+          const errMsg = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau vài giây.';
           this.updateState({ error: { code: 'CONNECT_TIMEOUT', message: errMsg } });
           reject(new Error(errMsg));
-        }, 2500);
+        }, 15000);
 
         const onConnect = () => {
+          if (progressiveTimer) clearTimeout(progressiveTimer);
           clearTimeout(connectTimer);
           socket.off('connect_error', onError);
+          this.updateState({ error: null });
           resolve();
         };
 
         const onError = (err: Error) => {
+          if (progressiveTimer) clearTimeout(progressiveTimer);
           clearTimeout(connectTimer);
           socket.off('connect', onConnect);
           const errMsg = `Không thể kết nối đến máy chủ: ${err.message}`;
@@ -207,7 +224,7 @@ export class SocketAdapter implements GameSessionAdapter {
       const ackTimer = setTimeout(() => {
         if (!settled) {
           settled = true;
-          const errMsg = 'Bàn chưa tồn tại hoặc không thể kết nối đến máy chủ.';
+          const errMsg = 'Máy chủ chưa phản hồi. Vui lòng thử lại.';
           this.updateState({ error: { code: 'TIMEOUT', message: errMsg } });
           reject(new Error(errMsg));
         }
@@ -237,13 +254,19 @@ export class SocketAdapter implements GameSessionAdapter {
   private saveSession(session: StoredSession): void {
     if (typeof localStorage === 'undefined') return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      const now = Date.now();
+      const withExpiry: StoredSession = {
+        ...session,
+        savedAt: now,
+        expiresAt: now + 3 * 60 * 60 * 1000, // Hạn 3 giờ khớp với vòng đời phòng server
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(withExpiry));
     } catch {
       // ignore storage error
     }
   }
 
-  private clearStoredSession(): void {
+  public clearStoredSession(): void {
     if (typeof localStorage === 'undefined') return;
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -252,14 +275,25 @@ export class SocketAdapter implements GameSessionAdapter {
     }
   }
 
-  private getStoredSession(): StoredSession | null {
+  public getStoredSession(): StoredSession | null {
     if (typeof localStorage === 'undefined') return null;
     try {
       const data = localStorage.getItem(STORAGE_KEY);
-      return data ? (JSON.parse(data) as StoredSession) : null;
+      if (!data) return null;
+      const session = JSON.parse(data) as StoredSession;
+      if (session.expiresAt && Date.now() > session.expiresAt) {
+        this.clearStoredSession();
+        return null;
+      }
+      return session;
     } catch {
       return null;
     }
+  }
+
+  public hasRecoverableSession(): boolean {
+    const session = this.getStoredSession();
+    return Boolean(session && session.roomCode && session.token);
   }
 
   public async createRoom(options: CreateRoomOptions): Promise<{ roomCode: string }> {

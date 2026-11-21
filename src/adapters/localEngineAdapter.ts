@@ -172,10 +172,29 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         nightTurnPlan: this.roomState.nightTurnPlan,
         nightActionsAccumulator: this.roomState.nightActionsAccumulator,
         publicHistoryLogs: this.roomState.publicHistoryLogs,
+        savedAt: Date.now(),
+        expiresAt: Date.now() + 3 * 60 * 60 * 1000, // Hạn 3 giờ
       };
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(serializable));
     } catch {
       // ignore
+    }
+  }
+
+  public hasRecoverableSession(): boolean {
+    if (typeof localStorage === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || !data.roomCode || !data.players) return false;
+      if (data.expiresAt && Date.now() > data.expiresAt) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -187,6 +206,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
       const data = JSON.parse(raw);
       if (!data || !data.roomCode || !data.players) return false;
+
+      // Tự dọn nếu phiên offline đã quá hạn 3 giờ
+      if (data.expiresAt && Date.now() > data.expiresAt) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        return false;
+      }
 
       this.roomState.roomCode = data.roomCode;
       this.roomState.gameGeneration = data.gameGeneration || 1;

@@ -32,6 +32,11 @@ describe('SocketAdapter - Multi Device Mode', () => {
     expect(ok).toBe(false);
   });
 
+  it('hasRecoverableSession trả về false khi không có session hoặc session đã hết hạn', () => {
+    const adapter = new SocketAdapter('http://localhost:3001');
+    expect(adapter.hasRecoverableSession()).toBe(false);
+  });
+
   it('joinRoom báo lỗi ngay lập tức khi không thể kết nối hoặc bàn không tồn tại', async () => {
     // Cố ý kết nối đến port không tồn tại
     const adapter = new SocketAdapter('http://127.0.0.1:59999');
