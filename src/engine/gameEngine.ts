@@ -30,6 +30,12 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   tieVoteMode: 'ESCAPE',
   ghostMode: false,
   hasMayor: false,
+  customDeck: {
+    werewolf: 2,
+    seer: 1,
+    bodyguard: 1,
+    villager: 2,
+  },
 };
 
 /**

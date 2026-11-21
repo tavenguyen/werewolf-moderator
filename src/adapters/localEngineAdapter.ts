@@ -31,17 +31,6 @@ import { audioController } from '../audio/audioController';
 
 const LOCAL_STORAGE_KEY = 'werewolf_local_game_session';
 
-const DEFAULT_OFFLINE_NAMES = [
-  'Anh Tuấn',
-  'Lan Anh',
-  'Hoàng Nam',
-  'Bảo Trâm',
-  'Đức Huy',
-  'Quỳnh Như',
-  'Văn Hậu',
-  'Thúy Kiều',
-];
-
 export class LocalEngineAdapter implements GameSessionAdapter {
   private roomState: RoomState;
   private state: GameSessionState;
@@ -50,7 +39,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   private dayTimerInterval: number | null = null;
 
   constructor() {
-    this.roomState = this.createEmptyRoomState('7290');
+    this.roomState = this.createEmptyRoomState('7290', false);
     this.state = {
       roomCode: '7290',
       deviceMode: 'SINGLE_DEVICE',
@@ -68,21 +57,28 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.emitState();
   }
 
-  private createEmptyRoomState(roomCode: string): RoomState {
+  private createEmptyRoomState(
+    roomCode: string,
+    isPlayer = false,
+    hostUsername?: string
+  ): RoomState {
     const playersMap = new Map<PlayerId, RoomPlayer>();
-    DEFAULT_OFFLINE_NAMES.forEach((name, idx) => {
-      const id = `player_${idx + 1}`;
-      playersMap.set(id, {
-        id,
+    let hostPlayerId: PlayerId | undefined = undefined;
+
+    if (isPlayer) {
+      const name = hostUsername?.trim() || 'Host';
+      hostPlayerId = 'player_1';
+      playersMap.set(hostPlayerId, {
+        id: hostPlayerId,
         name,
-        normalizedName: name.trim().toLowerCase(),
-        playerToken: `local_token_${idx + 1}`,
+        normalizedName: name.toLowerCase(),
+        playerToken: 'local_token_1',
         socketId: null,
-        seatIndex: idx + 1,
+        seatIndex: 1,
         isAlive: true,
         isConnected: true,
       });
-    });
+    }
 
     return {
       roomCode,
@@ -92,7 +88,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       host: {
         hostToken: 'local_host_token',
         socketId: null,
-        isPlayer: false,
+        isPlayer,
+        playerId: hostPlayerId,
       },
       players: playersMap,
       settings: { ...DEFAULT_ROOM_SETTINGS },
@@ -239,20 +236,11 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public async createRoom(options: CreateRoomOptions): Promise<{ roomCode: string }> {
     const code = Math.floor(1000 + Math.random() * 9000).toString();
-    this.roomState = this.createEmptyRoomState(code);
+    const isPlayer = Boolean(options.isPlayer);
+    this.roomState = this.createEmptyRoomState(code, isPlayer, options.username);
 
-    const hostMode: HostMode = options.isPlayer ? 'PLAYER_HOST' : 'CENTER_BOARD';
-    this.roomState.host.isPlayer = options.isPlayer;
-
-    if (options.isPlayer && options.username) {
-      const firstPlayer = this.roomState.players.get('player_1');
-      if (firstPlayer) {
-        firstPlayer.name = options.username;
-        firstPlayer.normalizedName = options.username.trim().toLowerCase();
-        this.roomState.host.playerId = firstPlayer.id;
-        this.activeLocalPlayerId = firstPlayer.id;
-      }
-    }
+    const hostMode: HostMode = isPlayer ? 'PLAYER_HOST' : 'CENTER_BOARD';
+    this.activeLocalPlayerId = this.roomState.host.playerId;
 
     this.state.hostMode = hostMode;
     this.state.isHost = true;
@@ -296,7 +284,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         // ignore
       }
     }
-    this.roomState = this.createEmptyRoomState('7290');
+    this.roomState = this.createEmptyRoomState('7290', false);
     this.emitState();
   }
 
@@ -377,12 +365,14 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public removeOfflinePlayer(playerId: PlayerId): void {
     if (this.roomState.gameState) return;
-    if (this.roomState.players.size <= 6) return;
     this.roomState.players.delete(playerId);
     // Cập nhật lại seat index
     let idx = 1;
     for (const p of this.roomState.players.values()) {
       p.seatIndex = idx++;
+    }
+    if (this.activeLocalPlayerId === playerId) {
+      this.activeLocalPlayerId = Array.from(this.roomState.players.keys())[0];
     }
     this.emitState();
   }

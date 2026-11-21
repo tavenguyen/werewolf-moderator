@@ -1083,3 +1083,481 @@
 .lobby-btn-add:hover:not(:disabled) {
   background: rgba(201, 134, 56, 0.4);
 }
+
+/* =========================================================================
+   Lobby Redesign: Role Selection, Balance Gauge, Host Role & Faction Styling
+   ========================================================================= */
+
+.host-mode-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ede7dc;
+}
+.host-mode-pill.player {
+  background: rgba(201, 134, 56, 0.15);
+  border-color: rgba(201, 134, 56, 0.4);
+  color: var(--lantern, #c98638);
+}
+.host-mode-pill.board {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+}
+
+.lobby-player-role-hint {
+  font-size: 11.5px;
+  color: #8b92a0;
+  margin: -4px 0 12px;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.lobby-empty-players {
+  padding: 24px 16px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #717885;
+}
+.lobby-empty-players .empty-icon {
+  font-size: 28px;
+  display: block;
+  margin-bottom: 6px;
+  opacity: 0.7;
+}
+
+.lobby-readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+  font-size: 12px;
+}
+.lobby-readonly-banner strong {
+  display: block;
+  font-size: 12px;
+  color: #e0e7ff;
+}
+.lobby-readonly-banner p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #a5b4fc;
+}
+
+/* Balance Card & Gauge */
+.balance-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+}
+.balance-badge.status-BALANCED {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+}
+.balance-badge.status-LEAN_VILLAGE {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #34d399;
+}
+.balance-badge.status-LEAN_WOLF {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #f87171;
+}
+
+.deck-total-count {
+  font-size: 12px;
+  color: #8b92a0;
+}
+.deck-total-count b {
+  color: var(--lantern, #c98638);
+  font-size: 14px;
+}
+
+.balance-gauge-wrap {
+  margin-top: 14px;
+  padding: 10px 14px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+.balance-gauge-track {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  overflow: visible;
+  display: flex;
+  margin: 18px 0 10px;
+}
+
+.gauge-zone {
+  height: 100%;
+}
+.gauge-zone.zone-wolf {
+  flex: 13;
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+  border-radius: 6px 0 0 6px;
+  opacity: 0.85;
+}
+.gauge-zone.zone-balanced {
+  flex: 4;
+  background: #f59e0b;
+  opacity: 0.9;
+}
+.gauge-zone.zone-village {
+  flex: 13;
+  background: linear-gradient(90deg, #10b981, #059669);
+  border-radius: 0 6px 6px 0;
+  opacity: 0.85;
+}
+
+.gauge-center-marker {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #fff;
+  transform: translateX(-50%);
+  opacity: 0.6;
+  z-index: 2;
+}
+
+.gauge-needle {
+  position: absolute;
+  top: -10px;
+  width: 2px;
+  height: 32px;
+  background: #fff;
+  transform: translateX(-50%);
+  z-index: 4;
+  transition: left 0.25s ease-out;
+}
+.gauge-needle::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 6px solid #fff;
+}
+.gauge-needle-bubble {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  background: #11141b;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+.gauge-needle.needle-BALANCED .gauge-needle-bubble {
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+.gauge-needle.needle-LEAN_VILLAGE .gauge-needle-bubble {
+  border-color: #10b981;
+  color: #34d399;
+}
+.gauge-needle.needle-LEAN_WOLF .gauge-needle-bubble {
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+.gauge-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #717885;
+  font-weight: 600;
+  padding: 0 2px;
+}
+.label-wolf { color: #fca5a5; }
+.label-balanced { color: #fde68a; }
+.label-village { color: #a7f3d0; }
+
+.balance-composition-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.comp-pill {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.comp-pill b { font-weight: 700; }
+.comp-wolf { border-color: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+.comp-village { border-color: rgba(16, 185, 129, 0.25); color: #a7f3d0; }
+.comp-third { border-color: rgba(168, 85, 247, 0.25); color: #e9d5ff; }
+.pill-warn {
+  color: #f59e0b;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+/* Faction Tabs */
+.faction-filter-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ede7dc;
+}
+.tab-btn.active {
+  background: rgba(201, 134, 56, 0.18);
+  border-color: rgba(201, 134, 56, 0.45);
+  color: var(--lantern, #c98638);
+}
+
+/* Faction Groups and Role Selection Grid */
+.deck-selection-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+.faction-group-header {
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 8px;
+}
+.faction-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.faction-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.role-select-card {
+  padding: 10px;
+  border-radius: 8px;
+  background: #11141c;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  transition: all 0.16s ease;
+}
+.role-select-card:hover:not(.is-disabled) {
+  border-color: rgba(201, 134, 56, 0.35);
+  background: #151924;
+}
+.role-select-card.is-selected {
+  border-color: rgba(201, 134, 56, 0.4);
+  background: rgba(201, 134, 56, 0.06);
+}
+.role-select-card.is-disabled {
+  opacity: 0.38;
+  filter: grayscale(0.5);
+  cursor: not-allowed;
+}
+
+.role-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.role-card-icon {
+  font-size: 18px;
+  flex: none;
+}
+.role-card-title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.role-card-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ede7dc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-card-en {
+  font-size: 10px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-card-weight {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex: none;
+}
+.role-card-weight.pos {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+.role-card-weight.neg {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+.role-card-weight.zero {
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+
+.role-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.role-card-pack {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #717885;
+}
+.role-card-unsupported {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.role-card-controls {
+  margin-top: 2px;
+}
+.role-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 2px;
+}
+.counter-btn {
+  width: 28px;
+  height: 26px;
+  background: transparent;
+  border: 0;
+  color: #ede7dc;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+.counter-btn:hover:not(:disabled) {
+  background: rgba(201, 134, 56, 0.25);
+  color: var(--lantern, #c98638);
+}
+.counter-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.counter-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ede7dc;
+}
+
+.role-toggle-btn {
+  width: 100%;
+  min-height: 28px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.role-toggle-btn:hover:not(:disabled) {
+  background: rgba(201, 134, 56, 0.15);
+  border-color: rgba(201, 134, 56, 0.4);
+  color: var(--lantern, #c98638);
+}
+.role-toggle-btn.selected {
+  background: rgba(201, 134, 56, 0.2);
+  border-color: rgba(201, 134, 56, 0.5);
+  color: #ede7dc;
+  font-weight: 700;
+}
+.role-toggle-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Start Game Action Card Status */
+.lobby-start-card.status-success {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, rgba(21, 24, 31, 0.95), rgba(16, 185, 129, 0.08));
+}
+.lobby-start-card.status-warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(135deg, rgba(21, 24, 31, 0.95), rgba(245, 158, 11, 0.05));
+}
+.lobby-start-card.status-error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(135deg, rgba(21, 24, 31, 0.95), rgba(239, 68, 68, 0.05));
+}
+
+.start-waiting-notice {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+

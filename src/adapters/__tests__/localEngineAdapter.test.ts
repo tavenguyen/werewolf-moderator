@@ -1,17 +1,32 @@
 import { describe, expect, it } from 'bun:test';
 import { LocalEngineAdapter } from '../localEngineAdapter';
 
+function createPopulatedAdapter(playerCount = 8): LocalEngineAdapter {
+  const adapter = new LocalEngineAdapter();
+  for (let i = 1; i <= playerCount; i++) {
+    adapter.addOfflinePlayer(`Người chơi ${i}`);
+  }
+  return adapter;
+}
+
 describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
-  it('khởi tạo phòng offline với 8 người chơi mặc định và trạng thái LOBBY', () => {
+  it('khởi tạo phòng offline sạch không có người chơi demo (Clean Room Initialization)', async () => {
+    // 1. Mặc định khởi tạo: 0 người chơi (CENTER_BOARD)
     const adapter = new LocalEngineAdapter();
-    const state = adapter.getState();
+    let state = adapter.getState();
 
     expect(state.roomCode).toBeDefined();
     expect(state.deviceMode).toBe('SINGLE_DEVICE');
     expect(state.isHost).toBe(true);
     expect(state.isConnected).toBe(true);
     expect(state.publicView?.phase).toBe('LOBBY');
-    expect(state.publicView?.players.length).toBe(8);
+    expect(state.publicView?.players.length).toBe(0);
+
+    // 2. Tạo phòng kiêm người chơi: chỉ có đúng 1 Host
+    await adapter.createRoom({ isPlayer: true, username: 'Quản trò Nam' });
+    state = adapter.getState();
+    expect(state.publicView?.players.length).toBe(1);
+    expect(state.publicView?.players[0].name).toBe('Quản trò Nam');
   });
 
   it('cho phép thêm và bớt người chơi offline trong sảnh chờ', () => {
@@ -19,7 +34,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
 
     adapter.addOfflinePlayer('Trần Dũng');
     let state = adapter.getState();
-    expect(state.publicView?.players.length).toBe(9);
+    expect(state.publicView?.players.length).toBe(1);
     expect(state.publicView?.players.some((p) => p.name === 'Trần Dũng')).toBe(true);
 
     const dungPlayer = state.publicView?.players.find((p) => p.name === 'Trần Dũng');
@@ -28,11 +43,11 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     }
 
     state = adapter.getState();
-    expect(state.publicView?.players.length).toBe(8);
+    expect(state.publicView?.players.length).toBe(0);
   });
 
   it('bắt đầu ván đấu chuyển sang NIGHT Đêm 1 và sinh Night Turn Plan', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
     const state = adapter.getState();
@@ -43,7 +58,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('điều phối lần lượt các lượt đêm và chuyển sang Ngày thảo luận', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
     // Giả lập gửi action đêm và chuyển hết các lượt gọi
@@ -60,7 +75,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('điều khiển Pause, Resume, Gia hạn và Chốt biểu quyết ban ngày', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
     // Chuyển sang ngày
@@ -90,7 +105,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('trục xuất khẩn cấp người chơi sống', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
     const state = adapter.getState();
@@ -106,7 +121,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('lưu kết quả soi của Tiên tri và Pháp sư trong chế độ 1 máy', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame(['seer', 'werewolf', 'werewolf', 'villager', 'villager', 'villager', 'villager', 'villager']);
 
     // Tìm người chơi được chia vai Tiên tri
@@ -140,7 +155,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('xử lý phát súng Thợ săn chuyển sang NIGHT mượt mà không treo', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
     // Giả lập trạng thái HUNTER_SHOT
@@ -150,7 +165,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('Pause và Resume bảo toàn thời gian còn lại của đồng hồ', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
     // Chuyển sang ngày
@@ -174,7 +189,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   });
 
   it('thực hiện tái đấu Rematch tạo thế hệ ván mới', async () => {
-    const adapter = new LocalEngineAdapter();
+    const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
     await adapter.hostRematch();
 

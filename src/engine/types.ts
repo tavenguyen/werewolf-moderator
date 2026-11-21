@@ -69,6 +69,7 @@ export interface RoomSettings {
   tieVoteMode: 'ESCAPE' | 'RUNOFF';
   ghostMode: boolean;
   hasMayor: boolean;
+  customDeck?: Record<string, number>;
 }
 
 export interface NightActions {

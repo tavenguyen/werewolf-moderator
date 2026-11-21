@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useGameSession } from '../../adapters/useGameSession';
-import { getSmartPreset } from '../../engine/presets';
-import { ROLES_BY_ID } from '../../engine/roles';
+import { ROLES, ROLES_BY_ID, type RoleDefinition, type Faction } from '../../engine/roles';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
 import type { ScreenName } from '../../navigation';
-import type { LobbyPreset } from './lobbyTypes';
+import {
+  computeDeckMetrics,
+  convertSelectionToRoleIds,
+  DEFAULT_INITIAL_ROLES,
+  getFactionLabel,
+  getPackLabel,
+  type RoleSelectionMap,
+} from './lobbyValidation';
 import './lobby.css';
 
 type Props = {
@@ -12,12 +18,41 @@ type Props = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-interface DeckRoleDisplay {
-  name: string;
-  count: number;
-  symbol: string;
-  side: 'village' | 'wolf' | 'third';
-  sideName: string;
+const FACTION_ORDER: Faction[] = ['WEREWOLF', 'VILLAGER', 'THIRD_PARTY'];
+
+function getRoleSymbol(role: RoleDefinition): string {
+  if (role.faction === 'WEREWOLF') {
+    if (role.id === 'wolf_cub') return '🐾';
+    if (role.id === 'dream_wolf') return '🌙';
+    if (role.id === 'sorcerer') return '🧙‍♂️';
+    if (role.id === 'minion') return '👺';
+    return '🐺';
+  }
+  if (role.faction === 'THIRD_PARTY') {
+    if (role.id === 'white_wolf') return '❄️';
+    if (role.id === 'tanner') return '🍂';
+    return '⚖️';
+  }
+  switch (role.id) {
+    case 'seer':
+      return '🔮';
+    case 'bodyguard':
+      return '⚔️';
+    case 'witch':
+      return '🧪';
+    case 'hunter':
+      return '🎯';
+    case 'cupid':
+      return '💘';
+    case 'elder':
+      return '👴';
+    case 'village_idiot':
+      return '🤡';
+    case 'lycan':
+      return '🐺';
+    default:
+      return '🛡️';
+  }
 }
 
 export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
@@ -25,15 +60,16 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
 
   const roomCode = state.roomCode || '7290';
   const players = state.publicView?.players ?? [];
-  const playerCount = Math.max(players.length, 6);
   const isSingleDevice = deviceMode === 'SINGLE_DEVICE';
+  const isHost = state.isHost;
+  const isHostPlayer = !isSingleDevice && (state.hostMode === 'PLAYER_HOST' || Boolean(state.hostView?.isHostPlayer));
 
-  const [presetType, setPresetType] = useState<LobbyPreset>('basic');
   const [advanced, setAdvanced] = useState(false);
   const [notice, setNotice] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [activeFactionTab, setActiveFactionTab] = useState<Faction | 'ALL'>('ALL');
 
   // Settings
   const currentSettings = state.publicView?.settings ?? {
@@ -47,34 +83,23 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     tieVoteMode: 'ESCAPE' as const,
     ghostMode: false,
     hasMayor: false,
+    customDeck: DEFAULT_INITIAL_ROLES,
   };
 
-  const smartPreset = getSmartPreset(players.length >= 6 ? players.length : 8);
+  // Synchronized deck selection
+  const [selectedRoles, setSelectedRoles] = useState<RoleSelectionMap>(() => {
+    return currentSettings.customDeck || DEFAULT_INITIAL_ROLES;
+  });
 
-  const deckRoles: DeckRoleDisplay[] = (() => {
-    if (!smartPreset) return [];
-    const counts: Record<string, number> = {};
-    for (const rId of smartPreset.roles) {
-      counts[rId] = (counts[rId] ?? 0) + 1;
+  // Non-host players sync deck from settings
+  useEffect(() => {
+    if (!isHost && currentSettings.customDeck) {
+      setSelectedRoles(currentSettings.customDeck);
     }
-    return Object.entries(counts).map(([rId, count]) => {
-      const def = ROLES_BY_ID[rId];
-      const side = def?.faction === 'WEREWOLF' ? 'wolf' : def?.faction === 'NEUTRAL' ? 'third' : 'village';
-      const sideName = side === 'wolf' ? 'Phe Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân';
-      const symbol = side === 'wolf' ? '🐺' : rId === 'seer' ? '🔮' : rId === 'bodyguard' ? '⚔️' : rId === 'witch' ? '🧪' : rId === 'hunter' ? '🎯' : '🛡️';
-      return {
-        name: def?.nameVi ?? rId,
-        count,
-        symbol,
-        side,
-        sideName,
-      };
-    });
-  })();
+  }, [isHost, currentSettings.customDeck]);
 
-  const wolvesCount = deckRoles.filter((r) => r.side === 'wolf').reduce((acc, r) => acc + r.count, 0);
-  const villageCount = deckRoles.filter((r) => r.side === 'village').reduce((acc, r) => acc + r.count, 0);
-  const ready = players.length >= 6 && players.length <= 16;
+  // Metrics computation
+  const metrics = computeDeckMetrics(selectedRoles, players, isHostPlayer);
 
   const joinDeepLink =
     typeof window !== 'undefined'
@@ -92,14 +117,61 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
   };
 
   const handleToggleSetting = async (key: keyof typeof currentSettings) => {
+    if (!isHost) return;
     const nextVal = !currentSettings[key];
     await actions.updateSettings({ [key]: nextVal });
   };
 
-  const handleStartGame = async () => {
-    if (!ready) return;
+  const handleRoleCountChange = (roleId: string, delta: number) => {
+    if (!isHost) return;
+    const current = selectedRoles[roleId] ?? 0;
+    const next = Math.max(0, current + delta);
+    if (current === next) return;
+    if (delta > 0 && metrics.totalCards >= 16) return;
+
+    const newRoles = { ...selectedRoles, [roleId]: next };
+    if (next === 0 && roleId !== 'villager' && roleId !== 'werewolf') {
+      delete newRoles[roleId];
+    }
+    setSelectedRoles(newRoles);
+    void actions.updateSettings({ customDeck: newRoles });
+  };
+
+  const handleRoleToggle = (roleId: string) => {
+    if (!isHost) return;
+    const current = selectedRoles[roleId] ?? 0;
+    if (current === 0 && metrics.totalCards >= 16) return;
+    const next = current > 0 ? 0 : 1;
+    const newRoles = { ...selectedRoles, [roleId]: next };
+    if (next === 0) {
+      delete newRoles[roleId];
+    }
+    setSelectedRoles(newRoles);
+    void actions.updateSettings({ customDeck: newRoles });
+  };
+
+  const handleAddOfflinePlayer = () => {
+    const trimmed = newPlayerName.trim();
+    if (!trimmed) return;
+    if (players.some((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      setNotice(`Tên "${trimmed}" đã có trong bàn.`);
+      return;
+    }
     try {
-      await actions.startGame();
+      actions.addOfflinePlayer(trimmed);
+      setNewPlayerName('');
+      setNotice('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể thêm người chơi';
+      setNotice(msg);
+    }
+  };
+
+  const handleStartGame = async () => {
+    if (!metrics.isReadyToStart || !isHost) return;
+    try {
+      const roleIds = convertSelectionToRoleIds(selectedRoles);
+      await actions.startGame(roleIds);
       onNavigate?.('night');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván đấu';
@@ -107,11 +179,17 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     }
   };
 
-  const handleAddOfflinePlayer = () => {
-    if (!newPlayerName.trim()) return;
-    actions.addOfflinePlayer(newPlayerName.trim());
-    setNewPlayerName('');
+  // Group roles by Faction
+  const rolesByFaction: Record<Faction, RoleDefinition[]> = {
+    WEREWOLF: ROLES.filter((r) => r.faction === 'WEREWOLF'),
+    VILLAGER: ROLES.filter((r) => r.faction === 'VILLAGER'),
+    THIRD_PARTY: ROLES.filter((r) => r.faction === 'THIRD_PARTY'),
   };
+
+  const displayedFactions =
+    activeFactionTab === 'ALL'
+      ? FACTION_ORDER
+      : FACTION_ORDER.filter((f) => f === activeFactionTab);
 
   return (
     <div className="lobby-page">
@@ -136,8 +214,10 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
             </h1>
             <p>
               {isSingleDevice
-                ? 'Chế độ 1 máy offline: Người chơi dùng chung 1 thiết bị đặt giữa bàn'
-                : 'Mỗi người quét mã QR hoặc nhập 4 số trên điện thoại để tham gia'}
+                ? 'Chế độ 1 máy: Thiết bị đặt cố định giữa bàn làm Bảng trung tâm'
+                : isHostPlayer
+                  ? 'Chế độ nhiều máy: Host kiêm người chơi và nhận 1 lá bài'
+                  : 'Chế độ nhiều máy: Host là Bảng trung tâm không nhận bài'}
             </p>
           </div>
         </div>
@@ -150,7 +230,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
             <span aria-hidden="true">📜</span>
             <span>Luật &amp; Vai trò</span>
           </button>
-          {state.isHost && (
+          {isHost && (
             <button className="lobby-link-button" onClick={() => onNavigate?.('host')}>
               <span>Bàn Quản Trò</span>
               <span aria-hidden="true">↗</span>
@@ -161,102 +241,93 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
 
       {/* Main Grid */}
       <main className="lobby-layout">
-        {/* Left Column: Room Code & Players */}
+        {/* Left Column: Room Sharing & Players */}
         <div className="lobby-left-column">
-          {/* Room Code Card */}
-          <section className="lobby-card lobby-room-card">
-            <div className="lobby-room-details">
-              <span className="lobby-kicker">MÃ BÀN CHƠI</span>
-              <strong className="lobby-room-code">#{roomCode}</strong>
-              <p>Quét mã QR bằng camera điện thoại hoặc bấm bên dưới để phóng to</p>
-            </div>
-
-            <button
-              type="button"
-              className="lobby-qr-preview-btn"
-              onClick={() => setQrModalOpen(true)}
-              title="Bấm để phóng to mã QR cho cả bàn cùng quét"
-              aria-label={`Phóng to mã QR bàn ${roomCode}`}
-            >
-              <div className="qr-preview-box">
-                {/* Visual QR Code Symbol */}
-                <svg viewBox="0 0 80 80" className="lobby-qr-svg" aria-hidden="true">
-                  <rect width="80" height="80" fill="#13161c" rx="4" />
-                  <rect x="6" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
-                  <rect x="11" y="11" width="10" height="10" fill="#c98638" rx="1" />
-                  <rect x="54" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
-                  <rect x="59" y="11" width="10" height="10" fill="#c98638" rx="1" />
-                  <rect x="6" y="54" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
-                  <rect x="11" y="59" width="10" height="10" fill="#c98638" rx="1" />
-                  <rect x="34" y="14" width="6" height="6" fill="#c98638" rx="1" />
-                  <rect x="42" y="24" width="4" height="4" fill="#ede7dc" />
-                  <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="1" />
-                  <rect x="24" y="44" width="4" height="4" fill="#ede7dc" />
-                  <rect x="52" y="48" width="6" height="6" fill="#ede7dc" />
-                  <rect x="64" y="62" width="6" height="6" fill="#c98638" />
-                </svg>
+          {/* Multi-Device: Room Code Card */}
+          {!isSingleDevice && (
+            <section className="lobby-card lobby-room-card">
+              <div className="lobby-room-details">
+                <span className="lobby-kicker">MÃ BÀN CHƠI</span>
+                <strong className="lobby-room-code">#{roomCode}</strong>
+                <p>Quét mã QR bằng camera điện thoại hoặc sao chép link mời</p>
+                <div className="lobby-room-actions">
+                  <button
+                    type="button"
+                    className="qr-copy-btn"
+                    onClick={handleCopyDeepLink}
+                  >
+                    {copiedLink ? '✓ Đã sao chép link' : '🔗 Sao chép link mời'}
+                  </button>
+                </div>
               </div>
-              <span className="qr-preview-label">
-                <span aria-hidden="true">🔍</span> Phóng to QR
-              </span>
-            </button>
-          </section>
+
+              <button
+                type="button"
+                className="lobby-qr-preview-btn"
+                onClick={() => setQrModalOpen(true)}
+                title="Bấm để phóng to mã QR cho cả bàn cùng quét"
+                aria-label={`Phóng to mã QR bàn ${roomCode}`}
+              >
+                <div className="qr-preview-box">
+                  <svg viewBox="0 0 80 80" className="lobby-qr-svg" aria-hidden="true">
+                    <rect width="80" height="80" fill="#13161c" rx="4" />
+                    <rect x="6" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                    <rect x="11" y="11" width="10" height="10" fill="#c98638" rx="1" />
+                    <rect x="54" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                    <rect x="59" y="11" width="10" height="10" fill="#c98638" rx="1" />
+                    <rect x="6" y="54" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
+                    <rect x="11" y="59" width="10" height="10" fill="#c98638" rx="1" />
+                    <rect x="34" y="14" width="6" height="6" fill="#c98638" rx="1" />
+                    <rect x="42" y="24" width="4" height="4" fill="#ede7dc" />
+                    <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="1" />
+                    <rect x="24" y="44" width="4" height="4" fill="#ede7dc" />
+                    <rect x="52" y="48" width="6" height="6" fill="#ede7dc" />
+                    <rect x="64" y="62" width="6" height="6" fill="#c98638" />
+                  </svg>
+                </div>
+                <span className="qr-preview-label">
+                  <span aria-hidden="true">🔍</span> Phóng to QR
+                </span>
+              </button>
+            </section>
+          )}
 
           {/* Players Roster Card */}
           <section className="lobby-card lobby-players-card">
             <div className="lobby-section-title">
               <div>
-                <h2>Người chơi trong bàn</h2>
-                <span className="lobby-count">{players.length}/16 ghế</span>
+                <h2>Danh sách người chơi</h2>
+                <span className="lobby-count">{metrics.realPlayersCount}/16 ghế</span>
               </div>
-              {ready && <span className="lobby-ready">✓ ĐỦ ĐIỀU KIỆN (6–16)</span>}
+              <div className="lobby-host-role-badge">
+                {isSingleDevice ? (
+                  <span className="host-mode-pill">🖥️ Bảng trung tâm</span>
+                ) : isHostPlayer ? (
+                  <span className="host-mode-pill player">🎮 Host kiêm Người chơi</span>
+                ) : (
+                  <span className="host-mode-pill board">📺 Host Bảng trung tâm</span>
+                )}
+              </div>
             </div>
 
-            {/* Player Grid */}
-            <div className="lobby-player-grid">
-              {players.map((player) => (
-                <div
-                  className={`lobby-player ${player.id === state.playerId ? 'current-player' : ''}`}
-                  key={player.id}
-                >
-                  <div className="player-meta">
-                    <span className="player-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
-                    <span
-                      className={`player-status-dot ${player.isConnected ? 'online' : 'offline'}`}
-                      title={player.isConnected ? 'Đang kết nối' : 'Mất kết nối'}
-                      aria-hidden="true"
-                    />
-                    <span className="player-name">{player.name}</span>
-                  </div>
+            {/* Explanatory subtitle for Host counting logic */}
+            <p className="lobby-player-role-hint">
+              {isSingleDevice
+                ? 'Host nhập danh sách người chơi quanh bàn bên dưới (Host không nhận bài riêng).'
+                : isHostPlayer
+                  ? `Host là 1 người chơi thật nhận bài. Cần thêm ${Math.max(0, metrics.totalCards - metrics.realPlayersCount)} người chơi khác vào phòng.`
+                  : `Host chỉ là màn hình hiển thị/loa trung tâm. Cần ${metrics.totalCards} người chơi khác vào phòng.`}
+            </p>
 
-                  <div className="player-actions">
-                    {player.seatIndex === 1 && state.isHost && (
-                      <b className="badge-host">👑 HOST</b>
-                    )}
-                    {isSingleDevice && players.length > 6 && (
-                      <button
-                        type="button"
-                        className="player-kick-btn"
-                        onClick={() => actions.removeOfflinePlayer(player.id)}
-                        title={`Bớt ${player.name}`}
-                        aria-label={`Bớt ${player.name}`}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Thêm người chơi offline ở chế độ 1 máy */}
-            {isSingleDevice && players.length < 16 && (
+            {/* Single Device: Input form for adding players */}
+            {isSingleDevice && (
               <div className="lobby-add-offline">
                 <input
                   type="text"
-                  placeholder="Tên người chơi mới..."
+                  placeholder="Tên người chơi mới (VD: Lan Anh, Nam)..."
                   value={newPlayerName}
                   maxLength={20}
+                  disabled={metrics.realPlayersCount >= 16}
                   onChange={(e) => setNewPlayerName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleAddOfflinePlayer();
@@ -266,7 +337,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                 <button
                   type="button"
                   onClick={handleAddOfflinePlayer}
-                  disabled={!newPlayerName.trim()}
+                  disabled={!newPlayerName.trim() || metrics.realPlayersCount >= 16}
                   className="lobby-btn-add"
                 >
                   ＋ Thêm ghế
@@ -274,83 +345,282 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
               </div>
             )}
 
-            {notice && <p className="lobby-notice" role="status">{notice}</p>}
+            {/* Player Grid */}
+            <div className="lobby-player-grid">
+              {players.length === 0 ? (
+                <div className="lobby-empty-players">
+                  <span className="empty-icon" aria-hidden="true">👥</span>
+                  <p>
+                    {isSingleDevice
+                      ? 'Chưa có người chơi nào quanh bàn. Hãy nhập tên ở trên để thêm ghế!'
+                      : 'Chưa có ai vào phòng. Hãy chia sẻ mã hoặc QR để mọi người tham gia!'}
+                  </p>
+                </div>
+              ) : (
+                players.map((player) => (
+                  <div
+                    className={`lobby-player ${player.id === state.playerId ? 'current-player' : ''}`}
+                    key={player.id}
+                  >
+                    <div className="player-meta">
+                      <span className="player-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                      {!isSingleDevice && (
+                        <span
+                          className={`player-status-dot ${player.isConnected ? 'online' : 'offline'}`}
+                          title={player.isConnected ? 'Đang kết nối' : 'Mất kết nối'}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="player-name">{player.name}</span>
+                    </div>
 
-            {/* Faction Balance Bar */}
-            <div className="lobby-balance" aria-label={`Phe Dân Làng ${villageCount}, Phe Ma Sói ${wolvesCount}`}>
-              <div className="lobby-balance-header">
-                <span className="balance-title">PHÂN BỔ PHE PHÁI</span>
-                <span className="balance-status">{players.length} người chơi ({villageCount} Dân · {wolvesCount} Sói)</span>
-              </div>
-
-              <div className="lobby-balance-bar">
-                <i
-                  style={{ width: `${(villageCount / (players.length || 1)) * 100}%` }}
-                  title={`Phe Dân Làng: ${villageCount}`}
-                />
-                <i
-                  style={{ width: `${(wolvesCount / (players.length || 1)) * 100}%` }}
-                  title={`Phe Ma Sói: ${wolvesCount}`}
-                />
-              </div>
-
-              <div className="balance-legend">
-                <span className="legend-villager">
-                  <i /> Phe Dân Làng: <b>{villageCount}</b>
-                </span>
-                <span className="legend-wolf">
-                  <i /> Phe Ma Sói: <b>{wolvesCount}</b>
-                </span>
-              </div>
+                    <div className="player-actions">
+                      {!isSingleDevice && isHostPlayer && player.seatIndex === 0 && (
+                        <b className="badge-host">👑 HOST</b>
+                      )}
+                      {/* Host can remove player */}
+                      {isHost && (
+                        <button
+                          type="button"
+                          className="player-kick-btn"
+                          onClick={() => {
+                            if (isSingleDevice) {
+                              actions.removeOfflinePlayer(player.id);
+                            } else {
+                              void actions.hostEmergencyEliminate(player.id);
+                            }
+                          }}
+                          title={`Bớt ${player.name}`}
+                          aria-label={`Bớt ${player.name}`}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+
+            {notice && <p className="lobby-notice" role="status">{notice}</p>}
           </section>
         </div>
 
-        {/* Right Column: Presets & Deck Roster */}
+        {/* Right Column: Custom Role Deck Selection & Balance Gauge */}
         <div className="lobby-right-column">
-          <section className="lobby-card lobby-preset-card">
+          {/* Read-Only Notice for Non-Host Players */}
+          {!isHost && (
+            <div className="lobby-readonly-banner" role="status">
+              <span aria-hidden="true">👁️</span>
+              <div>
+                <strong>Chế độ chỉ đọc</strong>
+                <p>Bạn đang xem danh sách lá bài do Quản trò thiết lập cho ván đấu này.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Faction Balance Gauge Card */}
+          <section className="lobby-card lobby-balance-card">
             <div className="lobby-section-title">
               <div>
-                <h2>Đội hình thông minh (Smart Preset)</h2>
+                <h2>Thước đo cân bằng phe</h2>
+                <span className={`balance-badge status-${metrics.balanceStatus}`}>
+                  {metrics.balanceLabel}
+                </span>
               </div>
-              <span className="lobby-kicker">{playerCount} NGƯỜI CHƠI</span>
+              <span className="deck-total-count">
+                <b>{metrics.totalCards}</b> / 16 LÁ
+              </span>
             </div>
 
-            <div className="lobby-presets" role="group" aria-label="Chọn quy ước ván đấu">
-              <button
-                type="button"
-                onClick={() => setPresetType('basic')}
-                className={presetType === 'basic' ? 'active basic' : ''}
-                aria-pressed={presetType === 'basic'}
-              >
-                <div className="preset-top">
-                  <span className="preset-badge">Cân bằng</span>
-                  <strong className="preset-name">Tối ưu số người</strong>
-                </div>
-                <small>Preset chuẩn hóa theo thuật toán game engine</small>
-              </button>
-            </div>
+            {/* Visual Balance Bar */}
+            <div className="balance-gauge-wrap" aria-label={`Trạng thái cân bằng: ${metrics.balanceLabel}`}>
+              <div className="balance-gauge-track">
+                {/* Zone Wolf (< -2) */}
+                <div className="gauge-zone zone-wolf" title="Nghiêng phe Sói (< -2)" />
+                {/* Zone Balanced ([-2, +2]) */}
+                <div className="gauge-zone zone-balanced" title="Vùng Cân bằng (-2 đến +2)" />
+                {/* Zone Village (> +2) */}
+                <div className="gauge-zone zone-village" title="Nghiêng phe Dân (> +2)" />
 
-            {/* Expected Role Deck Breakdown */}
-            <div className="lobby-deck-roster">
-              <div className="deck-roster-head">
-                <span className="deck-roster-title">DANH SÁCH LÁ BÀI SẼ CHIA</span>
-                <span className="deck-roster-subtitle">Các vai trò sẽ được chia bí mật khi bắt đầu</span>
+                {/* Center marker (0) */}
+                <div className="gauge-center-marker" title="Mốc 0" />
+
+                {/* Needle Indicator */}
+                {(() => {
+                  // Map balanceScore (-15 to +15) into 0% - 100%
+                  const clamped = Math.max(-15, Math.min(15, metrics.balanceScore));
+                  const percentage = ((clamped + 15) / 30) * 100;
+                  return (
+                    <div
+                      className={`gauge-needle needle-${metrics.balanceStatus}`}
+                      style={{ left: `${percentage}%` }}
+                    >
+                      <span className="gauge-needle-bubble">
+                        {metrics.balanceScore > 0 ? `+${metrics.balanceScore}` : metrics.balanceScore}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
-              <div className="deck-roster-grid">
-                {deckRoles.map((role) => (
-                  <div key={role.name} className={`deck-role-pill side-${role.side}`}>
-                    <span className="deck-role-badge">{role.count}×</span>
-                    <span className="deck-role-icon" aria-hidden="true">{role.symbol}</span>
-                    <span className="deck-role-name">{role.name}</span>
-                    <span className="deck-role-side-tag">{role.sideName}</span>
+              <div className="gauge-labels">
+                <span className="label-wolf">🐺 Nghiêng Sói (&lt; -2)</span>
+                <span className="label-balanced">⚖️ Cân bằng (-2 đến +2)</span>
+                <span className="label-village">🛡️ Nghiêng Dân (&gt; +2)</span>
+              </div>
+            </div>
+
+            {/* Deck Composition Summary Pills */}
+            <div className="balance-composition-pills">
+              <span className="comp-pill comp-wolf">
+                <i>🐺</i> Phe Sói: <b>{metrics.wolvesCount}</b>
+                {metrics.nightHuntingWolvesCount < 1 && (
+                  <small className="pill-warn">⚠️ Thiếu sói cắn</small>
+                )}
+              </span>
+              <span className="comp-pill comp-village">
+                <i>🛡️</i> Phe Dân: <b>{metrics.villagersCount}</b>
+              </span>
+              <span className="comp-pill comp-third">
+                <i>⚖️</i> Phe Thứ 3: <b>{metrics.thirdPartyCount}</b>
+              </span>
+            </div>
+          </section>
+
+          {/* Role Selection Card */}
+          <section className="lobby-card lobby-deck-selector-card">
+            <div className="lobby-section-title">
+              <div>
+                <h2>Danh mục lá bài chia</h2>
+                <span className="lobby-count">Tối thiểu 6 lá, tối đa 16 lá</span>
+              </div>
+              {/* Faction Filter Tabs */}
+              <div className="faction-filter-tabs" role="tablist">
+                <button
+                  type="button"
+                  className={`tab-btn ${activeFactionTab === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setActiveFactionTab('ALL')}
+                >
+                  Tất cả
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${activeFactionTab === 'WEREWOLF' ? 'active' : ''}`}
+                  onClick={() => setActiveFactionTab('WEREWOLF')}
+                >
+                  🐺 Sói ({metrics.wolvesCount})
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${activeFactionTab === 'VILLAGER' ? 'active' : ''}`}
+                  onClick={() => setActiveFactionTab('VILLAGER')}
+                >
+                  🛡️ Dân ({metrics.villagersCount})
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${activeFactionTab === 'THIRD_PARTY' ? 'active' : ''}`}
+                  onClick={() => setActiveFactionTab('THIRD_PARTY')}
+                >
+                  ⚖️ Thứ 3 ({metrics.thirdPartyCount})
+                </button>
+              </div>
+            </div>
+
+            {/* Faction Groups */}
+            <div className="deck-selection-groups">
+              {displayedFactions.map((faction) => {
+                const roles = rolesByFaction[faction];
+                return (
+                  <div key={faction} className={`faction-deck-group group-${faction.toLowerCase()}`}>
+                    <div className="faction-group-header">
+                      <span className="faction-group-title">{getFactionLabel(faction)}</span>
+                    </div>
+
+                    <div className="faction-roles-grid">
+                      {roles.map((role) => {
+                        const count = selectedRoles[role.id] ?? 0;
+                        const isImplemented = role.implementedInEngine;
+                        const isMultiSelectable = role.id === 'villager' || role.id === 'werewolf';
+                        const isSelected = count > 0;
+                        const weight = role.balanceWeight;
+                        const weightStr = weight > 0 ? `+${weight}` : `${weight}`;
+
+                        return (
+                          <div
+                            key={role.id}
+                            className={`role-select-card ${!isImplemented ? 'is-disabled' : ''} ${isSelected ? 'is-selected' : ''}`}
+                          >
+                            <div className="role-card-top">
+                              <span className="role-card-icon" aria-hidden="true">
+                                {getRoleSymbol(role)}
+                              </span>
+                              <div className="role-card-title-wrap">
+                                <strong className="role-card-name">{role.nameVi}</strong>
+                                <span className="role-card-en">{role.nameEn}</span>
+                              </div>
+                              <span className={`role-card-weight ${weight > 0 ? 'pos' : weight < 0 ? 'neg' : 'zero'}`}>
+                                {weightStr}
+                              </span>
+                            </div>
+
+                            <div className="role-card-badges">
+                              <span className="role-card-pack">{getPackLabel(role.pack)}</span>
+                              {!isImplemented && (
+                                <span className="role-card-unsupported">Chưa hỗ trợ</span>
+                              )}
+                            </div>
+
+                            {/* Role Count Controllers */}
+                            {isImplemented && (
+                              <div className="role-card-controls">
+                                {isMultiSelectable ? (
+                                  /* Multi-Card Counter for Villager and Werewolf */
+                                  <div className="role-counter">
+                                    <button
+                                      type="button"
+                                      className="counter-btn minus"
+                                      disabled={!isHost || count <= 0}
+                                      onClick={() => handleRoleCountChange(role.id, -1)}
+                                      aria-label={`Giảm số lá ${role.nameVi}`}
+                                    >
+                                      −
+                                    </button>
+                                    <span className="counter-val">{count}</span>
+                                    <button
+                                      type="button"
+                                      className="counter-btn plus"
+                                      disabled={!isHost || metrics.totalCards >= 16}
+                                      onClick={() => handleRoleCountChange(role.id, 1)}
+                                      aria-label={`Tăng số lá ${role.nameVi}`}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : (
+                                  /* Binary 0 or 1 Toggle for Special Roles */
+                                  <button
+                                    type="button"
+                                    className={`role-toggle-btn ${isSelected ? 'selected' : ''}`}
+                                    disabled={!isHost || (!isSelected && metrics.totalCards >= 16)}
+                                    onClick={() => handleRoleToggle(role.id)}
+                                  >
+                                    {isSelected ? '✓ Đã chọn (1)' : '+ Chọn lá'}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
 
-            {/* Advanced Settings Toggle */}
+            {/* Advanced Room Settings Accordion */}
             <button
               type="button"
               className="lobby-advanced-toggle"
@@ -367,30 +637,35 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                   label="Lật vai khi chết"
                   desc="Công bố vai trò của người chơi ngay khi bị xử tử hoặc bị cắn"
                   checked={Boolean(currentSettings.revealOnDeath)}
+                  disabled={!isHost}
                   onChange={() => handleToggleSetting('revealOnDeath')}
                 />
                 <Setting
                   label="Sói được bỏ lượt cắn"
                   desc="Cho phép bầy Sói tạo đêm bình yên giả để tung hỏa mù"
                   checked={Boolean(currentSettings.allowWolfSkip)}
+                  disabled={!isHost}
                   onChange={() => handleToggleSetting('allowWolfSkip')}
                 />
                 <Setting
                   label="Sói được cắn đồng đội"
                   desc="Cho phép Ma Sói tự cắn nhau để đánh lạc hướng"
                   checked={Boolean(currentSettings.allowWolfFriendlyFire)}
+                  disabled={!isHost}
                   onChange={() => handleToggleSetting('allowWolfFriendlyFire')}
                 />
                 <Setting
                   label="Phù thủy được tự cứu"
                   desc="Cho phép Phù thủy dùng bình cứu cho chính mình"
                   checked={Boolean(currentSettings.allowWitchSelfHeal)}
+                  disabled={!isHost}
                   onChange={() => handleToggleSetting('allowWitchSelfHeal')}
                 />
                 <Setting
                   label="Bầu Trưởng làng ngày 1"
                   desc="Tổ chức bầu cử Trưởng làng vào sáng Ngày 1 (phiếu có trọng số 2)"
                   checked={Boolean(currentSettings.hasMayor)}
+                  disabled={!isHost}
                   onChange={() => handleToggleSetting('hasMayor')}
                 />
               </div>
@@ -398,38 +673,38 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
           </section>
 
           {/* Start Game Action Card */}
-          <section className={`lobby-start-card ${ready ? 'is-ready' : 'not-ready'}`}>
+          <section className={`lobby-start-card status-${metrics.statusType}`}>
             <div className="start-meta">
               <strong className="start-title">
-                {ready
+                {metrics.isReadyToStart
                   ? 'Bàn chơi đã sẵn sàng khai màn!'
-                  : `Cần tối thiểu 6 người chơi để bắt đầu (hiện có ${players.length})`}
+                  : metrics.statusType === 'error'
+                    ? 'Cấu hình bài chưa hợp lệ'
+                    : 'Chưa đủ điều kiện bắt đầu'}
               </strong>
-              <span className="start-desc">
-                {ready
-                  ? state.isHost
-                    ? 'Bấm nút bên dưới để bắt đầu chia bài và bước vào Đêm 1.'
-                    : 'Đang đợi Quản trò bấm bắt đầu ván đấu...'
-                  : 'Cần từ 6 đến 16 người để đảm bảo tính cân bằng giữa Phe Dân và Phe Sói.'}
-              </span>
+              <span className="start-desc">{metrics.statusMessage}</span>
             </div>
 
-            {state.isHost && (
+            {isHost ? (
               <button
                 className="start-button"
-                disabled={!ready}
+                disabled={!metrics.isReadyToStart}
                 onClick={handleStartGame}
               >
                 <span className="play-icon" aria-hidden="true">⚔</span>
                 <span>BẮT ĐẦU VÁN ĐẤU • ĐÊM 1</span>
               </button>
+            ) : (
+              <div className="start-waiting-notice">
+                <span>Đang đợi Quản trò cấu hình bài và bấm Bắt đầu ván đấu...</span>
+              </div>
             )}
           </section>
         </div>
       </main>
 
       {/* QR Code Magnified Modal */}
-      {qrModalOpen && (
+      {qrModalOpen && !isSingleDevice && (
         <div
           className="lobby-modal-backdrop"
           role="presentation"
@@ -458,7 +733,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
             </div>
 
             <div className="qr-modal-canvas-wrap">
-              {/* Pure Offline Client SVG QR Code */}
               <div
                 dangerouslySetInnerHTML={{ __html: generateQrSvgString(joinDeepLink, 200) }}
                 className="qr-modal-svg-wrap"
@@ -498,20 +772,22 @@ function Setting({
   label,
   desc,
   checked,
+  disabled,
   onChange,
 }: {
   label: string;
   desc?: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: () => void;
 }) {
   return (
-    <label className="lobby-setting">
+    <label className={`lobby-setting ${disabled ? 'is-disabled' : ''}`}>
       <div className="setting-copy">
         <span className="setting-title">{label}</span>
         {desc && <small className="setting-desc">{desc}</small>}
       </div>
-      <input type="checkbox" checked={checked} onChange={onChange} />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
     </label>
   );
 }
