@@ -817,6 +817,24 @@
   opacity: 1;
 }
 
+.create-mode-btn.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: none !important;
+}
+
+.create-mode-btn.is-disabled:hover {
+  color: var(--parchment-muted);
+  background: rgba(0, 0, 0, 0.25) !important;
+}
+
+.create-mode-btn.is-disabled .mode-btn-sub {
+  color: #e57373 !important;
+  opacity: 0.9;
+}
+
 .create-speaker-outline-btn {
   width: 100%;
   min-height: 38px;

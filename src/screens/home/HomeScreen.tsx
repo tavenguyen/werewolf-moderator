@@ -45,10 +45,15 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
   const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
 
-  // Remember username from previous play session
+  // Remember username from previous play session (sanitize legacy demo name 'Minh Khang')
   const [nickname, setNickname] = useState(() => {
     try {
-      return localStorage.getItem('werewolf_nickname') || '';
+      const saved = localStorage.getItem('werewolf_nickname');
+      if (saved === 'Minh Khang') {
+        localStorage.removeItem('werewolf_nickname');
+        return '';
+      }
+      return saved || '';
     } catch {
       return '';
     }
@@ -62,7 +67,21 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
   const [deviceSelection, setDeviceSelection] = useState<'multi' | 'shared'>('multi');
   const [hostRoleSelection, setHostRoleSelection] = useState<'player' | 'board'>('player');
 
-  // Auto-fill mã phòng từ URL Query (?room=xxxx)
+  // Background Wake-Up Ping: Đánh thức server miễn phí (Render cold-start) ngay khi mở HomeScreen
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const envUrl = (import.meta as unknown as { env?: { VITE_SERVER_URL?: string } }).env?.VITE_SERVER_URL;
+      const targetOrigin = envUrl || window.location.origin;
+      void fetch(`${targetOrigin}/`, { mode: 'no-cors' }).catch(() => {
+        // silent wake-up error
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Auto-fill mã phòng từ URL Query (?room=xxxx) & Dọn sạch URL query param
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -73,7 +92,8 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
         if (cleanCode.length === 4) {
           setRoomCode(cleanCode);
           setActiveModal('join');
-          // Tự động focus vào ô Tên hiển thị sau một nhịp render
+          // Dọn sạch query param khỏi thanh URL để tránh F5/rời phòng bị bật lại modal
+          window.history.replaceState({}, document.title, window.location.pathname);
           setTimeout(() => {
             nameInputRef.current?.focus();
           }, 150);
@@ -182,6 +202,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
   const handleReconnect = async () => {
     triggerHaptic();
     setIsLoading(true);
+    setNotice('');
     const ok = await actions.resumeSession();
     setIsLoading(false);
     if (ok) {
@@ -192,7 +213,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
         onNavigate?.('lobby');
       }, 580);
     } else {
-      setNotice('Không thể khôi phục phiên cũ. Vui lòng tạo hoặc vào phòng mới.');
+      setNotice('Bàn chơi cũ đã kết thúc hoặc không còn tồn tại.');
     }
   };
 
@@ -515,13 +536,15 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 <span>{isLoading ? 'Đang kết nối...' : 'Vào chơi'}</span>
               </button>
 
-              <button
-                type="button"
-                className="join-reconnect-inline"
-                onClick={handleReconnect}
-              >
-                <span>Khôi phục ván chơi dở gần nhất</span>
-              </button>
+              {actions.hasRecoverableSession() && (
+                <button
+                  type="button"
+                  className="join-reconnect-inline"
+                  onClick={handleReconnect}
+                >
+                  <span>Khôi phục ván chơi dở gần nhất</span>
+                </button>
+              )}
 
               {notice && (
                 <div className="home-modal-alert" role="alert">
@@ -583,7 +606,10 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     role="radio"
                     aria-checked={deviceSelection === 'shared'}
                     className={`create-mode-btn ${deviceSelection === 'shared' ? 'is-active' : ''}`}
-                    onClick={() => setDeviceSelection('shared')}
+                    onClick={() => {
+                      setDeviceSelection('shared');
+                      setHostRoleSelection('board');
+                    }}
                   >
                     <span className="mode-btn-title">1 máy dùng chung</span>
                     <span className="mode-btn-sub">Offline 100% không cần mạng</span>
@@ -599,11 +625,25 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     type="button"
                     role="radio"
                     aria-checked={hostRoleSelection === 'player'}
-                    className={`create-mode-btn ${hostRoleSelection === 'player' ? 'is-active' : ''}`}
-                    onClick={() => setHostRoleSelection('player')}
+                    disabled={deviceSelection === 'shared'}
+                    className={`create-mode-btn ${hostRoleSelection === 'player' ? 'is-active' : ''} ${
+                      deviceSelection === 'shared' ? 'is-disabled' : ''
+                    }`}
+                    onClick={() => {
+                      if (deviceSelection !== 'shared') {
+                        setHostRoleSelection('player');
+                      }
+                    }}
+                    title={
+                      deviceSelection === 'shared'
+                        ? 'Chế độ 1 máy dùng chung cố định thiết bị làm Bảng trung tâm cho cả làng'
+                        : 'Quản trò vừa chơi vừa điều phối qua thanh Control Bar'
+                    }
                   >
                     <span className="mode-btn-title">Host kiêm Người chơi</span>
-                    <span className="mode-btn-sub">Có thanh Control Bar trên đầu</span>
+                    <span className="mode-btn-sub">
+                      {deviceSelection === 'shared' ? 'Khóa ở chế độ 1 máy' : 'Có thanh Control Bar trên đầu'}
+                    </span>
                   </button>
 
                   <button
@@ -612,9 +652,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     aria-checked={hostRoleSelection === 'board'}
                     className={`create-mode-btn ${hostRoleSelection === 'board' ? 'is-active' : ''}`}
                     onClick={() => setHostRoleSelection('board')}
+                    title="Đặt máy giữa bàn làm Bảng trung tâm điều khiển và phát loa"
                   >
                     <span className="mode-btn-title">Bảng trung tâm</span>
-                    <span className="mode-btn-sub">iPad / TV / Laptop 3 cột</span>
+                    <span className="mode-btn-sub">
+                      {deviceSelection === 'shared' ? 'Auto cho 1 máy dùng chung' : 'iPad / TV / Laptop 3 cột'}
+                    </span>
                   </button>
                 </div>
 
@@ -629,8 +672,8 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 </button>
               </div>
 
-              {/* Khu vực Tên hiển thị (chỉ cần khi Host kiêm người chơi) */}
-              {hostRoleSelection === 'player' && (
+              {/* Khu vực Tên hiển thị (chỉ cần khi Host kiêm người chơi ở chế độ nhiều máy) */}
+              {deviceSelection === 'multi' && hostRoleSelection === 'player' && (
                 <div className="join-name-section">
                   <label className="home-label" htmlFor="modal-host-name">Tên hiển thị của Host</label>
                   <input
@@ -652,7 +695,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 className={`home-button home-button-primary create-submit-btn ${
                   (hostRoleSelection === 'board' || nickname.trim().length > 0) && !isLoading ? 'is-ready' : 'is-disabled'
                 }`}
-                disabled={(hostRoleSelection === 'player' && !nickname.trim()) || isLoading}
+                disabled={(deviceSelection === 'multi' && hostRoleSelection === 'player' && !nickname.trim()) || isLoading}
                 onClick={() => enterLobby('create')}
               >
                 <span>{isLoading ? 'Đang khởi tạo...' : 'Tạo bàn'}</span>
