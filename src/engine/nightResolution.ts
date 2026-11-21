@@ -1,224 +1,354 @@
-import { ROLES_BY_ID } from '../screens/home/roles';
+import { ROLES_BY_ID } from './roles';
 import type { DeathInput } from './deathCascade';
 import { processDeathCascade } from './deathCascade';
-import { getAliveNeighbors } from './seating';
+import { hasAnyOtherWolfDied } from './turnPlan';
 import type {
   DeathRecord,
   GameState,
   NightActions,
   NightInfoResults,
+  NightResolutionEvent,
   PlayerId,
+  PlayerState,
 } from './types';
 
 export interface NightResolutionOutput {
   newDeaths: DeathRecord[];
   infoResults: NightInfoResults;
+  events: NightResolutionEvent[];
 }
 
 /**
- * Phân giải ban đêm (Night Resolution Engine):
- * Thực thi tuần tự các hành động đêm độc lập với UI/Socket,
- * bảo đảm tính tất định và xử lý trọn vẹn mọi Edge Case.
+ * Chọn ngẫu nhiên có seed để đảm bảo tính tất định khi hòa phiếu.
  */
-export function resolveNight(state: GameState, actions: NightActions): NightResolutionOutput {
+function pickDeterministic<T>(items: T[], seed: number): T {
+  if (items.length === 0) throw new Error('Cannot pick from empty array');
+  const index = Math.abs(Math.floor((seed * 9301 + 49297) % 233280)) % items.length;
+  return items[index];
+}
+
+/**
+ * Tally phiếu bầu của bầy Sói từ các phiếu cá nhân.
+ * Sói trắng (white_wolf) được tham gia bỏ phiếu cùng bầy.
+ */
+function tallyWolfPackVotes(
+  votes: Record<PlayerId, PlayerId | null>,
+  livingWolves: PlayerState[],
+  allowSkip: boolean,
+  allowFriendlyFire: boolean,
+  targetCount: number,
+  seed: number,
+  players: PlayerState[]
+): PlayerId[] {
+  const validVoterIds = new Set(livingWolves.map((w) => w.id));
+  const voteCounts = new Map<string, number>();
+
+  for (const [voterId, targetId] of Object.entries(votes)) {
+    if (!validVoterIds.has(voterId)) continue;
+
+    // Bỏ cắn (Skip)
+    if (targetId === null) {
+      if (allowSkip) {
+        voteCounts.set('__SKIP__', (voteCounts.get('__SKIP__') ?? 0) + 1);
+      }
+      continue;
+    }
+
+    // Kiểm tra cắn đồng đội (Friendly Fire)
+    const targetPlayer = players.find((p) => p.id === targetId && p.isAlive);
+    if (!targetPlayer) continue;
+
+    const isWolfPackAlly =
+      targetPlayer.faction === 'WEREWOLF' || targetPlayer.roleId === 'white_wolf';
+    if (isWolfPackAlly && !allowFriendlyFire) {
+      continue; // Cấm cắn đồng đội thì bỏ qua phiếu này
+    }
+
+    voteCounts.set(targetId, (voteCounts.get(targetId) ?? 0) + 1);
+  }
+
+  if (voteCounts.size === 0) return [];
+
+  // Tìm số phiếu cao nhất
+  const sortedEntries = Array.from(voteCounts.entries()).sort((a, b) => b[1] - a[1]);
+  const chosenTargets: PlayerId[] = [];
+
+  for (let i = 0; i < targetCount; i++) {
+    if (sortedEntries.length === 0) break;
+
+    const highestVote = sortedEntries[0][1];
+    const topTied = sortedEntries.filter((e) => e[1] === highestVote);
+
+    let pickedKey: string;
+    if (topTied.length === 1) {
+      pickedKey = topTied[0][0];
+    } else {
+      pickedKey = pickDeterministic(topTied.map((e) => e[0]), seed + i * 17);
+    }
+
+    // Xóa mục tiêu đã chọn khỏi danh sách để chọn mục tiêu kế tiếp nếu cần
+    const pickedIdx = sortedEntries.findIndex((e) => e[0] === pickedKey);
+    if (pickedIdx !== -1) {
+      sortedEntries.splice(pickedIdx, 1);
+    }
+
+    if (pickedKey !== '__SKIP__') {
+      chosenTargets.push(pickedKey);
+    }
+  }
+
+  return chosenTargets;
+}
+
+/**
+ * Phân giải ban đêm (Night Resolution Engine) — PURE FUNCTION:
+ * Không sửa đổi state đầu vào, trả về nextState mới kèm kết quả chi tiết.
+ */
+export function resolveNight(
+  state: GameState,
+  actions: NightActions,
+  randomSeed: number = 42
+): { nextState: GameState; output: NightResolutionOutput } {
+  const nextState: GameState = structuredClone(state);
   const infoResults: NightInfoResults = {};
+  const events: NightResolutionEvent[] = [];
   const pendingDeaths: DeathInput[] = [];
 
   // =========================================================================
-  // 1. TỈNH RƯỢU Ở ĐẦU ĐÊM 3 (Kẻ say rượu - Drunk)
+  // 1. KIỂM TRA SÓI CHIÊM BAO THỨC TỈNH (Đầu mỗi đêm)
   // =========================================================================
-  if (state.roundNumber === 3) {
-    for (const player of state.players) {
-      if (player.roleId === 'drunk' && player.drunkRealRoleId) {
-        player.roleId = player.drunkRealRoleId;
-        const realDef = ROLES_BY_ID[player.drunkRealRoleId];
-        if (realDef) {
-          player.faction = realDef.faction;
-        }
-        state.historyLogs.push(
-          `Đầu Đêm 3: Kẻ say rượu (${player.name}) đã tỉnh rượu và mở khóa vai trò thật [${player.roleId}]!`
-        );
-      }
+  if (!nextState.dreamWolfAwakened && hasAnyOtherWolfDied(nextState)) {
+    nextState.dreamWolfAwakened = true;
+    nextState.historyLogs.push('Một Ma sói đã ngã xuống; thế lực bóng đêm đang âm thầm trỗi dậy.');
+  }
+
+  // =========================================================================
+  // 2. GHÉP ĐÔI CUPID (Chỉ Đêm 1)
+  // =========================================================================
+  if (nextState.roundNumber === 1 && actions.cupid && !nextState.villagePowerStripped) {
+    const { target1, target2 } = actions.cupid;
+    const p1 = nextState.players.find((p) => p.id === target1);
+    const p2 = nextState.players.find((p) => p.id === target2);
+
+    if (p1 && p2 && p1.id !== p2.id && p1.isAlive && p2.isAlive) {
+      p1.loverId = p2.id;
+      p2.loverId = p1.id;
+
+      // Cặp đôi chỉ tách thành Phe Thứ 3 nếu 2 người khác phe (Dân + Sói, v.v.)
+      // Nếu cùng phe (2 Dân hoặc 2 Sói), giữ nguyên phe gốc và thắng theo phe gốc
+      const crossFaction = p1.faction !== p2.faction;
+      p1.isCrossFactionCouple = crossFaction;
+      p2.isCrossFactionCouple = crossFaction;
+
+      // Không log tên người chơi hay phe để tránh rò rỉ danh tính bí mật
+      nextState.historyLogs.push(
+        'Thần tình yêu đã kết nối mũi tên định mệnh cho một cặp đôi trong làng.'
+      );
     }
   }
 
   // =========================================================================
-  // 2. KHIÊN BẢO VỆ (Bodyguard Shield)
+  // 3. KHIÊN BẢO VỆ (Bodyguard Shield)
   // =========================================================================
   let protectedPlayerId: PlayerId | null = null;
-  if (actions.bodyguard?.targetId && !state.villagePowerStripped) {
+  if (actions.bodyguard?.targetId && !nextState.villagePowerStripped) {
     const target = actions.bodyguard.targetId;
-    // Kiểm tra quy tắc không bảo vệ 1 người 2 đêm liên tiếp
-    if (target !== state.lastProtectedPlayerId) {
+    // Quy tắc: Không bảo vệ cùng 1 người 2 đêm liên tiếp
+    if (target !== nextState.lastProtectedPlayerId) {
       protectedPlayerId = target;
-      state.lastProtectedPlayerId = target;
+      nextState.lastProtectedPlayerId = target;
+      events.push({
+        type: 'PROTECTED',
+        sourceRole: 'bodyguard',
+        targetPlayerId: target,
+        isPublic: false,
+        details: 'Được Bảo vệ che chắn khỏi đòn cắn của bầy Sói',
+      });
     } else {
-      state.historyLogs.push('Bảo vệ chọn trùng mục tiêu đêm trước -> Khiên vô hiệu!');
-      state.lastProtectedPlayerId = null;
+      nextState.historyLogs.push('Bảo vệ chọn trùng mục tiêu đêm trước -> Khiên vô hiệu!');
+      nextState.lastProtectedPlayerId = null;
     }
   } else {
-    state.lastProtectedPlayerId = null;
+    nextState.lastProtectedPlayerId = null;
   }
 
   // =========================================================================
-  // 3. ĐÒN CẮN CỦA BẦY MA SÓI (Wolf Pack Attacks)
+  // 4. ĐÒN CẮN CỦA BẦY MA SÓI (Wolf Pack Attack)
   // =========================================================================
+  const targetCount = nextState.wolfCubDoubleKillNextNight ? 2 : 1;
+  nextState.wolfCubDoubleKillNextNight = false; // Reset cờ cắn 2 người
+
+  let rawWolfTargets: PlayerId[] = [];
+  if (actions.wolfPack) {
+    if (actions.wolfPack.individualVotes) {
+      // Sói trắng (white_wolf) cũng được thức dậy và bỏ phiếu cùng bầy
+      const livingWolves = nextState.players.filter((p) => {
+        if (!p.isAlive) return false;
+        if (p.faction !== 'WEREWOLF' && p.roleId !== 'white_wolf') return false;
+        if (p.roleId === 'minion' || p.roleId === 'sorcerer') return false;
+        if (p.roleId === 'dream_wolf' && !nextState.dreamWolfAwakened) return false;
+        return true;
+      });
+
+      rawWolfTargets = tallyWolfPackVotes(
+        actions.wolfPack.individualVotes,
+        livingWolves,
+        nextState.settings.allowWolfSkip,
+        nextState.settings.allowWolfFriendlyFire,
+        targetCount,
+        randomSeed,
+        nextState.players
+      );
+    } else if (actions.wolfPack.targets) {
+      if (!actions.wolfPack.isSkip || !nextState.settings.allowWolfSkip) {
+        let targets = [...actions.wolfPack.targets];
+        if (!nextState.settings.allowWolfFriendlyFire) {
+          targets = targets.filter((tId) => {
+            const p = nextState.players.find((pl) => pl.id === tId);
+            return p?.faction !== 'WEREWOLF' && p?.roleId !== 'white_wolf';
+          });
+        }
+        rawWolfTargets = targets.slice(0, targetCount);
+      }
+    }
+  }
+
+  // Khử trùng mục tiêu: Nếu bầy Sói chọn trùng 1 người trong đêm cắn 2 thì chỉ tính 1 vết cắn
+  const deduplicatedTargets = Array.from(new Set(rawWolfTargets));
+
   let wolfVictims: PlayerId[] = [];
-  if (actions.wolfPack && !actions.wolfPack.isSkip) {
-    const rawTargets = actions.wolfPack.targets ?? [];
-    // Lọc bỏ mục tiêu được Bảo vệ che chắn
-    for (const tId of rawTargets) {
-      if (tId === protectedPlayerId) {
-        state.historyLogs.push(`Bảo vệ đã đỡ trúng vết cắn của Sói nhắm vào [${tId}]!`);
-      } else {
-        wolfVictims.push(tId);
-      }
-    }
-  }
-
-  // =========================================================================
-  // 4. SÓI NGUYỀN (Accursed Wolf-Father)
-  // =========================================================================
-  if (actions.accursedWolf?.curseTargetId && !state.accursedWolfUsed) {
-    const curseId = actions.accursedWolf.curseTargetId;
-    state.accursedWolfUsed = true;
-
-    if (wolfVictims.includes(curseId)) {
-      // Biến đổi nạn nhân thành Sói thay vì giết chết
-      wolfVictims = wolfVictims.filter((id) => id !== curseId);
-      const victim = state.players.find((p) => p.id === curseId);
-      if (victim) {
-        victim.faction = 'WEREWOLF';
-        victim.roleId = 'werewolf'; // Mất sạch chức năng cũ, thành Sói thường
-        state.historyLogs.push(
-          `Sói nguyền đã nguyền rủa (${victim.name}). Nạn nhân không chết mà hóa Ma sói!`
-        );
-      }
+  for (const tId of deduplicatedTargets) {
+    if (tId === protectedPlayerId) {
+      nextState.historyLogs.push(`Bảo vệ đã đỡ trúng vết cắn của Sói nhắm vào [${tId}]!`);
     } else {
-      state.historyLogs.push('Sói nguyền đã nguyền trượt hoặc mục tiêu đã được bảo vệ che chở!');
+      wolfVictims.push(tId);
+      events.push({
+        type: 'WOLF_ATTACK',
+        sourceRole: 'werewolf',
+        targetPlayerId: tId,
+        isPublic: false,
+      });
     }
   }
 
   // =========================================================================
-  // 5. SÓI ĐẠI CA CẮN MẠNG THỨ HAI (Big Bad Wolf)
-  // =========================================================================
-  let bigBadWolfVictim: PlayerId | null = null;
-  const anyWolfDied = state.deaths.some((d) => {
-    const def = ROLES_BY_ID[d.roleId];
-    return def?.faction === 'WEREWOLF';
-  });
-
-  if (!anyWolfDied && actions.bigBadWolf?.targetId) {
-    const bbwTarget = actions.bigBadWolf.targetId;
-    if (bbwTarget === protectedPlayerId) {
-      state.historyLogs.push(`Bảo vệ đã đỡ trúng đòn cắn của Sói đại ca nhắm vào [${bbwTarget}]!`);
-    } else {
-      bigBadWolfVictim = bbwTarget;
-    }
-  }
-
-  // =========================================================================
-  // 6. SÓI TRẮNG ÁM SÁT RIÊNG (White Wolf)
+  // 5. SÓI TRẮNG ÁM SÁT RIÊNG (White Wolf - Đêm chẵn)
   // =========================================================================
   let whiteWolfVictim: PlayerId | null = null;
-  if (state.roundNumber % 2 === 0 && actions.whiteWolf?.targetId) {
-    whiteWolfVictim = actions.whiteWolf.targetId;
+  if (nextState.roundNumber % 2 === 0 && actions.whiteWolf?.targetId) {
+    const target = nextState.players.find((p) => p.id === actions.whiteWolf!.targetId);
+    if (target && target.isAlive) {
+      whiteWolfVictim = target.id;
+      events.push({
+        type: 'WHITE_WOLF_ATTACK',
+        sourceRole: 'white_wolf',
+        targetPlayerId: target.id,
+        isPublic: false,
+      });
+    }
   }
 
   // =========================================================================
-  // 7. PHÙ THỦY CỨU & NÉM ĐỘC (Witch Potion)
+  // 6. PHÙ THỦY CỨU & NÉM ĐỘC (Witch Potions)
   // =========================================================================
   let poisonVictim: PlayerId | null = null;
-  if (!state.villagePowerStripped && actions.witch) {
-    // 7a. Dùng bình Cứu
-    if (actions.witch.heal && !state.witchHealUsed) {
-      state.witchHealUsed = true;
-      if (state.settings.witchHealMode === 'AOE') {
-        // Cứu toàn bộ nạn nhân của bầy Sói và Sói đại ca
-        wolfVictims = [];
-        bigBadWolfVictim = null;
-        state.historyLogs.push('Phù thủy dùng bình Cứu AoE giải cứu tất cả nạn nhân bị Sói cắn!');
+  const witchPlayer = nextState.players.find((p) => p.roleId === 'witch');
+
+  if (!nextState.villagePowerStripped && actions.witch) {
+    // 6a. Dùng bình Cứu
+    if (actions.witch.heal && !nextState.witchHealUsed) {
+      nextState.witchHealUsed = true;
+
+      // Kiểm tra có cấm tự cứu không
+      let eligibleHealTargets = [...wolfVictims];
+      if (!nextState.settings.allowWitchSelfHeal && witchPlayer) {
+        eligibleHealTargets = eligibleHealTargets.filter((id) => id !== witchPlayer.id);
+      }
+
+      if (eligibleHealTargets.length > 0) {
+        if (nextState.settings.witchHealMode === 'AOE') {
+          // AoE cứu tất cả nạn nhân bị WOLF_PACK cắn hợp lệ (KHÔNG cứu WHITE_WOLF)
+          wolfVictims = wolfVictims.filter((id) => !eligibleHealTargets.includes(id));
+          for (const savedId of eligibleHealTargets) {
+            events.push({
+              type: 'WITCH_HEAL',
+              sourceRole: 'witch',
+              targetPlayerId: savedId,
+              isPublic: false,
+            });
+          }
+          nextState.historyLogs.push('Phù thủy dùng bình Cứu AoE giải cứu tất cả nạn nhân bị Sói cắn!');
+        } else {
+          // Cứu 1 người: Ưu tiên healTargetId nếu được chỉ định và hợp lệ
+          let savedId: PlayerId | undefined;
+          if (
+            actions.witch.healTargetId &&
+            eligibleHealTargets.includes(actions.witch.healTargetId)
+          ) {
+            savedId = actions.witch.healTargetId;
+          } else {
+            savedId = eligibleHealTargets[0];
+          }
+
+          if (savedId) {
+            wolfVictims = wolfVictims.filter((id) => id !== savedId);
+            events.push({
+              type: 'WITCH_HEAL',
+              sourceRole: 'witch',
+              targetPlayerId: savedId,
+              isPublic: false,
+            });
+            nextState.historyLogs.push(`Phù thủy dùng bình Cứu giải cứu nạn nhân [${savedId}]!`);
+          }
+        }
       } else {
-        // Cứu 1 nạn nhân đầu tiên
-        if (wolfVictims.length > 0) {
-          const saved = wolfVictims.shift();
-          state.historyLogs.push(`Phù thủy dùng bình Cứu giải cứu nạn nhân [${saved}]!`);
-        } else if (bigBadWolfVictim) {
-          bigBadWolfVictim = null;
-          state.historyLogs.push('Phù thủy giải cứu nạn nhân của Sói đại ca!');
+        // Cứu mù nhưng không có nạn nhân nào
+        if (!nextState.settings.witchKnowsVictim && !nextState.settings.witchWasteHealOnEmpty) {
+          nextState.witchHealUsed = false; // Hoàn bình nếu tắt mất bình khi cứu trượt
+        } else {
+          nextState.historyLogs.push('Phù thủy dùng bình Cứu nhưng không có ai bị Sói cắn trong đêm!');
         }
       }
     }
 
-    // 7b. Dùng bình Độc
-    if (actions.witch.poisonTargetId && !state.witchPoisonUsed) {
-      state.witchPoisonUsed = true;
-      poisonVictim = actions.witch.poisonTargetId;
-      state.historyLogs.push(`Phù thủy ném bình Độc vào mục tiêu [${poisonVictim}]!`);
-    }
-  }
-
-  // =========================================================================
-  // 8. CÁC VAI THU THẬP THÔNG TIN (Seer, Aura Seer, P.I., Fox, Sorcerer)
-  // =========================================================================
-  // Tiên tri (Seer / Apprentice Seer)
-  if (actions.seer?.targetId && !state.villagePowerStripped) {
-    const target = state.players.find((p) => p.id === actions.seer!.targetId);
-    if (target) {
-      const def = ROLES_BY_ID[target.roleId];
-      infoResults.seerResult = {
-        targetId: target.id,
-        result: def?.seerResult ?? 'VILLAGER',
-      };
-    }
-  }
-
-  // Tiên tri hào quang (Aura Seer)
-  if (actions.auraSeer?.targetId && !state.villagePowerStripped) {
-    const target = state.players.find((p) => p.id === actions.auraSeer!.targetId);
-    if (target) {
-      const isNormal = target.roleId === 'villager' || target.roleId === 'werewolf';
-      infoResults.auraResult = {
-        targetId: target.id,
-        result: isNormal ? 'NORMAL' : 'SPECIAL',
-      };
-    }
-  }
-
-  // Thám tử (P.I.)
-  if (actions.pi?.targetId && !state.piUsed && !state.villagePowerStripped) {
-    state.piUsed = true;
-    const neighbors = getAliveNeighbors(state.players, actions.pi.targetId);
-    if (neighbors) {
-      const hasWerewolf = neighbors.group.some((p) => p.faction === 'WEREWOLF');
-      infoResults.piResult = {
-        targetId: actions.pi.targetId,
-        hasWerewolf,
-        inspectedPlayerIds: neighbors.group.map((p) => p.id),
-      };
-    }
-  }
-
-  // Con cáo (Fox)
-  if (actions.fox?.targetId && !state.foxLostPower && !state.villagePowerStripped) {
-    const neighbors = getAliveNeighbors(state.players, actions.fox.targetId);
-    if (neighbors) {
-      const hasWerewolf = neighbors.group.some((p) => p.faction === 'WEREWOLF');
-      infoResults.foxResult = {
-        targetId: actions.fox.targetId,
-        hasWerewolf,
-        inspectedPlayerIds: neighbors.group.map((p) => p.id),
-      };
-      if (!hasWerewolf) {
-        state.foxLostPower = true;
-        state.historyLogs.push('Con cáo đã soi trúng nhóm 3 Dân -> Mất phép vĩnh viễn!');
+    // 6b. Dùng bình Độc
+    if (actions.witch.poisonTargetId && !nextState.witchPoisonUsed) {
+      const pTarget = nextState.players.find((p) => p.id === actions.witch!.poisonTargetId);
+      if (pTarget && pTarget.isAlive) {
+        nextState.witchPoisonUsed = true;
+        poisonVictim = pTarget.id;
+        events.push({
+          type: 'WITCH_POISON',
+          sourceRole: 'witch',
+          targetPlayerId: pTarget.id,
+          isPublic: false,
+        });
+        nextState.historyLogs.push(`Phù thủy ném bình Độc vào mục tiêu [${poisonVictim}]!`);
       }
     }
   }
 
-  // Pháp sư sói (Sorcerer)
+  // =========================================================================
+  // 7. CÁC VAI THU THẬP THÔNG TIN (Seer, Sorcerer)
+  // =========================================================================
+  if (actions.seer?.targetId && !nextState.villagePowerStripped) {
+    const target = nextState.players.find((p) => p.id === actions.seer!.targetId);
+    if (target) {
+      const def = ROLES_BY_ID[target.roleId];
+      let result = def?.seerResult ?? 'VILLAGER';
+      // Lycan soi ra Sói, Minion soi ra Dân
+      if (target.roleId === 'lycan') result = 'WEREWOLF';
+      if (target.roleId === 'minion') result = 'VILLAGER';
+
+      infoResults.seerResult = {
+        targetId: target.id,
+        result,
+      };
+    }
+  }
+
   if (actions.sorcerer?.targetId) {
-    const target = state.players.find((p) => p.id === actions.sorcerer!.targetId);
+    const target = nextState.players.find((p) => p.id === actions.sorcerer!.targetId);
     infoResults.sorcererResult = {
       targetId: actions.sorcerer.targetId,
       isSeer: target?.roleId === 'seer',
@@ -226,121 +356,64 @@ export function resolveNight(state: GameState, actions: NightActions): NightReso
   }
 
   // =========================================================================
-  // 9. CÁC VAI THAO TÚNG (Spellcaster, Troublemaker, Pied Piper, Cult Leader)
+  // 8. CHỐT SÁT THƯƠNG ĐÊM & CHUỖI TỬ VONG
   // =========================================================================
-  // Reset trạng thái câm của ngày trước
-  state.players.forEach((p) => {
-    p.isMuted = false;
-  });
-
-  if (actions.spellcaster?.targetId) {
-    const muted = state.players.find((p) => p.id === actions.spellcaster!.targetId);
-    if (muted) {
-      muted.isMuted = true;
-      state.historyLogs.push(`Người phù phép đã yểm bùa câm lặng lên (${muted.name})!`);
-    }
-  }
-
-  if (actions.troublemaker?.activate && !state.troublemakerUsed) {
-    state.troublemakerUsed = true;
-    state.doubleVoteDay = true;
-    state.historyLogs.push('Kẻ phá rối kích hoạt: Ngày mai sẽ có 2 lượt biểu quyết treo cổ liên tiếp!');
-  }
-
-  if (actions.piedPiper?.targetIds) {
-    for (const id of actions.piedPiper.targetIds) {
-      const p = state.players.find((pl) => pl.id === id);
-      if (p) p.isEnchanted = true;
-    }
-  }
-
-  if (actions.cultLeader?.targetId) {
-    const p = state.players.find((pl) => pl.id === actions.cultLeader!.targetId);
-    if (p) p.isCultMember = true;
-  }
-
-  // =========================================================================
-  // 10. CHỐT SÁT THƯƠNG & CHUYỂN HÓA CUỐI ĐÊM (Night Resolution)
-  // =========================================================================
-  const combinedWolfBites = [...wolfVictims];
-  if (bigBadWolfVictim) {
-    combinedWolfBites.push(bigBadWolfVictim);
-  }
-
-  // 10a. Xử lý vết cắn của Ma sói
-  for (const victimId of combinedWolfBites) {
-    const victim = state.players.find((p) => p.id === victimId);
+  // 8a. Nạn nhân của bầy Sói (WOLF_PACK)
+  for (const victimId of wolfVictims) {
+    const victim = nextState.players.find((p) => p.id === victimId);
     if (!victim || !victim.isAlive) continue;
 
-    // Kẻ bị nguyền (Cursed) biến thành Sói khi bị cắn thật
-    if (victim.roleId === 'cursed') {
-      victim.faction = 'WEREWOLF';
-      victim.roleId = 'werewolf';
-      state.historyLogs.push(`Kẻ bị nguyền (${victim.name}) đã bị cắn và thức tỉnh thành Ma sói!`);
-      continue;
-    }
-
-    // Người cứng cỏi (Tough Guy) hoãn cái chết sang cuối đêm hôm sau
-    if (victim.roleId === 'tough_guy') {
-      if (!victim.toughGuyBittenNight) {
-        victim.toughGuyBittenNight = state.roundNumber;
-        state.historyLogs.push(`Người cứng cỏi (${victim.name}) bị Sói cắn nhưng gắng gượng sống sót qua ngày!`);
-        continue;
-      }
-    }
-
-    // Già làng (Elder) có 2 giáp trước đòn cắn của Sói
+    // Già làng (Elder) có 2 giáp trước đòn cắn của bầy Sói
     if (victim.roleId === 'elder') {
       if ((victim.elderHp ?? 2) > 1) {
         victim.elderHp = 1;
-        state.historyLogs.push(`Già làng (${victim.name}) bị Sói cắn mất 1 giáp (còn 1 giáp)!`);
+        events.push({
+          type: 'SURVIVED',
+          targetPlayerId: victim.id,
+          isPublic: false,
+          details: 'Già làng chịu 1 vết cắn, còn 1 giáp',
+        });
+        nextState.historyLogs.push('Đêm qua làng có người bị tấn công nhưng đã kiên cường gượng dậy.');
         continue;
       }
     }
 
-    // Nạn nhân thông thường
     pendingDeaths.push({ playerId: victim.id, cause: 'WOLF_PACK' });
   }
 
-  // 10b. Xử lý đòn ám sát của Sói trắng (White Wolf)
+  // 8b. Nạn nhân của Sói trắng (WHITE_WOLF)
   if (whiteWolfVictim) {
     pendingDeaths.push({ playerId: whiteWolfVictim, cause: 'WHITE_WOLF' });
   }
 
-  // 10c. Xử lý thuốc độc của Phù thủy (Witch Poison)
+  // 8c. Nạn nhân của bình Độc (WITCH_POISON)
+  // Chú ý: Độc đè Cứu — nếu mục tiêu đã được bình Cứu cứu nhưng trúng Độc, Độc vẫn giết họ!
   if (poisonVictim) {
     pendingDeaths.push({ playerId: poisonVictim, cause: 'WITCH_POISON' });
   }
 
-  // 10d. Xử lý phát tác uốn ván của Kỵ sĩ gỉ sắt (Rusty Knight Tetanus)
-  for (const player of state.players) {
-    if (player.isAlive && player.infectedWithTetanus) {
-      player.infectedWithTetanus = false;
-      pendingDeaths.push({ playerId: player.id, cause: 'TETANUS' });
-      state.historyLogs.push(`Ma sói (${player.name}) đã chết vì vết thương uốn ván từ Kỵ sĩ gỉ sắt!`);
-    }
+  // Phân giải chuỗi chết liên hoàn
+  const newDeaths = processDeathCascade(nextState, pendingDeaths);
+
+  // Phát sinh event DEATH cho từng nạn nhân trong đêm vào resolvedEvents
+  for (const death of newDeaths) {
+    events.push({
+      type: 'DEATH',
+      targetPlayerId: death.playerId,
+      sourceRole: death.cause,
+      isPublic: nextState.settings.revealOnDeath,
+      details: nextState.settings.revealOnDeath ? `Nạn nhân mang vai trò [${death.roleId}]` : undefined,
+    });
   }
 
-  // 10e. Xử lý kiệt sức của Người cứng cỏi (Tough Guy Collapse)
-  for (const player of state.players) {
-    if (
-      player.isAlive &&
-      player.roleId === 'tough_guy' &&
-      player.toughGuyBittenNight &&
-      state.roundNumber > player.toughGuyBittenNight
-    ) {
-      pendingDeaths.push({ playerId: player.id, cause: 'TOUGH_GUY_COLLAPSE' });
-      state.historyLogs.push(`Người cứng cỏi (${player.name}) đã kiệt sức và trút hơi thở cuối cùng!`);
-    }
-  }
-
-  // =========================================================================
-  // 11. XỬ LÝ CHUỖI TỬ VONG LIÊN HOÀN (Process Death Cascade)
-  // =========================================================================
-  const newDeaths = processDeathCascade(state, pendingDeaths);
+  nextState.resolvedEvents = events;
 
   return {
-    newDeaths,
-    infoResults,
+    nextState,
+    output: {
+      newDeaths,
+      infoResults,
+      events,
+    },
   };
 }

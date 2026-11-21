@@ -1,23 +1,29 @@
-import type { GameState, WinOutcome } from './types';
+import type { GameState, PlayerState, WinOutcome } from './types';
+
+/**
+ * Kiểm tra xem cặp đôi Cupid có phải là cặp đôi khác phe (Third Party) hay không.
+ * Nếu cùng phe (2 Dân hoặc 2 Sói), họ giữ nguyên phe gốc và thắng theo phe gốc.
+ * Nếu khác phe (Dân + Sói, Dân + Phe thứ ba, v.v.), họ tách thành Phe Thứ 3
+ * và chỉ thắng khi là đúng 2 người sống sót cuối cùng trên bàn.
+ */
+export function isCrossFactionCouple(p1: PlayerState, p2: PlayerState): boolean {
+  if (p1.isCrossFactionCouple !== undefined) return p1.isCrossFactionCouple;
+  return p1.faction !== p2.faction;
+}
 
 /**
  * Kiểm tra điều kiện Thắng / Thua / Hòa theo thứ tự ưu tiên tuyệt đối:
- * 1. Tanner (Kẻ chán đời bị treo cổ)
- * 2. Angel (Thiên sứ chết Đêm 1 hoặc Ngày 1)
- * 3. Pied Piper (Người thổi sáo thôi miên toàn bộ người sống)
- * 4. Cult Leader (Trưởng giáo phái kết nạp toàn bộ người sống)
- * 5. Cặp đôi khác phe (Chỉ còn 2 người yêu sống sót)
- * 6. Sói trắng (Người sống sót duy nhất)
- * 7. Lone Wolf (Phe Sói thắng và Lone Wolf là con Sói duy nhất còn sống)
- * 8. Hoodlum (Cả 2 mục tiêu chết và Hoodlum còn sống khi ván kết thúc)
- * 9. Phe Dân làng (Tiêu diệt toàn bộ Ma sói)
- * 10. Phe Ma sói (Số Sói >= Số Dân)
- * 11. Hòa cả làng (DRAW - Cả bàn cùng chết sạch)
+ * 1. Kẻ chán đời (Tanner) bị treo cổ ban ngày.
+ * 2. Cả bàn cùng chết sạch trong chuỗi -> Hòa (DRAW).
+ * 3. Cặp đôi khác phe (Lover Couple) là đúng 2 người sống sót cuối cùng.
+ * 4. Sói trắng (White Wolf) là người sống sót duy nhất (aliveCount === 1).
+ * 5. Phe Dân làng thắng (toàn bộ Ma sói bị tiêu diệt, và KHÔNG còn Sói trắng hay cặp đôi khác phe).
+ * 6. Phe Ma sói thắng (số Sói cắn >= số Dân, và KHÔNG còn Sói trắng hay cặp đôi khác phe).
  */
 export function checkWinCondition(state: GameState): WinOutcome | null {
   const alivePlayers = state.players.filter((p) => p.isAlive);
 
-  // 1. Kẻ chán đời (Tanner) bị treo cổ ban ngày
+  // 1. Kẻ chán đời (Tanner) bị treo cổ ban ngày (VILLAGE_VOTE)
   const tannerHanged = state.deaths.find(
     (d) => d.roleId === 'tanner' && d.cause === 'VILLAGE_VOTE'
   );
@@ -29,47 +35,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
-  // 2. Thiên sứ (Angel) bị loại ở chu kỳ đầu tiên
-  const angelDead = state.deaths.find(
-    (d) =>
-      d.roleId === 'angel' &&
-      d.roundNumber === 1 &&
-      (d.cause === 'WOLF_PACK' || d.cause === 'VILLAGE_VOTE')
-  );
-  if (angelDead) {
-    return {
-      winner: 'ANGEL',
-      reason: 'Thiên sứ (Angel) đã đạt được ý nguyện tử vì đạo ở chu kỳ đầu tiên và thắng ván đấu!',
-      winningPlayerIds: [angelDead.playerId],
-    };
-  }
-
-  // 3. Người thổi sáo (Pied Piper) thôi miên toàn bộ người sống sót
-  const piedPiper = alivePlayers.find((p) => p.roleId === 'pied_piper');
-  if (piedPiper) {
-    const otherAlive = alivePlayers.filter((p) => p.id !== piedPiper.id);
-    if (otherAlive.length > 0 && otherAlive.every((p) => p.isEnchanted)) {
-      return {
-        winner: 'PIED_PIPER',
-        reason: 'Người thổi sáo đã thôi miên toàn bộ người sống sót trên bàn và giành chiến thắng!',
-        winningPlayerIds: [piedPiper.id],
-      };
-    }
-  }
-
-  // 4. Trưởng giáo phái (Cult Leader) kết nạp toàn bộ người sống sót
-  const cultLeader = alivePlayers.find((p) => p.roleId === 'cult_leader');
-  if (cultLeader) {
-    if (alivePlayers.length > 0 && alivePlayers.every((p) => p.isCultMember || p.id === cultLeader.id)) {
-      return {
-        winner: 'CULT_LEADER',
-        reason: 'Toàn bộ người chơi còn sống đã quy phục Giáo phái. Trưởng giáo phái chiến thắng!',
-        winningPlayerIds: [cultLeader.id],
-      };
-    }
-  }
-
-  // 5. Cả bàn cùng chết sạch -> Hòa cả làng (DRAW)
+  // 2. Cả bàn cùng chết sạch -> Hòa cả làng (DRAW)
   if (alivePlayers.length === 0) {
     return {
       winner: 'DRAW',
@@ -78,19 +44,28 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
-  // 6. Cặp đôi khác phe (Lover Couple) là 2 người sống sót cuối cùng
-  if (alivePlayers.length === 2) {
-    const [p1, p2] = alivePlayers;
-    if (p1.loverId === p2.id && p2.loverId === p1.id && p1.faction !== p2.faction) {
-      return {
-        winner: 'COUPLE',
-        reason: 'Tình yêu vượt qua ranh giới phe phái! Cặp đôi định mệnh là những người sống sót cuối cùng!',
-        winningPlayerIds: [p1.id, p2.id],
-      };
+  // Kiểm tra sự tồn tại của cặp đôi khác phe còn sống
+  const livingCouple = alivePlayers.filter((p) => p.loverId);
+  let hasLivingCrossFactionCouple = false;
+  if (livingCouple.length === 2) {
+    const [c1, c2] = livingCouple;
+    if (c1.loverId === c2.id && c2.loverId === c1.id && isCrossFactionCouple(c1, c2)) {
+      hasLivingCrossFactionCouple = true;
     }
   }
 
-  // 7. Sói trắng (White Wolf) sống sót duy nhất
+  // 3. Cặp đôi khác phe (Lover Couple) là đúng 2 người sống sót cuối cùng
+  if (alivePlayers.length === 2 && hasLivingCrossFactionCouple) {
+    const [p1, p2] = alivePlayers;
+    return {
+      winner: 'COUPLE',
+      reason: 'Tình yêu vượt qua ranh giới phe phái! Cặp đôi định mệnh là những người sống sót cuối cùng!',
+      winningPlayerIds: [p1.id, p2.id],
+    };
+  }
+
+  // 4. Sói trắng (White Wolf) sống sót duy nhất (aliveCount === 1)
+  const whiteWolfAlive = alivePlayers.some((p) => p.roleId === 'white_wolf');
   if (alivePlayers.length === 1 && alivePlayers[0].roleId === 'white_wolf') {
     return {
       winner: 'WHITE_WOLF',
@@ -99,18 +74,24 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
-  // Phân loại người chơi còn sống
-  // Lưu ý: Minion (Kẻ phản bội) mang faction WEREWOLF nhưng không có nanh vuốt.
-  // Khi tất cả Sói có nanh chết hết, Dân thắng ngay mà không cần giết Minion.
+  // Phân loại người chơi còn sống:
+  // - activeWolves: Sói có khả năng cắn (không tính Minion và Sorcerer)
+  // - totalWolves: toàn bộ người chơi phe WEREWOLF
+  // - totalVillagers: người chơi phe VILLAGER
   const activeWolves = alivePlayers.filter(
     (p) => p.faction === 'WEREWOLF' && p.roleId !== 'minion' && p.roleId !== 'sorcerer'
   );
-  const totalWolves = alivePlayers.filter((p) => p.faction === 'WEREWOLF');
   const totalVillagers = alivePlayers.filter((p) => p.faction === 'VILLAGER');
-  const thirdPartyAlive = alivePlayers.filter((p) => p.faction === 'THIRD_PARTY');
 
-  // 8. Phe Dân làng thắng: Toàn bộ Ma sói chính thức đã chết
-  if (activeWolves.length === 0 && thirdPartyAlive.length === 0) {
+  // Chừng nào Sói trắng còn sống hoặc còn Cặp đôi khác phe sống cản trở,
+  // cả phe Dân lẫn phe Sói thường đều CHƯA thể thắng!
+  if (whiteWolfAlive || hasLivingCrossFactionCouple) {
+    return null;
+  }
+
+  // 5. Phe Dân làng thắng: Toàn bộ Ma sói có khả năng cắn đã chết
+  // (Minion và Sorcerer không thể cắn; khi Sói thật chết hết, Dân thắng ngay)
+  if (activeWolves.length === 0 && totalVillagers.length > 0) {
     const winners = state.players.filter((p) => p.faction === 'VILLAGER').map((p) => p.id);
     return {
       winner: 'VILLAGER',
@@ -119,37 +100,15 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
-  // 9. Phe Ma sói thắng: Số Sói >= Số Dân (và không còn Phe thứ 3 cản trở)
-  if (activeWolves.length >= totalVillagers.length && thirdPartyAlive.length === 0) {
-    // 9a. Kiểm tra Sói cô đơn (Lone Wolf)
-    const loneWolf = alivePlayers.find((p) => p.roleId === 'lone_wolf');
-    if (loneWolf && activeWolves.length === 1 && activeWolves[0].id === loneWolf.id) {
-      return {
-        winner: 'LONE_WOLF',
-        reason: 'Phe Sói đã thống trị ngôi làng và Sói cô đơn là con Sói duy nhất còn sống sót!',
-        winningPlayerIds: [loneWolf.id],
-      };
-    }
-
+  // 6. Phe Ma sói thắng: Số Sói cắn >= Số Dân (và ít nhất 1 Sói cắn còn sống)
+  if (activeWolves.length >= totalVillagers.length && activeWolves.length > 0) {
+    // Toàn bộ phe Sói (kể cả Minion, Sorcerer dù còn sống hay đã chết) đều thắng cùng bầy
     const winners = state.players.filter((p) => p.faction === 'WEREWOLF').map((p) => p.id);
     return {
       winner: 'WEREWOLF',
       reason: 'Ma sói đã áp đảo hoàn toàn dân làng. Ngôi làng chìm trong bóng đêm vĩnh hằng!',
       winningPlayerIds: winners,
     };
-  }
-
-  // 10. Kiểm tra Du côn (Hoodlum) nếu một trong hai phe đã thắng
-  const hoodlum = alivePlayers.find((p) => p.roleId === 'hoodlum');
-  if (hoodlum && hoodlum.hoodlumTargetIds) {
-    const [t1Id, t2Id] = hoodlum.hoodlumTargetIds;
-    const target1 = state.players.find((p) => p.id === t1Id);
-    const target2 = state.players.find((p) => p.id === t2Id);
-
-    // Nếu cả 2 mục tiêu đã chết và ván đấu đã phân thắng bại ở trên, Hoodlum đoạt chiến thắng
-    if (target1 && !target1.isAlive && target2 && !target2.isAlive) {
-      // Hoodlum thắng cùng hoặc đè
-    }
   }
 
   return null;

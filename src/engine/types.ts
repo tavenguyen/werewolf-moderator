@@ -1,4 +1,4 @@
-import type { Faction, SeerResult } from '../screens/home/roles';
+import type { Faction, SeerResult } from './roles';
 
 export type PlayerId = string;
 
@@ -7,8 +7,11 @@ export type GamePhase =
   | 'FIRST_NIGHT_SETUP'
   | 'NIGHT'
   | 'DAY_DISCUSS'
+  | 'DAY_MAYOR_ELECTION'
   | 'DAY_VOTE'
+  | 'DAY_RUNOFF'
   | 'HUNTER_SHOT'
+  | 'MAYOR_SUCCESSION'
   | 'GAME_OVER';
 
 export type DeathCause =
@@ -40,18 +43,19 @@ export interface PlayerState {
   faction: Faction;
   isAlive: boolean;
   elderHp?: number; // 2 giáp cho Già làng
-  voteWeight: number; // 1 mặc định, 0 cho Thằng ngốc sau lật bài
-  isMuted?: boolean; // Bị Người phù phép (Spellcaster) câm lặng
-  isCultMember?: boolean; // Tín đồ Trưởng giáo phái (Cult Leader)
-  isEnchanted?: boolean; // Bị Người thổi sáo (Pied Piper) thôi miên
-  infectedWithTetanus?: boolean; // Bị Kỵ sĩ gỉ sắt (Rusty Knight) lây bệnh
-  toughGuyBittenNight?: number | null; // Đêm Người cứng cỏi bị cắn
+  voteWeight: number; // 1 mặc định, 0 cho Thằng ngốc sau lật bài, 2 cho Trưởng làng
   loverId?: PlayerId | null; // Cặp đôi Cupid
-  roleModelId?: PlayerId | null; // Hình mẫu của Đứa con hoang (Wild Child)
-  doppelgangerTargetId?: PlayerId | null; // Mục tiêu sao chép của Nhân bản
-  companionId?: PlayerId | null; // Bạn đồng hành của Sói tuyết (Dire Wolf)
-  hoodlumTargetIds?: [PlayerId, PlayerId] | null; // 2 mục tiêu của Du côn (Hoodlum)
-  drunkRealRoleId?: string | null; // Vai thật bốc ngầm của Kẻ say rượu (Drunk)
+  isCrossFactionCouple?: boolean; // Tách thành Phe Thứ 3 nếu 2 người khác phe
+  isMuted?: boolean;
+  isCultMember?: boolean;
+  isEnchanted?: boolean;
+  infectedWithTetanus?: boolean;
+  toughGuyBittenNight?: number | null;
+  roleModelId?: PlayerId | null;
+  doppelgangerTargetId?: PlayerId | null;
+  companionId?: PlayerId | null;
+  hoodlumTargetIds?: [PlayerId, PlayerId] | null;
+  drunkRealRoleId?: string | null;
 }
 
 export interface RoomSettings {
@@ -64,37 +68,75 @@ export interface RoomSettings {
   allowWitchSelfHeal: boolean;
   tieVoteMode: 'ESCAPE' | 'RUNOFF';
   ghostMode: boolean;
+  hasMayor: boolean;
 }
 
 export interface NightActions {
   cupid?: { target1: PlayerId; target2: PlayerId };
-  doppelganger?: { targetId: PlayerId };
-  wildChild?: { targetId: PlayerId };
-  hoodlum?: { target1: PlayerId; target2: PlayerId };
-  direWolf?: { targetId: PlayerId };
   bodyguard?: { targetId: PlayerId };
-  wolfPack?: { targets: PlayerId[]; isSkip?: boolean };
-  accursedWolf?: { curseTargetId: PlayerId | null };
-  bigBadWolf?: { targetId: PlayerId | null };
+  wolfPack?: {
+    targets?: PlayerId[];
+    isSkip?: boolean;
+    individualVotes?: Record<PlayerId, PlayerId | null>; // voterId -> targetId | null (skip)
+  };
   whiteWolf?: { targetId: PlayerId | null };
   seer?: { targetId: PlayerId };
+  sorcerer?: { targetId: PlayerId };
+  witch?: {
+    heal?: boolean;
+    healTargetId?: PlayerId | null;
+    poisonTargetId?: PlayerId | null;
+  };
+  // Non-MVP fields kept for compatibility
+  accursedWolf?: { curseTargetId: PlayerId | null };
+  bigBadWolf?: { targetId: PlayerId | null };
   auraSeer?: { targetId: PlayerId };
   pi?: { targetId: PlayerId };
   fox?: { targetId: PlayerId; isSkip?: boolean };
-  sorcerer?: { targetId: PlayerId };
-  witch?: { heal?: boolean; poisonTargetId?: PlayerId | null };
   spellcaster?: { targetId: PlayerId };
   troublemaker?: { activate?: boolean };
   piedPiper?: { targetIds: [PlayerId, PlayerId] };
   cultLeader?: { targetId: PlayerId };
+  doppelganger?: { targetId: PlayerId };
+  wildChild?: { targetId: PlayerId };
+  hoodlum?: { target1: PlayerId; target2: PlayerId };
+  direWolf?: { targetId: PlayerId };
 }
 
 export interface NightInfoResults {
   seerResult?: { targetId: PlayerId; result: SeerResult };
+  sorcererResult?: { targetId: PlayerId; isSeer: boolean };
   auraResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
   piResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
   foxResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
-  sorcererResult?: { targetId: PlayerId; isSeer: boolean };
+}
+
+export interface NightResolutionEvent {
+  type:
+    | 'PROTECTED'
+    | 'WOLF_ATTACK'
+    | 'WITCH_HEAL'
+    | 'WITCH_POISON'
+    | 'WHITE_WOLF_ATTACK'
+    | 'DEATH'
+    | 'SURVIVED'
+    | 'AWAKENED';
+  sourceRole?: string;
+  targetPlayerId: PlayerId;
+  isPublic: boolean;
+  details?: string;
+}
+
+export interface DayState {
+  discussionSecondsRemaining: number;
+  voteLockRemainingSeconds: number;
+  voteLocked: boolean;
+  isPaused: boolean;
+  extensionsUsed: number;
+  ballots: Record<PlayerId, PlayerId | null>;
+  runoffCandidates?: PlayerId[];
+  runoffBallots?: Record<PlayerId, PlayerId | null>;
+  mayorBallots?: Record<PlayerId, PlayerId | null>;
 }
 
 export interface WinOutcome {
@@ -102,13 +144,13 @@ export interface WinOutcome {
     | 'VILLAGER'
     | 'WEREWOLF'
     | 'TANNER'
+    | 'COUPLE'
+    | 'WHITE_WOLF'
     | 'ANGEL'
     | 'PIED_PIPER'
     | 'CULT_LEADER'
     | 'HOODLUM'
     | 'LONE_WOLF'
-    | 'COUPLE'
-    | 'WHITE_WOLF'
     | 'DRAW'
     | null;
   reason: string;
@@ -116,6 +158,7 @@ export interface WinOutcome {
 }
 
 export interface GameState {
+  generation: number;
   roundNumber: number;
   phase: GamePhase;
   players: PlayerState[];
@@ -131,7 +174,13 @@ export interface GameState {
   troublemakerUsed: boolean;
   accursedWolfUsed: boolean;
   doubleVoteDay: boolean;
-  villagePowerStripped: boolean; // Phạt khi Già làng bị Dân giết
+  villagePowerStripped: boolean;
+  mayorId: PlayerId | null;
   pendingHunterShotPlayerId?: PlayerId | null;
+  pendingMayorSuccessionPlayerId?: PlayerId | null;
+  previousPhaseBeforeHunter?: GamePhase;
+  previousPhaseBeforeMayorSuccession?: GamePhase;
+  dayState?: DayState;
+  resolvedEvents?: NightResolutionEvent[];
   historyLogs: string[];
 }
