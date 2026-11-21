@@ -29,9 +29,20 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
   const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
   const [isMuted, setIsMuted] = useState(() => audioController.getIsMuted());
   const [audioStatus, setAudioStatus] = useState<AudioStatus>(() => audioController.getAudioStatus());
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const qrTrigger = useRef<HTMLButtonElement>(null);
   const qrClose = useRef<HTMLButtonElement>(null);
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(joinDeepLink);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     const unsubSubtitle = audioController.subscribeSubtitle((sub) => {
@@ -435,6 +446,16 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             <p className="host-qr-desc">
               Quét mã QR bằng camera điện thoại để kết nối trực tiếp vào bàn đấu.
             </p>
+
+            <div className="host-qr-copy-box">
+              <button
+                type="button"
+                className="host-copy-btn"
+                onClick={handleCopyLink}
+              >
+                <span>{copiedLink ? '✓ Đã sao chép liên kết' : '🔗 Sao chép link mời'}</span>
+              </button>
+            </div>
           </section>
         </div>
       )}

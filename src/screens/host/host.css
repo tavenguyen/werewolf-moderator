@@ -764,6 +764,29 @@
   padding: 6px;
 }
 
+.host-qr-copy-box {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.host-copy-btn {
+  background: rgba(201, 134, 56, 0.15);
+  border: 1px solid rgba(201, 134, 56, 0.4);
+  color: var(--lantern, #e6a254);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font: 600 13px var(--font-title, inherit);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.host-copy-btn:hover {
+  background: rgba(201, 134, 56, 0.3);
+  border-color: rgba(201, 134, 56, 0.7);
+  color: #fff;
+}
+
 .host-audio-unblock-banner {
   width: 100%;
   display: flex;
