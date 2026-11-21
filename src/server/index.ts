@@ -50,8 +50,9 @@ export function createServerApp(options: ServerAppOptions = {}): ServerAppInstan
 
   const start = async (customPort?: number): Promise<number> => {
     const port = customPort ?? options.port ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 3001);
+    const host = process.env.HOST ?? '0.0.0.0';
     return new Promise<number>((resolve) => {
-      httpServer.listen(port, '127.0.0.1', () => {
+      httpServer.listen(port, host, () => {
         const address = httpServer.address();
         const actualPort = typeof address === 'object' && address !== null ? address.port : port;
         resolve(actualPort);

@@ -78,6 +78,17 @@ describe('Realtime Backend - Room Lifecycle & Authentication', () => {
     expect(player?.seatIndex).toBe(0);
   });
 
+  it('từ chối tham gia khi phòng không tồn tại với mã lỗi ROOM_NOT_FOUND', async () => {
+    const client = createClient();
+    const joinRes: any = await new Promise((resolve) => {
+      client.emit('room:join', { roomCode: '9999', username: 'Tester' }, resolve);
+    });
+
+    expect(joinRes.ok).toBe(false);
+    expect(joinRes.error.code).toBe('ROOM_NOT_FOUND');
+    expect(joinRes.error.message).toBe('Bàn chưa tồn tại hoặc đã kết thúc.');
+  });
+
   it('từ chối tham gia khi trùng username (case-insensitive & trimmed)', async () => {
     const clientHost = createClient();
     const clientPlayer1 = createClient();

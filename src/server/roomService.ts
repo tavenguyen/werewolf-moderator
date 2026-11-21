@@ -171,7 +171,7 @@ export class RoomService {
   public joinRoom(roomCode: string, username: string): JoinRoomResult {
     const room = this.rooms.get(roomCode);
     if (!room) {
-      throw new Error('Phòng không tồn tại hoặc đã bị đóng.');
+      throw new Error('Bàn chưa tồn tại hoặc đã kết thúc.');
     }
 
     if (room.gameState !== null) {
@@ -340,7 +340,7 @@ export class RoomService {
    */
   public startGame(roomCode: string, hostToken: string, customRoleIds?: string[]): void {
     const room = this.rooms.get(roomCode);
-    if (!room) throw new Error('Phòng không tồn tại.');
+    if (!room) throw new Error('Bàn chưa tồn tại hoặc đã kết thúc.');
     if (room.host.hostToken !== hostToken) throw new Error('Chỉ Host mới có quyền bắt đầu ván đấu.');
     if (room.gameState !== null) throw new Error('Ván đấu đã được bắt đầu trước đó.');
 
@@ -397,7 +397,7 @@ export class RoomService {
     settings: Partial<RoomSettings>
   ): RoomSettings {
     const room = this.rooms.get(roomCode);
-    if (!room) throw new Error('Phòng không tồn tại.');
+    if (!room) throw new Error('Bàn chưa tồn tại hoặc đã kết thúc.');
     if (room.host.hostToken !== hostToken) throw new Error('Chỉ Host mới có quyền thay đổi cài đặt.');
     if (room.gameState !== null) throw new Error('Không thể thay đổi cài đặt khi ván chơi đã bắt đầu.');
 
@@ -412,7 +412,7 @@ export class RoomService {
    */
   public emergencyEliminate(roomCode: string, hostToken: string, targetPlayerId: PlayerId): void {
     const room = this.rooms.get(roomCode);
-    if (!room) throw new Error('Phòng không tồn tại.');
+    if (!room) throw new Error('Bàn chưa tồn tại hoặc đã kết thúc.');
     if (room.host.hostToken !== hostToken) throw new Error('Chỉ Host mới có quyền loại khẩn cấp.');
 
     const player = room.players.get(targetPlayerId);
@@ -454,7 +454,7 @@ export class RoomService {
    */
   public rematch(roomCode: string, hostToken: string): void {
     const room = this.rooms.get(roomCode);
-    if (!room) throw new Error('Phòng không tồn tại.');
+    if (!room) throw new Error('Bàn chưa tồn tại hoặc đã kết thúc.');
     if (room.host.hostToken !== hostToken) throw new Error('Chỉ Host mới có quyền khởi động ván mới.');
     if (!room.gameState || room.gameState.phase !== 'GAME_OVER') {
       throw new Error('Chỉ có thể tái đấu khi ván chơi đã kết thúc (GAME_OVER).');

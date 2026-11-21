@@ -31,4 +31,18 @@ describe('SocketAdapter - Multi Device Mode', () => {
     const ok = await adapter.resumeSession();
     expect(ok).toBe(false);
   });
+
+  it('joinRoom báo lỗi ngay lập tức khi không thể kết nối hoặc bàn không tồn tại', async () => {
+    // Cố ý kết nối đến port không tồn tại
+    const adapter = new SocketAdapter('http://127.0.0.1:59999');
+    let error: Error | null = null;
+    try {
+      await adapter.joinRoom('9999', 'PlayerOne');
+    } catch (err) {
+      error = err as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toMatch(/Bàn chưa tồn tại hoặc không thể kết nối|Không thể kết nối/);
+  });
 });

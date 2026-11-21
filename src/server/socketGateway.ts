@@ -96,7 +96,7 @@ export class SocketGateway {
           const result = this.roomService.joinRoom(payload.roomCode, payload.username);
           const room = this.roomService.getRoom(payload.roomCode);
           if (!room) {
-            this.sendError(cb, 'ROOM_NOT_FOUND', 'Phòng không tồn tại.');
+            this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
             return;
           }
 
@@ -111,13 +111,16 @@ export class SocketGateway {
           this.broadcastRoom(room);
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : 'Lỗi khi tham gia phòng.';
-          const code: ServerErrorCode = message.includes('đã có người sử dụng')
-            ? 'NAME_TAKEN'
-            : message.includes('tối đa')
-              ? 'ROOM_FULL'
-              : message.includes('đã bắt đầu')
-                ? 'GAME_ALREADY_STARTED'
-                : 'INTERNAL_ERROR';
+          const code: ServerErrorCode =
+            message.includes('chưa tồn tại') || message.includes('không tồn tại')
+              ? 'ROOM_NOT_FOUND'
+              : message.includes('đã có người sử dụng')
+                ? 'NAME_TAKEN'
+                : message.includes('tối đa')
+                  ? 'ROOM_FULL'
+                  : message.includes('đã bắt đầu')
+                    ? 'GAME_ALREADY_STARTED'
+                    : 'INTERNAL_ERROR';
           this.sendError(cb, code, message);
         }
       }
@@ -127,7 +130,7 @@ export class SocketGateway {
     socket.on('room:resume', (payload: ClientResumePayload, cb?: (res: ServerResponse) => void) => {
       const room = this.roomService.getRoom(payload.roomCode);
       if (!room) {
-        this.sendError(cb, 'ROOM_NOT_FOUND', 'Phòng không tồn tại.');
+        this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
         return;
       }
 
@@ -164,7 +167,7 @@ export class SocketGateway {
     socket.on('room:leave', (payload: { roomCode: string; token: string }, cb?: (res: ServerResponse) => void) => {
       const room = this.roomService.getRoom(payload.roomCode);
       if (!room) {
-        this.sendError(cb, 'ROOM_NOT_FOUND', 'Phòng không tồn tại.');
+        this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
         return;
       }
 
@@ -1124,7 +1127,7 @@ export class SocketGateway {
   ): void {
     const room = this.roomService.getRoom(roomCode);
     if (!room) {
-      this.sendError(cb, 'ROOM_NOT_FOUND', 'Phòng không tồn tại.');
+      this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
       return;
     }
 

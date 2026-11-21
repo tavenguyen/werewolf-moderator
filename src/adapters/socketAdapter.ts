@@ -50,9 +50,13 @@ export class SocketAdapter implements GameSessionAdapter {
     if (serverUrl) {
       this.serverUrl = serverUrl;
     } else if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname || 'localhost';
-      // Mặc định kết nối backend Phase 2 trên port 3001
-      this.serverUrl = `${window.location.protocol}//${hostname}:3001`;
+      const envUrl = (import.meta as unknown as { env?: { VITE_SERVER_URL?: string } }).env?.VITE_SERVER_URL;
+      if (envUrl) {
+        this.serverUrl = envUrl;
+      } else {
+        // Mặc định kết nối cùng origin (trực tiếp qua Vite dev server plugin hoặc reverse proxy)
+        this.serverUrl = window.location.origin;
+      }
     } else {
       this.serverUrl = 'http://localhost:3001';
     }
@@ -162,12 +166,62 @@ export class SocketAdapter implements GameSessionAdapter {
     return this.socket;
   }
 
-  private emitWithAck<T>(event: string, payload: unknown): Promise<T> {
+  private async emitWithAck<T>(event: string, payload: unknown, timeoutMs = 4000): Promise<T> {
     const socket = this.ensureSocket();
+
+    // Nếu socket chưa kết nối, chờ kết nối tối đa 2500ms
+    if (!socket.connected) {
+      if (socket.disconnected) {
+        socket.connect();
+      }
+      await new Promise<void>((resolve, reject) => {
+        const connectTimer = setTimeout(() => {
+          socket.off('connect', onConnect);
+          socket.off('connect_error', onError);
+          const errMsg = 'Bàn chưa tồn tại hoặc không thể kết nối đến máy chủ.';
+          this.updateState({ error: { code: 'CONNECT_TIMEOUT', message: errMsg } });
+          reject(new Error(errMsg));
+        }, 2500);
+
+        const onConnect = () => {
+          clearTimeout(connectTimer);
+          socket.off('connect_error', onError);
+          resolve();
+        };
+
+        const onError = (err: Error) => {
+          clearTimeout(connectTimer);
+          socket.off('connect', onConnect);
+          const errMsg = `Không thể kết nối đến máy chủ: ${err.message}`;
+          this.updateState({ error: { code: 'CONNECT_ERROR', message: errMsg } });
+          reject(new Error(errMsg));
+        };
+
+        socket.once('connect', onConnect);
+        socket.once('connect_error', onError);
+      });
+    }
+
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const ackTimer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          const errMsg = 'Bàn chưa tồn tại hoặc không thể kết nối đến máy chủ.';
+          this.updateState({ error: { code: 'TIMEOUT', message: errMsg } });
+          reject(new Error(errMsg));
+        }
+      }, timeoutMs);
+
       socket.emit(event, payload, (res: ServerResponse<T>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(ackTimer);
+
         if (!res) {
-          reject(new Error('Máy chủ không phản hồi'));
+          const errMsg = 'Máy chủ không phản hồi';
+          this.updateState({ error: { code: 'NO_RESPONSE', message: errMsg } });
+          reject(new Error(errMsg));
           return;
         }
         if (res.ok) {

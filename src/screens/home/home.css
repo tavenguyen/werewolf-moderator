@@ -1449,6 +1449,27 @@
   font-style: italic;
 }
 
+.home-modal-alert {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 13px;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.home-modal-alert .home-alert-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
 /* Footer: Real-time Server & Room Status */
 .home-footer {
   border-top: 1px solid var(--border);

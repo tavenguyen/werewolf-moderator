@@ -48,16 +48,16 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
   // Remember username from previous play session
   const [nickname, setNickname] = useState(() => {
     try {
-      return localStorage.getItem('werewolf_nickname') || 'Minh Khang';
+      return localStorage.getItem('werewolf_nickname') || '';
     } catch {
-      return 'Minh Khang';
+      return '';
     }
   });
 
   const modalCloseBtn = useRef<HTMLButtonElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const navigationTimer = useRef<number | undefined>(undefined);
-  const [roomCode, setRoomCode] = useState('7290');
+  const [roomCode, setRoomCode] = useState('');
   const [notice, setNotice] = useState('');
   const [deviceSelection, setDeviceSelection] = useState<'multi' | 'shared'>('multi');
   const [hostRoleSelection, setHostRoleSelection] = useState<'player' | 'board'>('player');
@@ -243,12 +243,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
     triggerHaptic();
     const cleanCode = roomCode.replace(/\D/g, '').slice(0, 4);
     if (action === 'join' && cleanCode.length !== 4) {
-      setNotice('Mã phòng cần có đúng 4 chữ số.');
+      setNotice('Vui lòng nhập đủ 4 chữ số mã bàn.');
       return;
     }
     const cleanName = sanitizeNickname(nickname);
     if (!cleanName && (action === 'join' || hostRoleSelection === 'player')) {
-      setNotice('Hãy nhập tên bạn trước khi tiếp tục.');
+      setNotice('Vui lòng nhập tên của bạn.');
       return;
     }
 
@@ -468,7 +468,10 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     pattern="[0-9]*"
                     maxLength={4}
                     value={roomCode}
-                    onChange={(event) => setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                    onChange={(event) => {
+                      setNotice('');
+                      setRoomCode(event.target.value.replace(/\D/g, '').slice(0, 4));
+                    }}
                     autoFocus
                   />
                   <div className="home-code-display join-code-grid" aria-hidden="true">
@@ -494,7 +497,10 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                   className="home-text-input"
                   value={nickname}
                   maxLength={24}
-                  onChange={(event) => setNickname(event.target.value)}
+                  onChange={(event) => {
+                    setNotice('');
+                    setNickname(event.target.value);
+                  }}
                   placeholder="Tên của bạn"
                 />
               </div>
@@ -517,7 +523,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 <span>Khôi phục ván chơi dở gần nhất</span>
               </button>
 
-              {notice && <p className="home-notice" role="status">{notice}</p>}
+              {notice && (
+                <div className="home-modal-alert" role="alert">
+                  <span className="home-alert-icon">⚠️</span>
+                  <span>{notice}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -627,7 +638,10 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     className="home-text-input"
                     value={nickname}
                     maxLength={24}
-                    onChange={(event) => setNickname(event.target.value)}
+                    onChange={(event) => {
+                      setNotice('');
+                      setNickname(event.target.value);
+                    }}
                     placeholder="Tên của bạn"
                   />
                 </div>
@@ -644,7 +658,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 <span>{isLoading ? 'Đang khởi tạo...' : 'Tạo bàn'}</span>
               </button>
 
-              {notice && <p className="home-notice" role="status">{notice}</p>}
+              {notice && (
+                <div className="home-modal-alert" role="alert">
+                  <span className="home-alert-icon">⚠️</span>
+                  <span>{notice}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

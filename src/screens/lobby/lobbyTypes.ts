@@ -16,7 +16,7 @@ export type LobbyDemoState = {
 
 export const defaultLobbyDemoState: LobbyDemoState = {
   players: [
-    { name: 'Minh Khang', host: true }, { name: 'Lan Anh' }, { name: 'Hoàng Nam' },
+    { name: 'Người chơi 1', host: true }, { name: 'Lan Anh' }, { name: 'Hoàng Nam' },
     { name: 'Bảo Trâm' }, { name: 'Đức Huy' },
   ],
   preset: 'basic',

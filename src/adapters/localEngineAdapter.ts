@@ -32,7 +32,7 @@ import { audioController } from '../audio/audioController';
 const LOCAL_STORAGE_KEY = 'werewolf_local_game_session';
 
 const DEFAULT_OFFLINE_NAMES = [
-  'Minh Khang',
+  'Anh Tuấn',
   'Lan Anh',
   'Hoàng Nam',
   'Bảo Trâm',
