@@ -1,0 +1,192 @@
+import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { RoomService, ROOM_IDLE_TIMEOUT_MS } from '../roomService';
+import { TimerManager } from '../timerManager';
+import { SocketGateway } from '../socketGateway';
+import { createMockIoServer, type MockSocketIOServer, type MockClientSocket } from './mockSocket';
+
+describe('Realtime Backend - Room Lifecycle & Authentication', () => {
+  let mockIo: MockSocketIOServer;
+  let roomService: RoomService;
+  let timerManager: TimerManager;
+  let gateway: SocketGateway;
+  const clientSockets: MockClientSocket[] = [];
+
+  beforeEach(() => {
+    mockIo = createMockIoServer();
+    roomService = new RoomService();
+    timerManager = new TimerManager();
+    gateway = new SocketGateway(mockIo as any, roomService, timerManager);
+    gateway.registerEvents();
+  });
+
+  afterEach(() => {
+    for (const c of clientSockets) {
+      c.disconnect();
+    }
+    clientSockets.length = 0;
+    roomService.destroy();
+    mockIo.close();
+  });
+
+  const createClient = (): MockClientSocket => {
+    const c = mockIo.createClientSocket();
+    clientSockets.push(c);
+    return c;
+  };
+
+  it('tạo phòng sinh đúng mã 4 số và token CSPRNG cho Host bảng trung tâm', async () => {
+    const client = createClient();
+
+    const res: any = await new Promise((resolve) => {
+      client.emit('room:create', { isPlayer: false }, resolve);
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.data.roomCode).toMatch(/^\d{4}$/);
+    expect(res.data.hostToken).toBeDefined();
+    expect(typeof res.data.hostToken).toBe('string');
+    expect(res.data.hostToken.length).toBeGreaterThanOrEqual(32);
+    expect(res.data.playerToken).toBeUndefined();
+    expect(res.data.playerId).toBeUndefined();
+
+    const room = roomService.getRoom(res.data.roomCode);
+    expect(room).toBeDefined();
+    expect(room?.host.isPlayer).toBe(false);
+    expect(room?.players.size).toBe(0);
+  });
+
+  it('tạo phòng cho Host kiêm người chơi: có ghế và playerToken', async () => {
+    const client = createClient();
+
+    const res: any = await new Promise((resolve) => {
+      client.emit('room:create', { isPlayer: true, username: 'Alice Host' }, resolve);
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.data.roomCode).toMatch(/^\d{4}$/);
+    expect(res.data.hostToken).toBeDefined();
+    expect(res.data.playerToken).toBeDefined();
+    expect(res.data.playerId).toBeDefined();
+
+    const room = roomService.getRoom(res.data.roomCode);
+    expect(room).toBeDefined();
+    expect(room?.host.isPlayer).toBe(true);
+    expect(room?.players.size).toBe(1);
+
+    const player = room?.players.get(res.data.playerId);
+    expect(player?.name).toBe('Alice Host');
+    expect(player?.seatIndex).toBe(0);
+  });
+
+  it('từ chối tham gia khi trùng username (case-insensitive & trimmed)', async () => {
+    const clientHost = createClient();
+    const clientPlayer1 = createClient();
+    const clientPlayer2 = createClient();
+
+    const createRes: any = await new Promise((resolve) => {
+      clientHost.emit('room:create', { isPlayer: false }, resolve);
+    });
+    const roomCode = createRes.data.roomCode;
+
+    const join1: any = await new Promise((resolve) => {
+      clientPlayer1.emit('room:join', { roomCode, username: '  Minh An  ' }, resolve);
+    });
+    expect(join1.ok).toBe(true);
+    expect(join1.data.seatIndex).toBe(0);
+
+    const join2: any = await new Promise((resolve) => {
+      clientPlayer2.emit('room:join', { roomCode, username: 'minh an' }, resolve);
+    });
+    expect(join2.ok).toBe(false);
+    expect(join2.error.code).toBe('NAME_TAKEN');
+  });
+
+  it('cho phép reconnect bằng token đúng và từ chối token sai', async () => {
+    const client1 = createClient();
+
+    const createRes: any = await new Promise((resolve) => {
+      client1.emit('room:create', { isPlayer: true, username: 'HostPlayer' }, resolve);
+    });
+    const { roomCode, playerToken } = createRes.data;
+
+    // Disconnect client 1
+    client1.disconnect();
+
+    // Client mới reconnect bằng đúng token
+    const client2 = createClient();
+    const resumeRes: any = await new Promise((resolve) => {
+      client2.emit('room:resume', { roomCode, token: playerToken }, resolve);
+    });
+
+    expect(resumeRes.ok).toBe(true);
+    expect(resumeRes.data.playerId).toBeDefined();
+
+    // Token giả mạo bị từ chối
+    const fakeClient = createClient();
+    const fakeRes: any = await new Promise((resolve) => {
+      fakeClient.emit('room:resume', { roomCode, token: 'fake-token-123' }, resolve);
+    });
+    expect(fakeRes.ok).toBe(false);
+    expect(fakeRes.error.code).toBe('INVALID_TOKEN');
+  });
+
+  it('tự động dọn phòng khi idle quá 3 giờ', async () => {
+    const client = createClient();
+
+    const createRes: any = await new Promise((resolve) => {
+      client.emit('room:create', { isPlayer: false }, resolve);
+    });
+    const roomCode = createRes.data.roomCode;
+
+    const room = roomService.getRoom(roomCode);
+    expect(room).toBeDefined();
+
+    // Giả lập thời gian trôi qua hơn 3 giờ
+    if (room) {
+      room.lastActivityAt = Date.now() - (ROOM_IDLE_TIMEOUT_MS + 1000);
+    }
+
+    const cleaned = roomService.cleanupIdleRooms();
+    expect(cleaned).toBe(1);
+    expect(roomService.getRoom(roomCode)).toBeUndefined();
+  });
+
+  it('xử lý sự kiện room:leave thành công trong Lobby', async () => {
+    const hostClient = createClient();
+    const createRes: any = await new Promise((resolve) => {
+      hostClient.emit('room:create', { isPlayer: false }, resolve);
+    });
+    const roomCode = createRes.data.roomCode;
+    const hostToken = createRes.data.hostToken;
+
+    const p1 = createClient();
+    const p2 = createClient();
+
+    const j1: any = await new Promise((resolve) => {
+      p1.emit('room:join', { roomCode, username: 'Player 1' }, resolve);
+    });
+    const j2: any = await new Promise((resolve) => {
+      p2.emit('room:join', { roomCode, username: 'Player 2' }, resolve);
+    });
+
+    const room = roomService.getRoom(roomCode)!;
+    expect(room.players.size).toBe(2);
+
+    // Player 1 rời phòng
+    const leaveRes: any = await new Promise((resolve) => {
+      p1.emit('room:leave', { roomCode, token: j1.data.playerToken }, resolve);
+    });
+    expect(leaveRes.ok).toBe(true);
+    expect(leaveRes.data.left).toBe(true);
+    expect(room.players.size).toBe(1);
+    // Player 2 được dịch chuyển lên ghế 0
+    expect(room.players.get(j2.data.playerId)?.seatIndex).toBe(0);
+
+    // Host rời phòng ở Lobby -> phòng bị hủy
+    const hostLeave: any = await new Promise((resolve) => {
+      hostClient.emit('room:leave', { roomCode, token: hostToken }, resolve);
+    });
+    expect(hostLeave.ok).toBe(true);
+    expect(roomService.getRoom(roomCode)).toBeUndefined();
+  });
+});
