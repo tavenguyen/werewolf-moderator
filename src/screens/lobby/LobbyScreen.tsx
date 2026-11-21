@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { defaultLobbyDemoState, type LobbyDemoState, type LobbyPlayer, type LobbyPreset } from './lobbyTypes';
+import { useGameSession } from '../../adapters/useGameSession';
+import { getSmartPreset } from '../../engine/presets';
+import { ROLES_BY_ID } from '../../engine/roles';
+import { generateQrSvgString } from '../../utils/qrCodeSvg';
 import type { ScreenName } from '../../navigation';
+import type { LobbyPreset } from './lobbyTypes';
 import './lobby.css';
 
 type Props = {
@@ -8,98 +12,106 @@ type Props = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-const waitingNames = ['Quỳnh Như', 'Văn Hậu', 'Thúy Kiều', 'Gia Bảo', 'Tường Vy'];
-
-type DeckRoleItem = {
+interface DeckRoleDisplay {
   name: string;
   count: number;
   symbol: string;
   side: 'village' | 'wolf' | 'third';
   sideName: string;
-};
-
-function getDeckRoles(preset: LobbyPreset, count: number): DeckRoleItem[] {
-  if (preset === 'chaos') {
-    const wolves = Math.max(1, Math.floor(count / 4));
-    const specials = 3; // Tiên tri, Phù thủy, Thợ săn
-    const third = 1; // Bán sói
-    const villagers = Math.max(1, count - 1 - wolves - specials - third);
-    return [
-      { name: 'Sói Đầu Đàn', count: 1, symbol: '🩸', side: 'wolf', sideName: 'Phe Sói' },
-      { name: 'Ma Sói', count: wolves, symbol: '🐺', side: 'wolf', sideName: 'Phe Sói' },
-      { name: 'Tiên Tri', count: 1, symbol: '🔮', side: 'village', sideName: 'Phe Dân' },
-      { name: 'Phù Thủy', count: 1, symbol: '🧪', side: 'village', sideName: 'Phe Dân' },
-      { name: 'Thợ Săn', count: 1, symbol: '🎯', side: 'village', sideName: 'Phe Dân' },
-      { name: 'Bán Sói', count: 1, symbol: '🐾', side: 'third', sideName: 'Phe Thứ 3' },
-      { name: 'Dân Làng', count: villagers, symbol: '🛡️', side: 'village', sideName: 'Phe Dân' },
-    ].filter((r) => r.count > 0);
-  }
-
-  // Basic (Tiêu chuẩn)
-  const wolves = Math.max(2, Math.floor(count / 4));
-  const seer = 1;
-  const guard = count >= 6 ? 1 : 0;
-  const hunter = count >= 8 ? 1 : 0;
-  const villagers = Math.max(1, count - wolves - seer - guard - hunter);
-
-  const deck: DeckRoleItem[] = [
-    { name: 'Ma Sói', count: wolves, symbol: '🐺', side: 'wolf', sideName: 'Phe Sói' },
-    { name: 'Tiên Tri', count: seer, symbol: '🔮', side: 'village', sideName: 'Phe Dân' },
-  ];
-  if (guard > 0) deck.push({ name: 'Bảo Vệ', count: guard, symbol: '⚔️', side: 'village', sideName: 'Phe Dân' });
-  if (hunter > 0) deck.push({ name: 'Thợ Săn', count: hunter, symbol: '🎯', side: 'village', sideName: 'Phe Dân' });
-  deck.push({ name: 'Dân Làng', count: villagers, symbol: '🛡️', side: 'village', sideName: 'Phe Dân' });
-  return deck;
 }
 
-type LobbyProps = Props & { initialState?: LobbyDemoState; onStateChange?: (state: LobbyDemoState) => void };
+export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
+  const { state, actions, deviceMode } = useGameSession();
 
-export default function LobbyScreen({ onNavigate, initialState, onStateChange, onOpenRules }: LobbyProps) {
-  const [players, setPlayers] = useState<LobbyPlayer[]>(initialState?.players ?? defaultLobbyDemoState.players);
-  const [preset, setPreset] = useState<LobbyPreset>(initialState?.preset ?? 'basic');
-  const [advanced, setAdvanced] = useState(initialState?.advanced ?? false);
+  const roomCode = state.roomCode || '7290';
+  const players = state.publicView?.players ?? [];
+  const playerCount = Math.max(players.length, 6);
+  const isSingleDevice = deviceMode === 'SINGLE_DEVICE';
+
+  const [presetType, setPresetType] = useState<LobbyPreset>('basic');
+  const [advanced, setAdvanced] = useState(false);
   const [notice, setNotice] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [settings, setSettings] = useState(initialState?.settings ?? defaultLobbyDemoState.settings);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
 
-  const maxPlayers = 8;
-  const ready = players.length >= 6;
-  const wolves = Math.max(2, Math.floor(players.length / 4));
-  const specials = Math.min(2, Math.max(0, players.length - wolves - 2));
-  const villagers = Math.max(0, players.length - wolves - specials);
-  const totalVillage = villagers + specials;
-
-  const deckRoles = getDeckRoles(preset, players.length);
-
-  useEffect(() => {
-    onStateChange?.({ players, preset, advanced, settings });
-  }, [players, preset, advanced, settings, onStateChange]);
-
-  const addPlayer = () => {
-    if (players.length >= maxPlayers) return;
-    const nextIndex = (players.length - defaultLobbyDemoState.players.length) % waitingNames.length;
-    const name = waitingNames[Math.max(0, nextIndex)];
-    setPlayers((current) => [...current, { name }]);
-    setNotice(`${name} vừa vào bàn.`);
+  // Settings
+  const currentSettings = state.publicView?.settings ?? {
+    revealOnDeath: false,
+    allowWolfSkip: false,
+    allowWolfFriendlyFire: false,
+    allowWitchSelfHeal: true,
+    witchWasteHealOnEmpty: false,
+    witchKnowsVictim: true,
+    witchHealMode: 'AOE' as const,
+    tieVoteMode: 'ESCAPE' as const,
+    ghostMode: false,
+    hasMayor: false,
   };
 
-  const removeLastPlayer = () => {
-    if (players.length <= 1) return;
-    const last = players[players.length - 1];
-    if (last.host) return;
-    setPlayers((current) => current.slice(0, -1));
-    setNotice(`Đã xóa ${last.name} khỏi bàn.`);
+  const smartPreset = getSmartPreset(players.length >= 6 ? players.length : 8);
+
+  const deckRoles: DeckRoleDisplay[] = (() => {
+    if (!smartPreset) return [];
+    const counts: Record<string, number> = {};
+    for (const rId of smartPreset.roles) {
+      counts[rId] = (counts[rId] ?? 0) + 1;
+    }
+    return Object.entries(counts).map(([rId, count]) => {
+      const def = ROLES_BY_ID[rId];
+      const side = def?.faction === 'WEREWOLF' ? 'wolf' : def?.faction === 'NEUTRAL' ? 'third' : 'village';
+      const sideName = side === 'wolf' ? 'Phe Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân';
+      const symbol = side === 'wolf' ? '🐺' : rId === 'seer' ? '🔮' : rId === 'bodyguard' ? '⚔️' : rId === 'witch' ? '🧪' : rId === 'hunter' ? '🎯' : '🛡️';
+      return {
+        name: def?.nameVi ?? rId,
+        count,
+        symbol,
+        side,
+        sideName,
+      };
+    });
+  })();
+
+  const wolvesCount = deckRoles.filter((r) => r.side === 'wolf').reduce((acc, r) => acc + r.count, 0);
+  const villageCount = deckRoles.filter((r) => r.side === 'village').reduce((acc, r) => acc + r.count, 0);
+  const ready = players.length >= 6 && players.length <= 16;
+
+  const joinDeepLink =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/?room=${roomCode}`
+      : `http://localhost:5173/?room=${roomCode}`;
+
+  const handleCopyDeepLink = async () => {
+    try {
+      await navigator.clipboard.writeText(joinDeepLink);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      setNotice(`Link vào bàn: ${joinDeepLink}`);
+    }
   };
 
-  const handleKickPlayer = (targetIndex: number) => {
-    const target = players[targetIndex];
-    if (!target || target.host) return;
-    setPlayers((current) => current.filter((_, idx) => idx !== targetIndex));
-    setNotice(`Đã mời ${target.name} rời phòng.`);
+  const handleToggleSetting = async (key: keyof typeof currentSettings) => {
+    const nextVal = !currentSettings[key];
+    await actions.updateSettings({ [key]: nextVal });
   };
 
-  const toggleSetting = (key: keyof typeof settings) =>
-    setSettings((current) => ({ ...current, [key]: !current[key] }));
+  const handleStartGame = async () => {
+    if (!ready) return;
+    try {
+      await actions.startGame();
+      onNavigate?.('night');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván đấu';
+      setNotice(msg);
+    }
+  };
+
+  const handleAddOfflinePlayer = () => {
+    if (!newPlayerName.trim()) return;
+    actions.addOfflinePlayer(newPlayerName.trim());
+    setNewPlayerName('');
+  };
 
   return (
     <div className="lobby-page">
@@ -107,7 +119,10 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
       <header className="lobby-header">
         <button
           className="lobby-back"
-          onClick={() => onNavigate?.('home')}
+          onClick={() => {
+            void actions.leaveRoom();
+            onNavigate?.('home');
+          }}
           aria-label="Về trang chủ"
           title="Về trang chủ"
         >
@@ -117,24 +132,30 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
           <span className="lobby-candle-flame" aria-hidden="true">🕯️</span>
           <div>
             <h1>
-              PHÒNG CHỜ <span>• BÀN #{7290}</span>
+              PHÒNG CHỜ <span>• BÀN #{roomCode}</span>
             </h1>
-            <p>Chờ người chơi quét mã QR hoặc nhập 4 số để vào bàn trước khi bắt đầu</p>
+            <p>
+              {isSingleDevice
+                ? 'Chế độ 1 máy offline: Người chơi dùng chung 1 thiết bị đặt giữa bàn'
+                : 'Mỗi người quét mã QR hoặc nhập 4 số trên điện thoại để tham gia'}
+            </p>
           </div>
         </div>
         <div className="lobby-header-actions">
           <button
             className="lobby-link-button"
             onClick={() => onOpenRules?.('roles')}
-            title="Tra cứu luật chơi và 10 vai trò thực chiến"
+            title="Tra cứu luật chơi và vai trò"
           >
             <span aria-hidden="true">📜</span>
             <span>Luật &amp; Vai trò</span>
           </button>
-          <button className="lobby-link-button" onClick={() => onNavigate?.('host')}>
-            <span>Bàn Quản Trò</span>
-            <span aria-hidden="true">↗</span>
-          </button>
+          {state.isHost && (
+            <button className="lobby-link-button" onClick={() => onNavigate?.('host')}>
+              <span>Bàn Quản Trò</span>
+              <span aria-hidden="true">↗</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -146,18 +167,19 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
           <section className="lobby-card lobby-room-card">
             <div className="lobby-room-details">
               <span className="lobby-kicker">MÃ BÀN CHƠI</span>
-              <strong className="lobby-room-code">7290</strong>
-              <p>Người chơi nhập 4 số trên hoặc bấm để phóng to mã QR cho cả bàn cùng quét</p>
+              <strong className="lobby-room-code">#{roomCode}</strong>
+              <p>Quét mã QR bằng camera điện thoại hoặc bấm bên dưới để phóng to</p>
             </div>
 
             <button
               type="button"
               className="lobby-qr-preview-btn"
               onClick={() => setQrModalOpen(true)}
-              title="Bấm để phóng to mã QR"
-              aria-label="Phóng to mã QR bàn 7290"
+              title="Bấm để phóng to mã QR cho cả bàn cùng quét"
+              aria-label={`Phóng to mã QR bàn ${roomCode}`}
             >
               <div className="qr-preview-box">
+                {/* Visual QR Code Symbol */}
                 <svg viewBox="0 0 80 80" className="lobby-qr-svg" aria-hidden="true">
                   <rect width="80" height="80" fill="#13161c" rx="4" />
                   <rect x="6" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
@@ -166,21 +188,12 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
                   <rect x="59" y="11" width="10" height="10" fill="#c98638" rx="1" />
                   <rect x="6" y="54" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
                   <rect x="11" y="59" width="10" height="10" fill="#c98638" rx="1" />
-                  <rect x="32" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="42" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="36" y="16" width="4" height="4" fill="#c98638" />
-                  <rect x="32" y="24" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="44" y="24" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="8" y="34" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="18" y="38" width="4" height="4" fill="#c98638" />
-                  <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="2" />
-                  <rect x="58" y="34" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="68" y="38" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="32" y="48" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="42" y="54" width="4" height="4" fill="#c98638" />
-                  <rect x="36" y="62" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                  <rect x="54" y="58" width="6" height="6" fill="#ede7dc" opacity="0.8" />
-                  <rect x="66" y="66" width="6" height="6" fill="#c98638" />
+                  <rect x="34" y="14" width="6" height="6" fill="#c98638" rx="1" />
+                  <rect x="42" y="24" width="4" height="4" fill="#ede7dc" />
+                  <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="1" />
+                  <rect x="24" y="44" width="4" height="4" fill="#ede7dc" />
+                  <rect x="52" y="48" width="6" height="6" fill="#ede7dc" />
+                  <rect x="64" y="62" width="6" height="6" fill="#c98638" />
                 </svg>
               </div>
               <span className="qr-preview-label">
@@ -194,31 +207,39 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
             <div className="lobby-section-title">
               <div>
                 <h2>Người chơi trong bàn</h2>
-                <span className="lobby-count">{players.length}/{maxPlayers}</span>
+                <span className="lobby-count">{players.length}/16 ghế</span>
               </div>
-              {ready && <span className="lobby-ready">✓ ĐỦ ĐIỀU KIỆN</span>}
+              {ready && <span className="lobby-ready">✓ ĐỦ ĐIỀU KIỆN (6–16)</span>}
             </div>
 
             {/* Player Grid */}
             <div className="lobby-player-grid">
-              {players.map((player, index) => (
-                <div className={`lobby-player ${player.host ? 'host-player' : ''}`} key={`${player.name}-${index}`}>
+              {players.map((player) => (
+                <div
+                  className={`lobby-player ${player.id === state.playerId ? 'current-player' : ''}`}
+                  key={player.id}
+                >
                   <div className="player-meta">
-                    <span className="player-seat">#{String(index + 1).padStart(2, '0')}</span>
-                    <span className="player-status-dot" title="Đang kết nối" aria-hidden="true" />
+                    <span className="player-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                    <span
+                      className={`player-status-dot ${player.isConnected ? 'online' : 'offline'}`}
+                      title={player.isConnected ? 'Đang kết nối' : 'Mất kết nối'}
+                      aria-hidden="true"
+                    />
                     <span className="player-name">{player.name}</span>
                   </div>
 
                   <div className="player-actions">
-                    {player.host ? (
-                      <b className="badge-host">👑 CHỦ BÀN</b>
-                    ) : (
+                    {player.seatIndex === 1 && state.isHost && (
+                      <b className="badge-host">👑 HOST</b>
+                    )}
+                    {isSingleDevice && players.length > 6 && (
                       <button
                         type="button"
                         className="player-kick-btn"
-                        onClick={() => handleKickPlayer(index)}
-                        title={`Mời ${player.name} rời phòng`}
-                        aria-label={`Mời ${player.name} rời phòng`}
+                        onClick={() => actions.removeOfflinePlayer(player.id)}
+                        title={`Bớt ${player.name}`}
+                        aria-label={`Bớt ${player.name}`}
                       >
                         ×
                       </button>
@@ -228,49 +249,57 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
               ))}
             </div>
 
-            {/* Subtle Dev/Test Bot Utility */}
-            <div className="lobby-bot-tools">
-              <span className="bot-tools-label">Dành cho Host thử nghiệm:</span>
-              <div className="bot-tools-btns">
-                {players.length < maxPlayers && (
-                  <button type="button" className="lobby-btn-bot" onClick={addPlayer} title="Thêm 1 người chơi ảo">
-                    ＋ Thêm Bot
-                  </button>
-                )}
-                {players.length > 1 && (
-                  <button type="button" className="lobby-btn-bot" onClick={removeLastPlayer} title="Bớt 1 người chơi ảo">
-                    − Bớt Bot
-                  </button>
-                )}
+            {/* Thêm người chơi offline ở chế độ 1 máy */}
+            {isSingleDevice && players.length < 16 && (
+              <div className="lobby-add-offline">
+                <input
+                  type="text"
+                  placeholder="Tên người chơi mới..."
+                  value={newPlayerName}
+                  maxLength={20}
+                  onChange={(e) => setNewPlayerName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddOfflinePlayer();
+                  }}
+                  className="lobby-input-name"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddOfflinePlayer}
+                  disabled={!newPlayerName.trim()}
+                  className="lobby-btn-add"
+                >
+                  ＋ Thêm ghế
+                </button>
               </div>
-            </div>
+            )}
 
             {notice && <p className="lobby-notice" role="status">{notice}</p>}
 
             {/* Faction Balance Bar */}
-            <div className="lobby-balance" aria-label={`Phe Dân Làng ${totalVillage}, Phe Ma Sói ${wolves}`}>
+            <div className="lobby-balance" aria-label={`Phe Dân Làng ${villageCount}, Phe Ma Sói ${wolvesCount}`}>
               <div className="lobby-balance-header">
                 <span className="balance-title">PHÂN BỔ PHE PHÁI</span>
-                <span className="balance-status">{players.length} người chơi ({totalVillage} Dân · {wolves} Sói)</span>
+                <span className="balance-status">{players.length} người chơi ({villageCount} Dân · {wolvesCount} Sói)</span>
               </div>
 
               <div className="lobby-balance-bar">
                 <i
-                  style={{ width: `${(totalVillage / players.length) * 100}%` }}
-                  title={`Phe Dân Làng: ${totalVillage}`}
+                  style={{ width: `${(villageCount / (players.length || 1)) * 100}%` }}
+                  title={`Phe Dân Làng: ${villageCount}`}
                 />
                 <i
-                  style={{ width: `${(wolves / players.length) * 100}%` }}
-                  title={`Phe Ma Sói: ${wolves}`}
+                  style={{ width: `${(wolvesCount / (players.length || 1)) * 100}%` }}
+                  title={`Phe Ma Sói: ${wolvesCount}`}
                 />
               </div>
 
               <div className="balance-legend">
                 <span className="legend-villager">
-                  <i /> Phe Dân Làng: <b>{totalVillage}</b> <small>({villagers} Dân thường · {specials} Chức năng)</small>
+                  <i /> Phe Dân Làng: <b>{villageCount}</b>
                 </span>
                 <span className="legend-wolf">
-                  <i /> Phe Ma Sói: <b>{wolves}</b>
+                  <i /> Phe Ma Sói: <b>{wolvesCount}</b>
                 </span>
               </div>
             </div>
@@ -282,57 +311,31 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
           <section className="lobby-card lobby-preset-card">
             <div className="lobby-section-title">
               <div>
-                <h2>Quy ước ván đấu</h2>
+                <h2>Đội hình thông minh (Smart Preset)</h2>
               </div>
-              <span className="lobby-kicker">CHẾ ĐỘ CHƠI</span>
+              <span className="lobby-kicker">{playerCount} NGƯỜI CHƠI</span>
             </div>
 
             <div className="lobby-presets" role="group" aria-label="Chọn quy ước ván đấu">
               <button
                 type="button"
-                onClick={() => setPreset('basic')}
-                className={preset === 'basic' ? 'active basic' : ''}
-                aria-pressed={preset === 'basic'}
+                onClick={() => setPresetType('basic')}
+                className={presetType === 'basic' ? 'active basic' : ''}
+                aria-pressed={presetType === 'basic'}
               >
                 <div className="preset-top">
-                  <span className="preset-badge">Cơ Bản</span>
-                  <strong className="preset-name">Tiêu Chuẩn</strong>
+                  <span className="preset-badge">Cân bằng</span>
+                  <strong className="preset-name">Tối ưu số người</strong>
                 </div>
-                <small>6–8 người · Tiên tri + Bảo vệ + 2 Sói</small>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPreset('chaos')}
-                className={preset === 'chaos' ? 'active chaos' : ''}
-                aria-pressed={preset === 'chaos'}
-              >
-                <div className="preset-top">
-                  <span className="preset-badge">Mở Rộng</span>
-                  <strong className="preset-name">Kịch Tính</strong>
-                </div>
-                <small>Thêm Phù Thủy, Thợ Săn, Sói Đầu Đàn, Bán Sói</small>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setPreset('custom'); setAdvanced(true); }}
-                className={preset === 'custom' ? 'active custom' : ''}
-                aria-pressed={preset === 'custom'}
-              >
-                <div className="preset-top">
-                  <span className="preset-badge">Tự Chọn</span>
-                  <strong className="preset-name">Tùy Biến</strong>
-                </div>
-                <small>Bật/tắt luật nâng cao theo ý muốn</small>
+                <small>Preset chuẩn hóa theo thuật toán game engine</small>
               </button>
             </div>
 
             {/* Expected Role Deck Breakdown */}
             <div className="lobby-deck-roster">
               <div className="deck-roster-head">
-                <span className="deck-roster-title">ĐỘI HÌNH LÁ BÀI ({players.length} NGƯỜI CHƠI)</span>
-                <span className="deck-roster-subtitle">Các vai trò sẽ được chia kín trong ván</span>
+                <span className="deck-roster-title">DANH SÁCH LÁ BÀI SẼ CHIA</span>
+                <span className="deck-roster-subtitle">Các vai trò sẽ được chia bí mật khi bắt đầu</span>
               </div>
 
               <div className="deck-roster-grid">
@@ -363,38 +366,38 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
                 <Setting
                   label="Lật vai khi chết"
                   desc="Công bố vai trò của người chơi ngay khi bị xử tử hoặc bị cắn"
-                  checked={settings.reveal}
-                  onChange={() => toggleSetting('reveal')}
+                  checked={Boolean(currentSettings.revealOnDeath)}
+                  onChange={() => handleToggleSetting('revealOnDeath')}
                 />
                 <Setting
                   label="Sói được bỏ lượt cắn"
                   desc="Cho phép bầy Sói tạo đêm bình yên giả để tung hỏa mù"
-                  checked={settings.wolfSkip}
-                  onChange={() => toggleSetting('wolfSkip')}
+                  checked={Boolean(currentSettings.allowWolfSkip)}
+                  onChange={() => handleToggleSetting('allowWolfSkip')}
                 />
                 <Setting
                   label="Sói được cắn đồng đội"
                   desc="Cho phép Ma Sói tự cắn nhau để đánh lạc hướng"
-                  checked={settings.friendlyFire}
-                  onChange={() => toggleSetting('friendlyFire')}
+                  checked={Boolean(currentSettings.allowWolfFriendlyFire)}
+                  onChange={() => handleToggleSetting('allowWolfFriendlyFire')}
                 />
                 <Setting
                   label="Phù thủy được tự cứu"
                   desc="Cho phép Phù thủy dùng bình cứu cho chính mình"
-                  checked={settings.selfHeal}
-                  onChange={() => toggleSetting('selfHeal')}
+                  checked={Boolean(currentSettings.allowWitchSelfHeal)}
+                  onChange={() => handleToggleSetting('allowWitchSelfHeal')}
                 />
                 <Setting
-                  label="Cứu mù mất bình nếu trượt"
-                  desc="Mất bình cứu nếu dùng khi đêm đó không ai bị sói cắn trúng"
-                  checked={settings.blindWaste}
-                  onChange={() => toggleSetting('blindWaste')}
+                  label="Bầu Trưởng làng ngày 1"
+                  desc="Tổ chức bầu cử Trưởng làng vào sáng Ngày 1 (phiếu có trọng số 2)"
+                  checked={Boolean(currentSettings.hasMayor)}
+                  onChange={() => handleToggleSetting('hasMayor')}
                 />
               </div>
             )}
           </section>
 
-          {/* Start Game Action Card (Sole Location for Start Requirements) */}
+          {/* Start Game Action Card */}
           <section className={`lobby-start-card ${ready ? 'is-ready' : 'not-ready'}`}>
             <div className="start-meta">
               <strong className="start-title">
@@ -404,19 +407,23 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
               </strong>
               <span className="start-desc">
                 {ready
-                  ? 'Tất cả người chơi đã có mặt. Host bấm nút để bắt đầu Đêm 1.'
-                  : 'Cần đủ 6 người để đảm bảo tính cân bằng giữa Phe Dân và Phe Sói.'}
+                  ? state.isHost
+                    ? 'Bấm nút bên dưới để bắt đầu chia bài và bước vào Đêm 1.'
+                    : 'Đang đợi Quản trò bấm bắt đầu ván đấu...'
+                  : 'Cần từ 6 đến 16 người để đảm bảo tính cân bằng giữa Phe Dân và Phe Sói.'}
               </span>
             </div>
 
-            <button
-              className="start-button"
-              disabled={!ready}
-              onClick={() => onNavigate?.('night')}
-            >
-              <span className="play-icon" aria-hidden="true">⚔</span>
-              <span>BẮT ĐẦU VÁN ĐẤU • ĐÊM 1</span>
-            </button>
+            {state.isHost && (
+              <button
+                className="start-button"
+                disabled={!ready}
+                onClick={handleStartGame}
+              >
+                <span className="play-icon" aria-hidden="true">⚔</span>
+                <span>BẮT ĐẦU VÁN ĐẤU • ĐÊM 1</span>
+              </button>
+            )}
           </section>
         </div>
       </main>
@@ -437,8 +444,8 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
           >
             <div className="qr-modal-head">
               <div>
-                <span className="qr-modal-kicker">MÃ BÀN QUÉT NHANH</span>
-                <h3 id="qr-modal-title">BÀN #{7290}</h3>
+                <span className="qr-modal-kicker">MÃ PHÒNG DEEP LINK</span>
+                <h3 id="qr-modal-title">BÀN #{roomCode}</h3>
               </div>
               <button
                 type="button"
@@ -451,42 +458,27 @@ export default function LobbyScreen({ onNavigate, initialState, onStateChange, o
             </div>
 
             <div className="qr-modal-canvas-wrap">
-              <svg viewBox="0 0 160 160" className="qr-modal-svg" aria-label="Mã QR bàn 7290">
-                <rect width="160" height="160" fill="#0d1017" rx="8" />
-                {/* 3 Corner Finder Anchors */}
-                <rect x="12" y="12" width="40" height="40" fill="none" stroke="#c98638" strokeWidth="5" rx="4" />
-                <rect x="22" y="22" width="20" height="20" fill="#c98638" rx="2" />
-
-                <rect x="108" y="12" width="40" height="40" fill="none" stroke="#c98638" strokeWidth="5" rx="4" />
-                <rect x="118" y="22" width="20" height="20" fill="#c98638" rx="2" />
-
-                <rect x="12" y="108" width="40" height="40" fill="none" stroke="#c98638" strokeWidth="5" rx="4" />
-                <rect x="22" y="118" width="20" height="20" fill="#c98638" rx="2" />
-
-                {/* High Density Data Matrix */}
-                <rect x="64" y="16" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="84" y="16" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="72" y="32" width="8" height="8" fill="#c98638" rx="1" />
-                <rect x="64" y="48" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="88" y="48" width="8" height="8" fill="#ede7dc" rx="1" />
-
-                <rect x="16" y="68" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="36" y="76" width="8" height="8" fill="#c98638" rx="1" />
-                <rect x="72" y="72" width="16" height="16" fill="#c98638" rx="3" />
-                <rect x="116" y="68" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="136" y="76" width="8" height="8" fill="#ede7dc" rx="1" />
-
-                <rect x="64" y="96" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="84" y="108" width="8" height="8" fill="#c98638" rx="1" />
-                <rect x="72" y="124" width="8" height="8" fill="#ede7dc" rx="1" />
-                <rect x="108" y="116" width="12" height="12" fill="#ede7dc" rx="2" />
-                <rect x="132" y="132" width="12" height="12" fill="#c98638" rx="2" />
-              </svg>
+              {/* Pure Offline Client SVG QR Code */}
+              <div
+                dangerouslySetInnerHTML={{ __html: generateQrSvgString(joinDeepLink, 200) }}
+                className="qr-modal-svg-wrap"
+              />
             </div>
 
             <p className="qr-modal-hint">
-              Mọi người mở camera điện thoại quét mã để bước vào bàn ngay
+              Quét mã QR bằng camera mặc định của điện thoại để tự động vào bàn
             </p>
+
+            <div className="qr-deeplink-copy-box">
+              <code className="qr-deeplink-url">{joinDeepLink}</code>
+              <button
+                type="button"
+                className="qr-copy-btn"
+                onClick={handleCopyDeepLink}
+              >
+                {copiedLink ? '✓ Đã sao chép' : 'Sao chép link'}
+              </button>
+            </div>
 
             <button
               type="button"

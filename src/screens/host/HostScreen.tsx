@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
+import { useGameSession } from '../../adapters/useGameSession';
+import { audioController } from '../../audio/audioController';
 import { formatTime } from '../../utils/formatTime';
+import { generateQrSvgString } from '../../utils/qrCodeSvg';
+import type { PlayerId } from '../../engine/types';
 import './host.css';
 
 type HostScreenProps = {
@@ -8,39 +12,57 @@ type HostScreenProps = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-const players = [
-  ['Minh Khang', 'Trưởng làng', true],
-  ['Lan Anh', 'Sống', true],
-  ['Hoàng Nam', 'Sống', true],
-  ['Bảo Trâm', 'Tử vong', false],
-  ['Đức Huy', 'Sống', true],
-  ['Quỳnh Như', 'Sống', true],
-] as const;
-
 export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps) {
-  const [remaining, setRemaining] = useState(165);
-  const [lockRemaining, setLockRemaining] = useState(60);
-  const [paused, setPaused] = useState(false);
+  const { state, actions } = useGameSession();
+
+  const publicView = state.publicView;
+  const roomCode = state.roomCode || '7290';
+  const players = publicView?.players ?? [];
+  const isPaused = publicView?.isPaused ?? false;
+  const voteLocked = publicView?.voteLocked ?? false;
+  const voteLockRemaining = publicView?.voteLockRemainingSeconds ?? 0;
+
+  const [remainingTime, setRemainingTime] = useState(180);
   const [qrOpen, setQrOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
-  const [voiceVolume, setVoiceVolume] = useState(85);
-  const [musicVolume, setMusicVolume] = useState(40);
+  const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
+  const [isMuted, setIsMuted] = useState(() => audioController.getIsMuted());
+
   const qrTrigger = useRef<HTMLButtonElement>(null);
   const qrClose = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (paused) return;
-    const timer = window.setInterval(() => {
-      setRemaining((value) => Math.max(0, value - 1));
-      setLockRemaining((value) => Math.max(0, value - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [paused]);
+    const unsub = audioController.subscribeSubtitle((sub) => {
+      setSubtitle(sub);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
-    if (!qrOpen && !emergencyOpen && !confirming) return;
+    if (!publicView?.deadlineAt) {
+      setRemainingTime(180);
+      return;
+    }
+
+    if (publicView.isPaused) {
+      // Đóng băng hiển thị đồng hồ khi Pause
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const left = Math.max(0, Math.ceil((publicView.deadlineAt! - now) / 1000));
+      setRemainingTime(left);
+    };
+
+    updateTimer();
+    const interval = window.setInterval(updateTimer, 500);
+    return () => window.clearInterval(interval);
+  }, [publicView?.deadlineAt, publicView?.isPaused]);
+
+  useEffect(() => {
+    if (!qrOpen && !emergencyOpen) return;
     if (qrOpen) qrClose.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -49,25 +71,61 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
           qrTrigger.current?.focus();
         }
         if (emergencyOpen) setEmergencyOpen(false);
-        if (confirming) setConfirming(false);
-      } else if (event.key === 'Tab' && qrOpen) {
-        event.preventDefault();
-        qrClose.current?.focus();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [qrOpen, emergencyOpen, confirming]);
+  }, [qrOpen, emergencyOpen]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenEnabled) return;
-    if (!document.fullscreenElement) void document.documentElement.requestFullscreen?.().catch(() => undefined);
-    else void document.exitFullscreen?.().catch(() => undefined);
+    if (!document.fullscreenElement) {
+      void document.documentElement.requestFullscreen?.().catch(() => undefined);
+    } else {
+      void document.exitFullscreen?.().catch(() => undefined);
+    }
   };
 
-  const livingCount = players.filter((p) => p[2]).length;
-  const deadCount = players.length - livingCount;
-  const isUrgent = remaining <= 30;
+  const handleToggleMute = () => {
+    const muted = audioController.toggleMute();
+    setIsMuted(muted);
+  };
+
+  const handleEmergencyEliminate = async (playerId: PlayerId, name: string) => {
+    await actions.hostEmergencyEliminate(playerId);
+    setAnnouncement(`⚠️ ${name} đã được Quản trò trục xuất khỏi bàn.`);
+    setEmergencyOpen(false);
+  };
+
+  const handleTogglePause = async () => {
+    if (isPaused) {
+      await actions.hostResume();
+    } else {
+      await actions.hostPause();
+    }
+  };
+
+  const handleExtendTime = async () => {
+    await actions.hostExtendTime();
+  };
+
+  const handleFinalizeVote = async () => {
+    try {
+      await actions.finalizePublicVote();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể chốt phán quyết lúc này';
+      setAnnouncement(msg);
+    }
+  };
+
+  const livingPlayers = players.filter((p) => p.isAlive);
+  const deadPlayers = players.filter((p) => !p.isAlive);
+  const isUrgent = remainingTime <= 30;
+
+  const joinDeepLink =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/?room=${roomCode}`
+      : `http://localhost:5173/?room=${roomCode}`;
 
   return (
     <main className="host-screen">
@@ -76,9 +134,9 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
           <span className="host-candle-flame" aria-hidden="true">🕯️</span>
           <div>
             <h1>
-              BÀN ĐIỀU PHỐI QUẢN TRÒ <span>• PHÒNG #7290</span>
+              BÀN ĐIỀU PHỐI QUẢN TRÒ <span>• PHÒNG #{roomCode}</span>
             </h1>
-            <p>Màn hình trung tâm đặt giữa bàn hoặc chiếu Smart TV / iPad</p>
+            <p>Màn hình trung tâm đặt giữa bàn hoặc chiếu Smart TV / iPad (Bảo mật vai trò)</p>
           </div>
         </div>
         <div className="host-header-actions">
@@ -99,7 +157,7 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             <span>Toàn màn hình</span>
           </button>
           <button className="host-mobile-nav" onClick={() => onNavigate?.('day')}>
-            Trời sáng
+            Xem màn ngày ➔
           </button>
         </div>
       </header>
@@ -109,22 +167,29 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
         <aside className="host-panel host-roster">
           <div className="host-panel-title">
             <strong>CHIẾU BÀN DÂN LÀNG</strong>
-            <span className="host-alive-tag">{livingCount} SỐNG · {deadCount} CHẾT</span>
+            <span className="host-alive-tag">{livingPlayers.length} SỐNG · {deadPlayers.length} CHẾT</span>
           </div>
 
           <div className="host-player-list">
-            {players.map(([name, , alive], index) => (
-              <div className={`host-player ${!alive ? 'is-dead' : ''} ${index === 0 ? 'is-mayor' : ''}`} key={name}>
+            {players.map((player) => (
+              <div
+                className={`host-player ${!player.isAlive ? 'is-dead' : ''} ${player.isMayor ? 'is-mayor' : ''}`}
+                key={player.id}
+              >
                 <div className="host-player-name">
-                  <span className="host-seat">#{String(index + 1).padStart(2, '0')}</span>
-                  <i aria-hidden="true" />
-                  <span className="host-name-txt">{name}</span>
+                  <span className="host-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                  <i
+                    className={`host-connect-dot ${player.isConnected ? 'is-online' : 'is-offline'}`}
+                    title={player.isConnected ? 'Đang kết nối' : 'Mất kết nối'}
+                    aria-hidden="true"
+                  />
+                  <span className="host-name-txt">{player.name}</span>
                 </div>
-                {index === 0 ? (
+                {player.isMayor ? (
                   <span className="host-mayor-tag">👑 TRƯỞNG LÀNG</span>
                 ) : (
-                  <span className={alive ? 'host-alive' : 'host-dead'}>
-                    {alive ? 'SỐNG' : '☠ TỬ VONG'}
+                  <span className={player.isAlive ? 'host-alive' : 'host-dead'}>
+                    {player.isAlive ? 'SỐNG' : '☠ TỬ VONG'}
                   </span>
                 )}
               </div>
@@ -140,19 +205,14 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             ) : (
               <div className="host-emergency-picker">
                 <strong>Chọn người chơi rời bàn khẩn cấp:</strong>
-                {players
-                  .filter((p) => p[2])
-                  .map(([name]) => (
-                    <button
-                      key={name}
-                      onClick={() => {
-                        setAnnouncement(`⚠️ ${name} đã được quản trò cho rời bàn.`);
-                        setEmergencyOpen(false);
-                      }}
-                    >
-                      {name}
-                    </button>
-                  ))}
+                {livingPlayers.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleEmergencyEliminate(p.id, p.name)}
+                  >
+                    #{p.seatIndex} {p.name}
+                  </button>
+                ))}
                 <button className="host-cancel" onClick={() => setEmergencyOpen(false)}>
                   Hủy bỏ
                 </button>
@@ -165,22 +225,26 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
         <section className={`host-panel host-main-panel ${isUrgent ? 'host-urgent' : ''}`}>
           <div className="host-panel-title host-center-title">
             <div className="host-title-left">
-              <span className="phase-badge">TRỜI SÁNG · NGÀY II</span>
+              <span className="phase-badge">
+                {publicView?.phase === 'NIGHT'
+                  ? `TRỜI TỐI · ĐÊM THỨ ${publicView.roundNumber}`
+                  : `TRỜI SÁNG · NGÀY THỨ ${publicView?.roundNumber || 1}`}
+              </span>
               <strong>ĐỒNG HỒ BIỂU QUYẾT TOÀN BÀN</strong>
             </div>
             <span className="host-stable">
               <i aria-hidden="true" />
-              <span>LOA ĐANG HOẠT ĐỘNG</span>
+              <span>LOA TRUNG TÂM HOẠT ĐỘNG</span>
             </span>
           </div>
 
           <div className="host-clock-block">
-            <div className="host-clock" aria-live="off">{formatTime(remaining)}</div>
-            <div className={`host-lock ${lockRemaining === 0 ? 'unlocked' : 'locked'}`}>
-              <span aria-hidden="true">{lockRemaining === 0 ? '🔓' : '🔒'}</span>
+            <div className="host-clock" aria-live="off">{formatTime(remainingTime)}</div>
+            <div className={`host-lock ${!voteLocked ? 'unlocked' : 'locked'}`}>
+              <span aria-hidden="true">{!voteLocked ? '🔓' : '🔒'}</span>
               <span>
-                {lockRemaining > 0 ? (
-                  <>KHÓA BIỂU QUYẾT: <b>{lockRemaining}S TRANH LUẬN ĐẦU</b></>
+                {voteLocked ? (
+                  <>KHÓA BIỂU QUYẾT: <b>{voteLockRemaining}S TRANH LUẬN ĐẦU</b></>
                 ) : (
                   <b className="unlocked-highlight">BỎ PHIẾU ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU VOTE</b>
                 )}
@@ -188,23 +252,33 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             </div>
           </div>
 
+          {/* Script / Subtitle từ AudioController */}
           <div className="host-script">
             <div className="host-script-icon-wrap" aria-hidden="true">
               <span className="host-script-icon">📜</span>
             </div>
             <div className="host-script-text">
               <div className="host-script-header">
-                <strong>LỜI RĂN QUẢN TRÒ (PHÁT LOA TRUNG TÂM):</strong>
+                <strong>CÂU LỆNH QUẢN TRÒ (PHÁT LOA TRUNG TÂM):</strong>
                 <div className="host-script-ember" title="Loa đang phát giọng nói">
                   <span className="ember-dot" />
                   <small>ĐANG PHÁT</small>
                 </div>
               </div>
-              <p>“Trời sáng, đêm qua Thợ Săn Bảo Trâm đã hy sinh. Cả làng có thời gian tìm ra kẻ khả nghi trước khi biểu quyết.”</p>
+              <p>
+                {subtitle ||
+                  (publicView?.phase === 'NIGHT'
+                    ? 'Trời tối rồi, tất cả dân làng hãy nhắm mắt đi ngủ và chờ tiếng gọi vai.'
+                    : 'Trời đã sáng, thôn dân cùng nhau bàn bạc và bỏ phiếu tìm ra kẻ phản bội.')}
+              </p>
             </div>
             <button
               className="host-button host-speaker"
-              onClick={() => setAnnouncement('Đang phát giọng đọc quản trò qua loa...')}
+              onClick={() => {
+                if (publicView?.currentTurnInfo?.turnKey) {
+                  audioController.playTurnNarration(publicView.currentTurnInfo.turnKey);
+                }
+              }}
               aria-label="Phát lại lời thoại"
             >
               <span>Phát lại</span>
@@ -217,99 +291,81 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             <div className="host-control-row">
               <button
                 className="host-button host-control"
-                onClick={() => setPaused((value) => !value)}
+                onClick={handleTogglePause}
               >
-                <span aria-hidden="true">{paused ? '▶' : 'Ⅱ'}</span>
-                <span>{paused ? 'TIẾP TỤC ĐẾM GIỜ' : 'TẠM DỪNG ĐẾM GIỜ'}</span>
+                <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
+                <span>{isPaused ? 'TIẾP TỤC ĐẾM GIỜ' : 'TẠM DỪNG ĐẾM GIỜ'}</span>
               </button>
-              <button
-                className="host-button host-control host-extend"
-                onClick={() => setRemaining((value) => value + 30)}
-              >
-                <span aria-hidden="true">＋</span>
-                <span>+30 GIÂY THẢO LUẬN</span>
-              </button>
+              {(publicView?.extensionsUsed ?? 0) < 2 && (
+                <button
+                  className="host-button host-control host-extend"
+                  onClick={handleExtendTime}
+                >
+                  <span aria-hidden="true">＋</span>
+                  <span>+30 GIÂY THẢO LUẬN</span>
+                </button>
+              )}
             </div>
 
-            {!confirming ? (
-              <button
-                disabled={lockRemaining > 0}
-                className="host-finalize"
-                onClick={() => setConfirming(true)}
-              >
-                <span aria-hidden="true">⚒</span>
-                <span>
-                  {lockRemaining > 0
-                    ? `CHỐT KẾT QUẢ VOTE (ĐANG KHÓA ${lockRemaining}S)`
-                    : 'CHỐT KẾT QUẢ VOTE NGOÀI ĐỜI & LẬT BÀI'}
-                </span>
-              </button>
-            ) : (
-              <div className="host-confirm">
-                <span>Xác nhận kết thúc bỏ phiếu và chuyển sang giải mã ván đấu?</span>
-                <div className="host-confirm-actions">
-                  <button className="host-button" onClick={() => setConfirming(false)}>
-                    Hủy
-                  </button>
-                  <button className="host-confirm-yes" onClick={() => onNavigate?.('summary')}>
-                    Đồng ý chốt →
-                  </button>
-                </div>
-              </div>
-            )}
+            <button
+              disabled={voteLocked}
+              className="host-finalize"
+              onClick={handleFinalizeVote}
+            >
+              <span aria-hidden="true">⚒</span>
+              <span>
+                {voteLocked
+                  ? `ĐANG KHÓA CHỐT VOTE (${voteLockRemaining}S)`
+                  : 'CHỐT KẾT QUẢ BIỂU QUYẾT TREO CỔ'}
+              </span>
+            </button>
           </div>
         </section>
 
-        {/* Right Column: Audio & Privacy Guard */}
+        {/* Right Column: Audio & Privacy Guard & Timeline Logs */}
         <aside className="host-panel host-audio-panel">
           <div className="host-panel-title">
-            <strong>ÂM HƯỞNG &amp; BẢO MẬT</strong>
-            <span className="audio-badge">TỰ HẠ NHẠC</span>
+            <strong>ÂM HƯỞNG &amp; NHẬT KÝ LÀNG</strong>
+            <button
+              type="button"
+              className="audio-badge"
+              onClick={handleToggleMute}
+              style={{ cursor: 'pointer', border: 'none' }}
+            >
+              {isMuted ? '🔇 ĐANG TẮT TIẾNG' : '🔊 ĐANG BẬT LOA'}
+            </button>
           </div>
 
-          <div className="host-slider-group">
-            <label className="host-slider">
-              <div className="slider-label">
-                <span>Giọng đọc quản trò</span>
-                <b>{voiceVolume}%</b>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={voiceVolume}
-                onChange={(event) => setVoiceVolume(Number(event.target.value))}
-                aria-label="Âm lượng giọng đọc"
-              />
-            </label>
-
-            <label className="host-slider">
-              <div className="slider-label">
-                <span>Nhạc nền đêm (Ambient)</span>
-                <b>{musicVolume}%</b>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={musicVolume}
-                onChange={(event) => setMusicVolume(Number(event.target.value))}
-                aria-label="Âm lượng nhạc nền"
-              />
-            </label>
+          <div className="host-logs-scroll">
+            <strong className="logs-title">BIÊN NIÊN SỬ CÔNG KHAI:</strong>
+            <div className="logs-list">
+              {(publicView?.publicLogs ?? []).map((log, index) => (
+                <div key={index} className="log-entry">
+                  <span className="log-bullet">•</span>
+                  <span>{log}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="host-public-note">
             <div className="note-title">
               <span aria-hidden="true">🔒</span>
-              <strong>MÀN HÌNH BẢO MẬT TUYỆT ĐỐI</strong>
+              <strong>BẢO MẬT TUYỆT ĐỐI BẢNG TRUNG TÂM</strong>
             </div>
-            <p>Bảng trung tâm chỉ hiển thị thông tin công khai. Mọi vai trò và phiếu vote kín đều được che giấu đến hết ván.</p>
+            <p>
+              Bảng trung tâm không chứa thông tin vai trò của người chơi còn sống. An toàn 100% khi trình chiếu lên TV hoặc iPad.
+            </p>
           </div>
 
-          <button className="host-summary-btn" onClick={() => onNavigate?.('summary')}>
-            Xem trước màn tổng kết →
-          </button>
+          {publicView?.phase === 'GAME_OVER' && (
+            <button
+              className="host-summary-btn"
+              onClick={() => onNavigate?.('summary')}
+            >
+              Xem giải mã toàn bộ ván đấu ➔
+            </button>
+          )}
         </aside>
       </div>
 
@@ -331,7 +387,7 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             onClick={(event) => event.stopPropagation()}
           >
             <div className="host-modal-heading">
-              <h2 id="host-qr-title">MẬT MÃ KẾT NỐI BÀN ĐẤU</h2>
+              <h2 id="host-qr-title">MẬT MÃ KẾT NỐI BÀN #{roomCode}</h2>
               <button
                 ref={qrClose}
                 onClick={() => {
@@ -345,25 +401,15 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             </div>
 
             <div className="host-qr-wrap">
-              <svg viewBox="0 0 80 80" className="host-qr-svg" aria-label="Mã QR kết nối phòng 7290">
-                <rect width="80" height="80" fill="#13161c" rx="4" />
-                <rect x="6" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
-                <rect x="11" y="11" width="10" height="10" fill="#c98638" rx="1" />
-                <rect x="54" y="6" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
-                <rect x="59" y="11" width="10" height="10" fill="#c98638" rx="1" />
-                <rect x="6" y="54" width="20" height="20" fill="none" stroke="#c98638" strokeWidth="2.5" rx="2" />
-                <rect x="11" y="59" width="10" height="10" fill="#c98638" rx="1" />
-                <rect x="32" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                <rect x="42" y="8" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-                <rect x="36" y="16" width="4" height="4" fill="#c98638" />
-                <rect x="36" y="36" width="8" height="8" fill="#c98638" rx="2" />
-                <rect x="36" y="62" width="4" height="4" fill="#ede7dc" opacity="0.8" />
-              </svg>
+              <div
+                dangerouslySetInnerHTML={{ __html: generateQrSvgString(joinDeepLink, 190) }}
+                className="host-qr-svg-wrap"
+              />
             </div>
 
-            <strong className="host-room-code">#7290</strong>
+            <strong className="host-room-code">#{roomCode}</strong>
             <p className="host-qr-desc">
-              Quét mã để kết nối lại điện thoại nếu bị ngắt mạng hoặc vô tình đóng trình duyệt.
+              Quét mã QR bằng camera điện thoại để kết nối trực tiếp vào bàn đấu.
             </p>
           </section>
         </div>

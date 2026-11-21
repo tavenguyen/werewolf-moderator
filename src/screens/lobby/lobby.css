@@ -1001,3 +1001,85 @@
   background: var(--lantern, #c98638);
   color: #0d1017;
 }
+
+
+/* Phase 3 Deep Link & Offline UI Additions */
+.qr-modal-img {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+.qr-deeplink-copy-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(201, 134, 56, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 12px 0 16px;
+}
+
+.qr-deeplink-url {
+  font-family: monospace;
+  font-size: 11px;
+  color: #c98638;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.qr-copy-btn {
+  background: rgba(201, 134, 56, 0.2);
+  border: 1px solid rgba(201, 134, 56, 0.5);
+  border-radius: 4px;
+  color: #ede7dc;
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qr-copy-btn:hover {
+  background: rgba(201, 134, 56, 0.4);
+}
+
+.lobby-add-offline {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lobby-input-name {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #ede7dc;
+  font-size: 12px;
+}
+
+.lobby-input-name:focus {
+  outline: none;
+  border-color: #c98638;
+}
+
+.lobby-btn-add {
+  background: rgba(201, 134, 56, 0.2);
+  border: 1px solid rgba(201, 134, 56, 0.4);
+  border-radius: 6px;
+  color: #ede7dc;
+  font-size: 12px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.lobby-btn-add:hover:not(:disabled) {
+  background: rgba(201, 134, 56, 0.4);
+}

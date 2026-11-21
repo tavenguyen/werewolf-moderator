@@ -719,3 +719,53 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Phase 3 Day UI Additions */
+.last-tally-card {
+  background: rgba(201, 134, 56, 0.1);
+  border: 1px solid rgba(201, 134, 56, 0.35);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.last-tally-card strong {
+  display: block;
+  font-size: 11px;
+  color: #c98638;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.tally-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tally-badge {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #ede7dc;
+}
+
+.abstain-badge {
+  color: #999;
+}
+
+.abstain-card {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.offline-voter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #d1c7b7;
+}

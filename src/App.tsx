@@ -6,7 +6,7 @@ import DayScreen from './screens/day/DayScreen';
 import HostScreen from './screens/host/HostScreen';
 import SummaryScreen from './screens/summary/SummaryScreen';
 import RulesAndRolesDrawer from './components/RulesAndRolesDrawer';
-import { defaultLobbyDemoState, type LobbyDemoState } from './screens/lobby/lobbyTypes';
+import { GameSessionProvider, useGameSession } from './adapters/useGameSession';
 import type { ScreenName } from './navigation';
 
 const screens = ['home', 'lobby', 'night', 'day', 'host', 'summary'] as const satisfies readonly ScreenName[];
@@ -20,11 +20,12 @@ const screenLabels: Record<ScreenName, { title: string; keyNum: string }> = {
   summary: { title: 'Tổng kết', keyNum: '6' },
 };
 
-export default function App() {
+function AppContent() {
+  const { state } = useGameSession();
   const [screen, setScreen] = useState<ScreenName>('home');
-  const [lobbyState, setLobbyState] = useState<LobbyDemoState>(defaultLobbyDemoState);
   const [rulesDrawerOpen, setRulesDrawerOpen] = useState(false);
   const [rulesDrawerTab, setRulesDrawerTab] = useState<'rules' | 'roles'>('rules');
+
   const navigate = setScreen;
 
   const handleOpenRules = (tab: 'rules' | 'roles' = 'rules') => {
@@ -32,34 +33,51 @@ export default function App() {
     setRulesDrawerOpen(true);
   };
 
-  // Handle sanitized host nickname setup from home screen
-  const handleHostJoined = (sanitizedName: string) => {
-    setLobbyState((prev) => ({
-      ...prev,
-      players: prev.players.map((p, idx) => (idx === 0 ? { ...p, name: sanitizedName } : p)),
-    }));
-  };
+  // Tự động điều hướng theo gamePhase của GameSession
+  useEffect(() => {
+    const phase = state.publicView?.phase;
+    if (!phase) return;
 
+    if (phase === 'LOBBY') {
+      if (screen !== 'home' && screen !== 'lobby' && screen !== 'host') {
+        setScreen('lobby');
+      }
+    } else if (phase === 'NIGHT') {
+      if (state.isHost && state.hostMode === 'CENTER_BOARD') {
+        setScreen('host');
+      } else {
+        setScreen('night');
+      }
+    } else if (
+      phase === 'DAY_DISCUSS' ||
+      phase === 'DAY_RUNOFF' ||
+      phase === 'DAY_MAYOR_ELECTION' ||
+      phase === 'HUNTER_SHOT' ||
+      phase === 'MAYOR_SUCCESSION'
+    ) {
+      if (state.isHost && state.hostMode === 'CENTER_BOARD') {
+        setScreen('host');
+      } else {
+        setScreen('day');
+      }
+    } else if (phase === 'GAME_OVER') {
+      setScreen('summary');
+    }
+  }, [state.publicView?.phase, state.isHost, state.hostMode]);
+
+  // Bắt phím tắt bàn phím [1..6] để dev/tester chuyển nhanh khi cần
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Security: Do not intercept browser shortcuts (Ctrl, Alt, Meta, Shift)
       if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
         return;
       }
 
-      // Security: Do not trigger while typing in inputs, textareas, or contenteditables
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
         return;
       }
 
-      // If drawer is open, do not trigger numeric shortcuts
       if (rulesDrawerOpen) {
-        return;
-      }
-
-      // Security & Role privacy: Do not allow accidental screen jumping out of pitch-black Night mode
-      if (screen === 'night') {
         return;
       }
 
@@ -71,12 +89,12 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [screen, rulesDrawerOpen]);
+  }, [rulesDrawerOpen]);
 
   return (
     <>
       <div className="demo-nav-wrapper">
-        <nav className="demo-nav" aria-label="Chuyển màn hình demo">
+        <nav className="demo-nav" aria-label="Chuyển màn hình ván đấu">
           <div className="demo-nav-label">
             <span className="hud-dot" aria-hidden="true" />
             <span>MODERATOR HUD</span>
@@ -101,7 +119,6 @@ export default function App() {
         {screen === 'home' && (
           <HomeScreen
             onNavigate={navigate}
-            onPlayerJoined={handleHostJoined}
             onOpenRules={handleOpenRules}
             isRulesOpen={rulesDrawerOpen}
           />
@@ -109,8 +126,6 @@ export default function App() {
         {screen === 'lobby' && (
           <LobbyScreen
             onNavigate={navigate}
-            initialState={lobbyState}
-            onStateChange={setLobbyState}
             onOpenRules={handleOpenRules}
           />
         )}
@@ -134,5 +149,13 @@ export default function App() {
         initialTab={rulesDrawerTab}
       />
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <GameSessionProvider>
+      <AppContent />
+    </GameSessionProvider>
   );
 }

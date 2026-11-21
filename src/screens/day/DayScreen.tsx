@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ScreenName } from '../../navigation';
+import { useGameSession } from '../../adapters/useGameSession';
 import { formatTime } from '../../utils/formatTime';
+import CompactHostControlBar from '../../components/CompactHostControlBar';
+import type { PlayerId } from '../../engine/types';
 import './day.css';
 
 type DayScreenProps = {
@@ -8,71 +11,102 @@ type DayScreenProps = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-const initialPlayers = [
-  { name: 'Minh Khang', alive: true, mayor: true },
-  { name: 'Lan Anh', alive: true },
-  { name: 'Hoàng Nam', alive: true },
-  { name: 'Bảo Trâm', alive: false },
-  { name: 'Đức Huy', alive: true },
-  { name: 'Quỳnh Như', alive: true },
-];
-
 export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
-  const [totalTime] = useState(180);
-  const [remaining, setRemaining] = useState(165);
-  const [lockRemaining, setLockRemaining] = useState(60);
-  const [paused, setPaused] = useState(false);
-  const [mode, setMode] = useState<'shared' | 'player'>('shared');
-  const [selected, setSelected] = useState<string | null>(null);
+  const { state, actions, deviceMode } = useGameSession();
+
+  const publicView = state.publicView;
+  const privateView = state.privateView;
+  const isSingleDevice = deviceMode === 'SINGLE_DEVICE';
+  const isPlayerHost = state.isHost && state.hostMode === 'PLAYER_HOST';
+
+  const [mode, setMode] = useState<'shared' | 'player'>('player');
+  const [selectedPlayerId, setSelectedPlayerId] = useState<PlayerId | null>(null);
   const [voteSubmitted, setVoteSubmitted] = useState(false);
   const [notice, setNotice] = useState('');
-  const [confirmFinalize, setConfirmFinalize] = useState(false);
-  const [isNarrating, setIsNarrating] = useState(true);
+  const [remainingTime, setRemainingTime] = useState(180);
 
-  useEffect(() => {
-    if (paused) return;
-    const id = window.setInterval(() => {
-      setRemaining((value) => Math.max(0, value - 1));
-      setLockRemaining((value) => Math.max(0, value - 1));
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [paused]);
+  const players = publicView?.players ?? [];
+  const livingPlayers = players.filter((p) => p.isAlive);
+  const deadPlayers = players.filter((p) => !p.isAlive);
+  const isPaused = publicView?.isPaused ?? false;
+  const voteLocked = publicView?.voteLocked ?? false;
+  const voteLockRemaining = publicView?.voteLockRemainingSeconds ?? 0;
+  const lastVoteTally = publicView?.lastVoteTally;
 
+  // Cập nhật đếm ngược theo deadlineAt từ session (đóng băng khi Pause)
   useEffect(() => {
-    if (!confirmFinalize) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setConfirmFinalize(false);
+    if (!publicView?.deadlineAt) {
+      setRemainingTime(180);
+      return;
+    }
+
+    if (publicView.isPaused) {
+      // Khi đang Pause, đóng băng hiển thị không cập nhật đếm lùi
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const left = Math.max(0, Math.ceil((publicView.deadlineAt! - now) / 1000));
+      setRemainingTime(left);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [confirmFinalize]);
 
-  const unlocked = lockRemaining === 0;
-  const livingPlayers = initialPlayers.filter((player) => player.alive);
-  const isUrgent = remaining <= 30;
+    updateTimer();
+    const interval = window.setInterval(updateTimer, 500);
+    return () => window.clearInterval(interval);
+  }, [publicView?.deadlineAt, publicView?.isPaused]);
 
-  // Calculate SVG circular progress
+  // Reset voteSubmitted khi sang ngày mới, đổi phase, hoặc khi đổi người chơi ở chế độ 1 máy
+  useEffect(() => {
+    setVoteSubmitted(false);
+    setSelectedPlayerId(null);
+  }, [publicView?.roundNumber, publicView?.phase, state.playerId]);
+
+  const handleCastVote = async () => {
+    if (voteSubmitted || voteLocked) return;
+
+    try {
+      await actions.sendDayVote(selectedPlayerId);
+      setVoteSubmitted(true);
+      const targetName = selectedPlayerId
+        ? players.find((p) => p.id === selectedPlayerId)?.name
+        : 'Phiếu trắng';
+      setNotice(`✓ Đã niêm phong phiếu biểu quyết kín của bạn (${targetName}). Không thể sửa đổi.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Lỗi gửi phiếu';
+      setNotice(msg);
+    }
+  };
+
+  const handleFinalizeVote = async () => {
+    try {
+      await actions.finalizePublicVote();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể chốt phán quyết lúc này';
+      setNotice(msg);
+    }
+  };
+
+  const isUrgent = remainingTime <= 30;
   const radius = 64;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (remaining / totalTime) * circumference;
+  const strokeDashoffset = circumference - (Math.min(remainingTime, 180) / 180) * circumference;
 
   return (
     <main className="day-screen app-page">
+      {/* Compact Host Bar cho Host kiêm Người chơi */}
+      {isPlayerHost && <CompactHostControlBar />}
+
       <header className="screen-header day-header">
         <div className="phase-label">
           <span className="day-candle-flame" aria-hidden="true">☀️</span>
-          <span>TRỜI SÁNG · NGÀY II <b>•</b> THẢO LUẬN DÂN LÀNG</span>
+          <span>
+            TRỜI SÁNG · NGÀY {publicView?.roundNumber || 1} <b>•</b> THẢO LUẬN DÂN LÀNG
+          </span>
         </div>
+
         <div className="day-header-actions">
           <nav aria-label="Chế độ xem ban ngày" className="day-mode-switch">
-            <button
-              type="button"
-              aria-pressed={mode === 'shared'}
-              onClick={() => setMode('shared')}
-              className={mode === 'shared' ? 'day-mode-active' : ''}
-            >
-              CHIẾU CHUNG
-            </button>
             <button
               type="button"
               aria-pressed={mode === 'player'}
@@ -81,12 +115,20 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
             >
               PHIẾU KÍN
             </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'shared'}
+              onClick={() => setMode('shared')}
+              className={mode === 'shared' ? 'day-mode-active' : ''}
+            >
+              CHIẾU BÀN
+            </button>
           </nav>
           <button
             type="button"
             className="day-rules-button"
             onClick={() => onOpenRules?.('roles')}
-            title="Tra cứu luật làng và 10 vai trò thực chiến"
+            title="Tra cứu luật làng và vai trò"
           >
             <span aria-hidden="true">📜</span>
             <span>Luật &amp; Vai trò</span>
@@ -98,10 +140,9 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
         {/* Antique Sundial Countdown Clock */}
         <section className={`day-clock-card ${isUrgent ? 'is-urgent' : ''}`}>
           <span className="eyebrow">ĐỒNG HỒ NẮNG • THẢO LUẬN DÂN LÀNG</span>
-          
+
           <div className="day-clock-graphic">
             <svg className="timer-svg" viewBox="0 0 160 160">
-              {/* Background antique brass ring */}
               <circle
                 cx="80"
                 cy="80"
@@ -110,7 +151,6 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
                 strokeWidth="6"
                 fill="none"
               />
-              {/* Progress ring */}
               <circle
                 cx="80"
                 cy="80"
@@ -124,142 +164,157 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
               />
             </svg>
             <div className="clock-digits-wrap">
-              <div className="day-clock" aria-live="off">{formatTime(remaining)}</div>
+              <div className="day-clock" aria-live="off">{formatTime(remainingTime)}</div>
               <span className="clock-status-tag">
-                {paused ? 'TẠM DỪNG' : isUrgent ? 'HOÀNG HÔN BUÔNG' : 'ĐANG TRÔI'}
+                {isPaused ? 'TẠM DỪNG' : isUrgent ? 'HOÀNG HÔN BUÔNG' : 'ĐANG THẢO LUẬN'}
               </span>
             </div>
           </div>
 
-          <div className={`lock-indicator ${unlocked ? 'is-unlocked' : 'is-locked'}`} aria-live="polite">
-            <span className="lock-icon" aria-hidden="true">{unlocked ? '🔓' : '🔒'}</span>
+          <div className={`lock-indicator ${!voteLocked ? 'is-unlocked' : 'is-locked'}`} aria-live="polite">
+            <span className="lock-icon" aria-hidden="true">{!voteLocked ? '🔓' : '🔒'}</span>
             <span>
-              {unlocked ? (
-                <strong className="unlocked-text">BIỂU QUYẾT ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU VOTE TREO CỔ</strong>
+              {!voteLocked ? (
+                <strong className="unlocked-text">HÒM PHIẾU ĐÃ MỞ · CẢ LÀNG BỎ PHIẾU TREO CỔ</strong>
               ) : (
-                <>KHÓA BIỂU QUYẾT: <strong>{lockRemaining}S ĐÀM ĐẠO ĐẦU</strong></>
+                <>KHÓA BIỂU QUYẾT: <strong>{voteLockRemaining}S ĐÀM ĐẠO ĐẦU</strong></>
               )}
             </span>
           </div>
 
-          <div className="day-timer-actions">
-            <button
-              type="button"
-              className="action-btn-pause"
-              onClick={() => setPaused((value) => !value)}
-            >
-              <span aria-hidden="true">{paused ? '▶' : 'Ⅱ'}</span>
-              <span>{paused ? 'TIẾP TỤC ĐẾM' : 'TẠM DỪNG'}</span>
-            </button>
-            <button
-              type="button"
-              className="action-btn-extend"
-              onClick={() => setRemaining((value) => value + 30)}
-            >
-              <span aria-hidden="true">＋</span>
-              <span>GIA HẠN +30S</span>
-            </button>
-          </div>
+          {/* Điều khiển cho Host */}
+          {state.isHost && (
+            <div className="day-timer-actions">
+              <button
+                type="button"
+                className="action-btn-pause"
+                onClick={() => (isPaused ? actions.hostResume() : actions.hostPause())}
+              >
+                <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
+                <span>{isPaused ? 'TIẾP TỤC ĐẾM' : 'TẠM DỪNG'}</span>
+              </button>
+              {(publicView?.extensionsUsed ?? 0) < 2 && (
+                <button
+                  type="button"
+                  className="action-btn-extend"
+                  onClick={() => actions.hostExtendTime()}
+                >
+                  <span aria-hidden="true">＋</span>
+                  <span>GIA HẠN +30S</span>
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
-        {/* Narrator Scroll Card */}
+        {/* Cổ Thư / Log thông báo sáng */}
         <section className="narration-card">
           <div className="narration-avatar" aria-hidden="true">
             <span className="narration-icon">📜</span>
           </div>
           <div className="narration-body">
             <div className="narration-title-bar">
-              <strong>CỔ THƯ QUẢN TRÒ BÁO HIỆU</strong>
-              <div className="narration-sigil" title="Lời quản trò đang được cất lên">
-                <span className="sigil-dot" />
-                <small>PHÁT LOA TRUNG TÂM</small>
-              </div>
+              <strong>THÔNG CÁO DÂN LÀNG BUỔI SÁNG</strong>
             </div>
             <p>
-              “Trời đã sáng, đêm qua Thợ Săn Bảo Trâm đã tử vong. Cả làng có thời gian thảo luận tìm ra kẻ khả nghi trước khi tiến hành phán quyết treo cổ.”
+              {publicView?.publicLogs?.[publicView.publicLogs.length - 1] ??
+                'Trời đã sáng, thôn dân cùng nhau bàn bạc vạch trần kẻ ác ma trước khi hoàng hôn buông xuống.'}
             </p>
           </div>
-          <button
-            type="button"
-            className="replay-voice-btn"
-            onClick={() => setIsNarrating((v) => !v)}
-            title="Nghe lại lời dẫn"
-          >
-            {isNarrating ? 'Đang phát' : 'Nghe lại'}
-          </button>
         </section>
 
-        {mode === 'shared' ? (
-          <section className="day-players-panel">
-            <div className="day-panel-heading">
-              <div className="heading-group">
-                <span className="heading-dot" />
-                <strong>CHIẾU BÀN THÔN DÂN</strong>
-              </div>
-              <span className="player-stats">
-                <b>{livingPlayers.length}</b> Sống · <b>{initialPlayers.length - livingPlayers.length}</b> Chết
+        {/* Kết quả biểu quyết gần nhất nếu có */}
+        {lastVoteTally && (
+          <section className="last-tally-card">
+            <strong>KẾT QUẢ BIỂU QUYẾT VỪA QUA:</strong>
+            <div className="tally-breakdown">
+              {Object.entries(lastVoteTally.tallies).map(([pId, count]) => {
+                const p = players.find((pl) => pl.id === pId);
+                return (
+                  <span key={pId} className="tally-badge">
+                    #{p?.seatIndex} {p?.name}: <b>{count} phiếu</b>
+                  </span>
+                );
+              })}
+              <span className="tally-badge abstain-badge">
+                Phiếu trắng: <b>{lastVoteTally.abstainCount} phiếu</b>
               </span>
-            </div>
-
-            <div className="day-player-grid">
-              {initialPlayers.map((player, index) => (
-                <div
-                  key={player.name}
-                  className={`day-player-card ${player.alive ? 'is-alive' : 'is-dead'}`}
-                >
-                  <div className="player-col-main">
-                    <span className="seat-badge">#{String(index + 1).padStart(2, '0')}</span>
-                    <i className={player.alive ? 'alive-indicator' : 'dead-indicator'} />
-                    <span className={`player-title ${player.alive ? '' : 'crossed-out'}`}>
-                      {player.name}
-                    </span>
-                  </div>
-                  {player.mayor ? (
-                    <b className="mayor-badge">👑 TRƯỞNG LÀNG</b>
-                  ) : (
-                    <span className={player.alive ? 'alive-label' : 'dead-label'}>
-                      {player.alive ? 'CÒN SỐNG' : '☠ ĐÃ CHẾT'}
-                    </span>
-                  )}
-                </div>
-              ))}
             </div>
           </section>
-        ) : (
+        )}
+
+        {/* Danh sách người chơi / Bỏ phiếu */}
+        {mode === 'player' ? (
           <section className="day-players-panel">
             <div className="day-panel-heading">
               <div className="heading-group">
                 <span className="heading-dot" />
-                <strong>BỎ PHIẾU TREO CỔ KÍN</strong>
+                <strong>BỎ PHIẾU BIỂU QUYẾT KÍN</strong>
               </div>
-              <span className={unlocked ? 'unlocked-label' : 'locked-label'}>
-                {unlocked ? '✓ ĐÃ MỞ PHIẾU' : `🔒 KHÓA ${lockRemaining}S`}
+              <span className={!voteLocked ? 'unlocked-label' : 'locked-label'}>
+                {!voteLocked ? '✓ HÒM PHIẾU ĐÃ MỞ' : `🔒 KHÓA ${voteLockRemaining}S`}
               </span>
             </div>
 
+            {/* Single-device chọn người đang vote */}
+            {isSingleDevice && (
+              <div className="offline-voter-bar">
+                <span>Người đang cầm máy bỏ phiếu:</span>
+                <select
+                  value={state.playerId}
+                  onChange={(e) => actions.setLocalActivePlayer(e.target.value)}
+                  className="offline-select"
+                >
+                  {livingPlayers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      #{p.seatIndex} {p.name} {p.isMayor ? '(Trưởng làng - 2 phiếu)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="day-vote-grid">
-              {initialPlayers.map((player, index) =>
-                player.alive ? (
+              {/* Nút Bỏ phiếu trắng */}
+              <button
+                type="button"
+                disabled={voteLocked || voteSubmitted}
+                aria-pressed={selectedPlayerId === null}
+                onClick={() => setSelectedPlayerId(null)}
+                className={`day-vote-card abstain-card ${selectedPlayerId === null ? 'vote-selected' : ''}`}
+              >
+                <div className="vote-card-header">
+                  <span className="vote-seat">⚪</span>
+                  <span className="vote-name">Bỏ phiếu trắng</span>
+                </div>
+                <small className="vote-weight">Không muốn treo cổ ai hôm nay</small>
+              </button>
+
+              {players.map((player) =>
+                player.isAlive ? (
                   <button
-                    key={player.name}
+                    key={player.id}
                     type="button"
-                    disabled={!unlocked || voteSubmitted}
-                    aria-pressed={selected === player.name}
-                    onClick={() => { setSelected(player.name); setNotice(''); }}
-                    className={`day-vote-card ${selected === player.name ? 'vote-selected' : ''}`}
+                    disabled={voteLocked || voteSubmitted}
+                    aria-pressed={selectedPlayerId === player.id}
+                    onClick={() => {
+                      setSelectedPlayerId(player.id);
+                      setNotice('');
+                    }}
+                    className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
                   >
                     <div className="vote-card-header">
-                      <span className="vote-seat">#{String(index + 1).padStart(2, '0')}</span>
+                      <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
                       <span className="vote-name">{player.name}</span>
                     </div>
                     <small className="vote-weight">
-                      {player.mayor ? '⭐ 2 Phiếu (Trưởng làng)' : '1 Phiếu biểu quyết'}
+                      {player.isMayor ? '👑 Trưởng làng (2 Phiếu)' : '1 Phiếu biểu quyết'}
                     </small>
                   </button>
                 ) : (
-                  <div key={player.name} className="day-vote-card dead-vote-card">
+                  <div key={player.id} className="day-vote-card dead-vote-card">
                     <div className="vote-card-header">
-                      <span className="vote-seat">#{String(index + 1).padStart(2, '0')}</span>
+                      <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
                       <span className="vote-name crossed-out">{player.name}</span>
                     </div>
                     <small className="dead-tag">☠ Đã tử vong</small>
@@ -268,61 +323,81 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
               )}
             </div>
 
-            {unlocked && (
+            {!voteLocked && (
               <button
                 type="button"
-                disabled={!selected || voteSubmitted}
+                disabled={voteSubmitted}
                 className={`cast-vote-button ${voteSubmitted ? 'is-submitted' : ''}`}
-                onClick={() => {
-                  if (selected && !voteSubmitted) {
-                    setVoteSubmitted(true);
-                    setNotice(`✓ Đã niêm ấn phiếu vote của bạn: ${selected}`);
-                  }
-                }}
+                onClick={handleCastVote}
               >
                 <span>
                   {voteSubmitted
-                    ? `✓ ĐÃ NIÊM ẤN PHIẾU VOTE (${selected})`
-                    : selected
-                    ? `BỎ PHIẾU TREO CỔ: ${selected}`
-                    : 'CHỌN MỤC TIÊU ĐỂ GỬI PHIẾU'}
+                    ? '✓ ĐÃ KHÓA PHIẾU KÍN (KHÔNG THỂ THAY ĐỔI)'
+                    : selectedPlayerId
+                    ? `XÁC NHẬN BỎ PHIẾU TREO CỔ: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                    : 'XÁC NHẬN BỎ PHIẾU TRẮNG'}
                 </span>
               </button>
             )}
           </section>
+        ) : (
+          <section className="day-players-panel">
+            <div className="day-panel-heading">
+              <div className="heading-group">
+                <span className="heading-dot" />
+                <strong>CHIẾU BÀN DÂN LÀNG</strong>
+              </div>
+              <span className="player-stats">
+                <b>{livingPlayers.length}</b> Sống · <b>{deadPlayers.length}</b> Chết
+              </span>
+            </div>
+
+            <div className="day-player-grid">
+              {players.map((player) => (
+                <div
+                  key={player.id}
+                  className={`day-player-card ${player.isAlive ? 'is-alive' : 'is-dead'}`}
+                >
+                  <div className="player-col-main">
+                    <span className="seat-badge">#{String(player.seatIndex).padStart(2, '0')}</span>
+                    <i className={player.isAlive ? 'alive-indicator' : 'dead-indicator'} />
+                    <span className={`player-title ${player.isAlive ? '' : 'crossed-out'}`}>
+                      {player.name}
+                    </span>
+                  </div>
+                  {player.isMayor ? (
+                    <b className="mayor-badge">👑 TRƯỞNG LÀNG</b>
+                  ) : (
+                    <span className={player.isAlive ? 'alive-label' : 'dead-label'}>
+                      {player.isAlive ? 'CÒN SỐNG' : '☠ ĐÃ CHẾT'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
 
-      <footer className="day-bottom-bar">
-        {confirmFinalize ? (
-          <div className="finalize-confirm" role="group" aria-label="Xác nhận chốt kết quả">
-            <span className="confirm-text">Xác nhận hoàn tất phán quyết &amp; lật bài giải mã ván đấu?</span>
-            <div className="confirm-btns">
-              <button type="button" className="confirm-cancel" onClick={() => setConfirmFinalize(false)}>
-                Hủy
-              </button>
-              <button type="button" className="confirm-yes" onClick={() => onNavigate?.('summary')}>
-                Chốt kết quả →
-              </button>
-            </div>
-          </div>
-        ) : (
+      {/* Footer Host chốt phán quyết */}
+      {state.isHost && (
+        <footer className="day-bottom-bar">
           <button
             type="button"
             className="finalize-button"
-            disabled={!unlocked}
-            onClick={() => setConfirmFinalize(true)}
+            disabled={voteLocked}
+            onClick={handleFinalizeVote}
           >
             <span className="gavel-icon" aria-hidden="true">⚒</span>
             <span>
-              {unlocked
+              {!voteLocked
                 ? 'CHỐT PHÁN QUYẾT BIỂU QUYẾT TREO CỔ'
-                : `KHÓA CHỐT VOTE (${lockRemaining}S ĐẦU)`}
+                : `ĐANG KHÓA HÒM PHIẾU (${voteLockRemaining}S)`}
             </span>
           </button>
-        )}
-        {notice && <p role="status" className="vote-notice">{notice}</p>}
-      </footer>
+          {notice && <p role="status" className="vote-notice">{notice}</p>}
+        </footer>
+      )}
     </main>
   );
 }

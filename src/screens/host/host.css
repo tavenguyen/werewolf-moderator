@@ -716,3 +716,50 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Phase 3 Host Screen Additions */
+.host-logs-scroll {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.logs-title {
+  font-size: 11px;
+  color: #c98638;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.log-entry {
+  font-size: 11.5px;
+  color: #d1c7b7;
+  display: flex;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.log-bullet {
+  color: #c98638;
+}
+
+.host-qr-img {
+  width: 180px;
+  height: 180px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px;
+}

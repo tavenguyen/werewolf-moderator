@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { ScreenName } from '../../navigation';
+import { useGameSession } from '../../adapters/useGameSession';
+import { ROLES_BY_ID } from '../../engine/roles';
 import './summary.css';
 
 type SummaryScreenProps = {
@@ -7,83 +9,152 @@ type SummaryScreenProps = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-type PlayerSummary = {
+interface RoleDisplayItem {
+  id: string;
   name: string;
-  role: string;
+  seatIndex: number;
+  initialRoleName: string;
+  finalRoleName: string;
   symbol: string;
   status: string;
-  side: 'seer' | 'wolf' | 'village' | 'hunter';
+  side: 'wolf' | 'village' | 'third';
   sideName: string;
-};
-
-const players: PlayerSummary[] = [
-  { name: 'Minh Khang', role: 'Tiên Tri', symbol: '🔮', status: 'CÒN SỐNG', side: 'seer', sideName: 'Phe Dân Làng' },
-  { name: 'Lan Anh', role: 'Phù Thủy', symbol: '🧪', status: 'CÒN SỐNG', side: 'seer', sideName: 'Phe Dân Làng' },
-  { name: 'Hoàng Nam', role: 'Ma Sói', symbol: '🐺', status: 'BỊ TREO CỔ', side: 'wolf', sideName: 'Phe Ma Sói' },
-  { name: 'Bảo Trâm', role: 'Thợ Săn', symbol: '🎯', status: 'BỊ CẮN', side: 'hunter', sideName: 'Phe Dân Làng' },
-  { name: 'Đức Huy', role: 'Sói Đầu Đàn', symbol: '🩸', status: 'BỊ BẮN HẠ', side: 'wolf', sideName: 'Phe Ma Sói' },
-  { name: 'Quỳnh Như', role: 'Dân Làng', symbol: '🛡️', status: 'CÒN SỐNG', side: 'village', sideName: 'Phe Dân Làng' },
-];
+  isAlive: boolean;
+}
 
 export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
+  const { state, actions } = useGameSession();
+
+  const postGame = state.postGameView;
+  const publicView = state.publicView;
+  const roomCode = state.roomCode || '7290';
+
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<'cards' | 'timeline'>('cards');
+  const [notice, setNotice] = useState('');
 
-  const flip = (name: string) => {
+  // Chuẩn bị danh sách vai trò người chơi
+  const rolesList: RoleDisplayItem[] = (() => {
+    if (postGame && postGame.allRoles && postGame.allRoles.length > 0) {
+      return postGame.allRoles.map((p) => {
+        const initDef = ROLES_BY_ID[p.initialRoleId];
+        const finalDef = ROLES_BY_ID[p.finalRoleId];
+        const side =
+          p.faction === 'WEREWOLF' ? 'wolf' : p.faction === 'NEUTRAL' ? 'third' : 'village';
+        const sideName = side === 'wolf' ? 'Phe Ma Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân Làng';
+        const symbol =
+          side === 'wolf' ? '🐺' : p.finalRoleId === 'seer' ? '🔮' : p.finalRoleId === 'witch' ? '🧪' : p.finalRoleId === 'hunter' ? '🎯' : '🛡️';
+        return {
+          id: p.id,
+          name: p.name,
+          seatIndex: p.seatIndex,
+          initialRoleName: initDef?.nameVi ?? p.initialRoleId,
+          finalRoleName: finalDef?.nameVi ?? p.finalRoleId,
+          symbol,
+          status: p.isAlive ? 'CÒN SỐNG' : 'ĐÃ TỬ VONG',
+          side,
+          sideName,
+          isAlive: p.isAlive,
+        };
+      });
+    }
+
+    // Fallback nếu chưa kết thúc ván
+    const currentPlayers = publicView?.players ?? [];
+    return currentPlayers.map((p) => ({
+      id: p.id,
+      name: p.name,
+      seatIndex: p.seatIndex,
+      initialRoleName: 'Chưa công bố',
+      finalRoleName: 'Chưa công bố',
+      symbol: '❓',
+      status: p.isAlive ? 'CÒN SỐNG' : 'ĐÃ TỬ VONG',
+      side: 'village' as const,
+      sideName: 'Bí Mật',
+      isAlive: p.isAlive,
+    }));
+  })();
+
+  const winner = postGame?.winOutcome?.winner;
+  const isVillageWin = winner === 'VILLAGER';
+  const isWolfWin = winner === 'WEREWOLF';
+  const isCoupleWin = winner === 'COUPLE';
+
+  const flip = (id: string) => {
     setOpenCards((current) => {
       const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const revealAll = () => {
-    if (openCards.size < players.length) {
-      setOpenCards(new Set(players.map((player) => player.name)));
+    if (openCards.size < rolesList.length) {
+      setOpenCards(new Set(rolesList.map((p) => p.id)));
     } else {
       setOpenCards(new Set());
     }
   };
 
-  const allRevealed = openCards.size === players.length;
+  const allRevealed = openCards.size === rolesList.length;
+
+  const handleRematch = async () => {
+    if (!state.isHost) {
+      setNotice('Chỉ Quản trò (Host) mới có quyền bấm Tái đấu.');
+      return;
+    }
+
+    try {
+      await actions.hostRematch();
+      onNavigate?.('night');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Lỗi khi khởi động ván mới';
+      setNotice(msg);
+    }
+  };
+
+  const handleExit = async () => {
+    await actions.leaveRoom();
+    onNavigate?.('home');
+  };
 
   return (
     <main className="summary-screen">
       <header className="summary-header">
         <div className="summary-header-title">
           <i aria-hidden="true" />
-          <strong>GIẢI MÃ VÁN ĐẤU <span>• PHÒNG #7290</span></strong>
+          <strong>GIẢI MÃ VÁN ĐẤU <span>• PHÒNG #{roomCode}</span></strong>
         </div>
         <span className="summary-badge-complete">HOÀN TẤT VÁN ĐẤU</span>
       </header>
 
       <div className="summary-content">
         {/* Victory Banner */}
-        <section className="summary-winner">
+        <section className={`summary-winner ${isWolfWin ? 'wolf-victory' : isCoupleWin ? 'couple-victory' : 'village-victory'}`}>
           <div className="summary-trophy-wrap" aria-hidden="true">
-            <span className="summary-trophy">☀️</span>
+            <span className="summary-trophy">{isWolfWin ? '🐺' : isCoupleWin ? '💘' : '☀️'}</span>
           </div>
           <div className="summary-winner-copy">
             <span className="winner-eyebrow">PHE CHIẾN THẮNG CHUNG CUỘC</span>
-            <h1>THÔN BẢN TOÀN THẮNG!</h1>
-            <p>Bầy Ma Sói đã bị vạch trần và quy án. Làng quê trở về yên bình dưới ánh trăng.</p>
+            <h1>
+              {isWolfWin
+                ? 'BẦY MA SÓI THỐNG TRỊ!'
+                : isCoupleWin
+                ? 'CẶP ĐÔI TÌNH YÊU CHIẾN THẮNG!'
+                : 'THÔN BẢN TOÀN THẮNG!'}
+            </h1>
+            <p>
+              {postGame?.winOutcome?.reason ||
+                'Ván đấu kết thúc. Toàn bộ bí mật bóng đêm đã được đưa ra ánh sáng.'}
+            </p>
           </div>
           <button className="summary-reveal-all" onClick={revealAll}>
             {allRevealed ? 'ÚP TOÀN BÀN' : 'LẬT TOÀN BÀN ✦'}
           </button>
         </section>
 
-        {/* Dramatic Turning Point */}
-        <section className="summary-turning-point">
-          <div className="turning-point-icon" aria-hidden="true">⚔️</div>
-          <div className="turning-point-body">
-            <strong>BƯỚC NGOẶT ĐỊNH ĐOẠT VÁN ĐẤU</strong>
-            <p>
-              Đêm 2: Sói cắn tử vong Thợ Săn Bảo Trâm. Trước khi trút hơi thở cuối cùng, Bảo Trâm nổ phát súng chuẩn xác găm trúng tim <b>Sói Đầu Đàn Đức Huy</b>, mở toang cánh cửa thắng lợi cho Thôn Dân!
-            </p>
-          </div>
-        </section>
+        {notice && <p className="screen-notice" role="status" style={{ margin: '12px auto' }}>{notice}</p>}
 
         {/* Tabs */}
         <div className="summary-tabs" role="tablist" aria-label="Nội dung tổng kết">
@@ -94,7 +165,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             onClick={() => setTab('cards')}
           >
             <span aria-hidden="true">🎴</span>
-            <span>THẺ BÀI HUYỀN BÍ ({openCards.size}/{players.length})</span>
+            <span>THẺ BÀI HUYỀN BÍ ({openCards.size}/{rolesList.length})</span>
           </button>
           <button
             role="tab"
@@ -109,15 +180,15 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
 
         {tab === 'cards' ? (
           <section className="summary-cards" aria-label="Vai trò người chơi">
-            {players.map((player, index) => {
-              const isOpen = openCards.has(player.name);
+            {rolesList.map((player, index) => {
+              const isOpen = openCards.has(player.id);
               return (
                 <button
-                  key={player.name}
+                  key={player.id}
                   className={`summary-card ${isOpen ? 'is-open' : ''}`}
-                  onClick={() => flip(player.name)}
+                  onClick={() => flip(player.id)}
                   aria-pressed={isOpen}
-                  aria-label={`${isOpen ? 'Ẩn' : 'Lật'} thẻ bài vai trò của ${player.name}`}
+                  aria-label={`${isOpen ? 'Ẩn' : 'Lật'} thẻ bài của ${player.name}`}
                   style={{ animationDelay: `${index * 60}ms` }}
                 >
                   <span className="summary-card-inner">
@@ -128,7 +199,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                         <span className="tarot-corner tr" />
                         <span className="tarot-corner bl" />
                         <span className="tarot-corner br" />
-                        <small className="card-seat-tag">GHẾ #{String(index + 1).padStart(2, '0')}</small>
+                        <small className="card-seat-tag">GHẾ #{String(player.seatIndex).padStart(2, '0')}</small>
                         <div className="tarot-emblem" aria-hidden="true">☾</div>
                         <b className="card-player-name">{player.name}</b>
                         <small className="summary-card-hint">CHẠM ĐỂ GIẢI MÃ</small>
@@ -142,8 +213,11 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                         <div className="role-symbol-display" aria-hidden="true">
                           {player.symbol}
                         </div>
-                        <b className="role-title-display">{player.role}</b>
-                        <span className={`status-pill ${player.status.includes('SỐNG') ? 'status-alive' : 'status-dead'}`}>
+                        <b className="role-title-display">{player.finalRoleName}</b>
+                        {player.initialRoleName !== player.finalRoleName && (
+                          <small className="initial-role-tag">Ban đầu: {player.initialRoleName}</small>
+                        )}
+                        <span className={`status-pill ${player.isAlive ? 'status-alive' : 'status-dead'}`}>
                           {player.status}
                         </span>
                       </div>
@@ -155,66 +229,31 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
           </section>
         ) : (
           <section className="summary-timeline" aria-label="Diễn biến ván đấu">
-            <article className="timeline-event">
-              <i className="timeline-dot night-dot" aria-hidden="true" />
-              <div className="timeline-heading">
-                <strong>ĐÊM THỨ I · BÌNH YÊN</strong>
-                <b className="safe">0 tử vong</b>
-              </div>
-              <p>
-                • <b>Tiên tri</b> soi trúng Đức Huy (Ma Sói).<br />
-                • <b>Bầy Sói</b> chọn cắn Quỳnh Như.<br />
-                • <b>Phù thủy</b> kịp thời dùng Bình Cứu, cứu sống thành công Quỳnh Như!
-              </p>
-            </article>
-
-            <article className="timeline-event">
-              <i className="timeline-dot day-dot" aria-hidden="true" />
-              <div className="timeline-heading">
-                <strong>NGÀY I · BIỂU QUYẾT BẤT THÀNH</strong>
-                <b className="safe">Hòa phiếu</b>
-              </div>
-              <p>
-                • Cả làng tranh luận gay gắt nhưng biểu quyết hòa phiếu giữa Hoàng Nam và Lan Anh.<br />
-                • Không có ai bị xử tử trong ngày đầu.
-              </p>
-            </article>
-
-            <article className="timeline-event">
-              <i className="timeline-dot night-dot" aria-hidden="true" />
-              <div className="timeline-heading">
-                <strong>ĐÊM THỨ II · PHÁT SÚNG SINH TỬ</strong>
-                <b className="danger">2 người chết</b>
-              </div>
-              <p>
-                • <b>Bầy Sói</b> cắn tử vong Thợ Săn Bảo Trâm.<br />
-                • <b>Thợ Săn</b> nổ súng găm trúng tim Sói Đầu Đàn Đức Huy!
-              </p>
-            </article>
-
-            <article className="timeline-event">
-              <i className="timeline-dot win-dot" aria-hidden="true" />
-              <div className="timeline-heading">
-                <strong>NGÀY II · THÔN BẢN TOÀN THẮNG</strong>
-                <b className="safe">Dân Làng Thắng</b>
-              </div>
-              <p>
-                • Cả bàn đồng thuận 4 phiếu xử tử <b>Hoàng Nam</b> (Con sói cuối cùng).<br />
-                • Ván đấu kết thúc trọn vẹn với chiến thắng thuộc về Dân Làng!
-              </p>
-            </article>
+            {(postGame?.historyLogs ?? publicView?.publicLogs ?? []).map((log, index) => (
+              <article key={index} className="timeline-event">
+                <i className="timeline-dot night-dot" aria-hidden="true" />
+                <div className="timeline-heading">
+                  <strong>SỰ KIỆN #{index + 1}</strong>
+                </div>
+                <p>{log}</p>
+              </article>
+            ))}
           </section>
         )}
       </div>
 
       <footer className="summary-footer">
-        <button className="summary-rematch" onClick={() => onNavigate?.('lobby')}>
-          <span className="rematch-icon" aria-hidden="true">🎲</span>
-          <span>ĐẢO BÀI &amp; CHƠI VÁN MỚI</span>
-        </button>
+        {state.isHost ? (
+          <button className="summary-rematch" onClick={handleRematch}>
+            <span className="rematch-icon" aria-hidden="true">🎲</span>
+            <span>ĐẢO BÀI &amp; TÁI ĐẤU (REMATCH)</span>
+          </button>
+        ) : (
+          <span className="summary-waiting-rematch">Đang đợi Host bắt đầu ván mới...</span>
+        )}
         <button
           className="summary-exit"
-          onClick={() => onNavigate?.('home')}
+          onClick={handleExit}
           aria-label="Rời phòng về cổng làng"
           title="Rời phòng về cổng làng"
         >

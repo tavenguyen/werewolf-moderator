@@ -536,3 +536,31 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Phase 3 Summary Additions */
+.summary-waiting-rematch {
+  font-size: 13px;
+  color: #a39b8e;
+  font-style: italic;
+}
+
+.wolf-victory {
+  border-color: rgba(142, 30, 36, 0.4) !important;
+  background: radial-gradient(ellipse 60% 50% at 50% 20%, rgba(142, 30, 36, 0.2), transparent) !important;
+}
+
+.wolf-victory .summary-trophy {
+  filter: drop-shadow(0 0 16px rgba(142, 30, 36, 0.8));
+}
+
+.couple-victory {
+  border-color: rgba(220, 53, 69, 0.4) !important;
+  background: radial-gradient(ellipse 60% 50% at 50% 20%, rgba(220, 53, 69, 0.2), transparent) !important;
+}
+
+.initial-role-tag {
+  font-size: 10px;
+  color: #ffb703;
+  margin-top: 2px;
+}
