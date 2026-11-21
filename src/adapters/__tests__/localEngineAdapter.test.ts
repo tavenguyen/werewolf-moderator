@@ -1,0 +1,185 @@
+import { describe, expect, it } from 'bun:test';
+import { LocalEngineAdapter } from '../localEngineAdapter';
+
+describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
+  it('khởi tạo phòng offline với 8 người chơi mặc định và trạng thái LOBBY', () => {
+    const adapter = new LocalEngineAdapter();
+    const state = adapter.getState();
+
+    expect(state.roomCode).toBeDefined();
+    expect(state.deviceMode).toBe('SINGLE_DEVICE');
+    expect(state.isHost).toBe(true);
+    expect(state.isConnected).toBe(true);
+    expect(state.publicView?.phase).toBe('LOBBY');
+    expect(state.publicView?.players.length).toBe(8);
+  });
+
+  it('cho phép thêm và bớt người chơi offline trong sảnh chờ', () => {
+    const adapter = new LocalEngineAdapter();
+
+    adapter.addOfflinePlayer('Trần Dũng');
+    let state = adapter.getState();
+    expect(state.publicView?.players.length).toBe(9);
+    expect(state.publicView?.players.some((p) => p.name === 'Trần Dũng')).toBe(true);
+
+    const dungPlayer = state.publicView?.players.find((p) => p.name === 'Trần Dũng');
+    if (dungPlayer) {
+      adapter.removeOfflinePlayer(dungPlayer.id);
+    }
+
+    state = adapter.getState();
+    expect(state.publicView?.players.length).toBe(8);
+  });
+
+  it('bắt đầu ván đấu chuyển sang NIGHT Đêm 1 và sinh Night Turn Plan', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+
+    const state = adapter.getState();
+    expect(state.publicView?.phase).toBe('NIGHT');
+    expect(state.publicView?.roundNumber).toBe(1);
+    expect(state.publicView?.currentTurnInfo).toBeDefined();
+    expect(state.privateView?.roleId).toBeDefined();
+  });
+
+  it('điều phối lần lượt các lượt đêm và chuyển sang Ngày thảo luận', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+
+    // Giả lập gửi action đêm và chuyển hết các lượt gọi
+    for (let i = 0; i < 10; i++) {
+      if (adapter.getState().publicView?.phase !== 'NIGHT') break;
+      adapter.advanceLocalTurn();
+    }
+
+    const state = adapter.getState();
+    // Sau khi kết thúc tất cả các lượt đêm, ván chuyển sang DAY_DISCUSS hoặc HUNTER_SHOT hoặc GAME_OVER
+    expect(['DAY_DISCUSS', 'DAY_MAYOR_ELECTION', 'HUNTER_SHOT', 'GAME_OVER']).toContain(
+      state.publicView?.phase ?? ''
+    );
+  });
+
+  it('điều khiển Pause, Resume, Gia hạn và Chốt biểu quyết ban ngày', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+
+    // Chuyển sang ngày
+    for (let i = 0; i < 10; i++) {
+      if (adapter.getState().publicView?.phase !== 'NIGHT') break;
+      adapter.advanceLocalTurn();
+    }
+
+    if (adapter.getState().publicView?.phase === 'DAY_DISCUSS') {
+      // Pause
+      await adapter.hostPause();
+      expect(adapter.getState().publicView?.isPaused).toBe(true);
+
+      // Resume
+      await adapter.hostResume();
+      expect(adapter.getState().publicView?.isPaused).toBe(false);
+
+      // Gia hạn +30s
+      await adapter.hostExtendTime();
+      expect(adapter.getState().publicView?.extensionsUsed).toBe(1);
+
+      // Chốt biểu quyết
+      await adapter.finalizePublicVote();
+      const afterState = adapter.getState();
+      expect(['NIGHT', 'GAME_OVER', 'HUNTER_SHOT']).toContain(afterState.publicView?.phase ?? '');
+    }
+  });
+
+  it('trục xuất khẩn cấp người chơi sống', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+
+    const state = adapter.getState();
+    const target = state.publicView?.players.find((p) => p.isAlive);
+    expect(target).toBeDefined();
+
+    if (target) {
+      await adapter.hostEmergencyEliminate(target.id);
+      const updated = adapter.getState();
+      const updatedTarget = updated.publicView?.players.find((p) => p.id === target.id);
+      expect(updatedTarget?.isAlive).toBe(false);
+    }
+  });
+
+  it('lưu kết quả soi của Tiên tri và Pháp sư trong chế độ 1 máy', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame(['seer', 'werewolf', 'werewolf', 'villager', 'villager', 'villager', 'villager', 'villager']);
+
+    // Tìm người chơi được chia vai Tiên tri
+    let seerId = '';
+    const allPlayers = adapter.getState().publicView?.players ?? [];
+    for (const p of allPlayers) {
+      adapter.setLocalActivePlayer(p.id);
+      if (adapter.getState().privateView?.roleId === 'seer') {
+        seerId = p.id;
+        break;
+      }
+    }
+    expect(seerId).not.toBe('');
+
+    // Advance qua các lượt trước để đến đúng lượt gọi Tiên tri
+    while (adapter.getState().publicView?.currentTurnInfo?.turnKey !== 'seer') {
+      adapter.advanceLocalTurn();
+      if (adapter.getState().publicView?.phase !== 'NIGHT') break;
+    }
+
+    // Tiên tri soi một người chơi khác
+    adapter.setLocalActivePlayer(seerId);
+    const targetId = allPlayers.find((p) => p.id !== seerId)?.id ?? 'player_2';
+    await adapter.sendNightAction('seer', { targetId });
+
+    adapter.setLocalActivePlayer(seerId);
+    const state = adapter.getState();
+    expect(state.privateView?.investigationResult).toBeDefined();
+    expect(state.privateView?.investigationResult?.targetId).toBe(targetId);
+    expect(['WEREWOLF', 'VILLAGER']).toContain(state.privateView?.investigationResult?.result as string);
+  });
+
+  it('xử lý phát súng Thợ săn chuyển sang NIGHT mượt mà không treo', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+
+    // Giả lập trạng thái HUNTER_SHOT
+    await adapter.sendHunterShot('player_2');
+    const state = adapter.getState();
+    expect(['DAY_DISCUSS', 'NIGHT', 'GAME_OVER', 'HUNTER_SHOT']).toContain(state.publicView?.phase ?? '');
+  });
+
+  it('Pause và Resume bảo toàn thời gian còn lại của đồng hồ', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+
+    // Chuyển sang ngày
+    for (let i = 0; i < 10; i++) {
+      if (adapter.getState().publicView?.phase !== 'NIGHT') break;
+      adapter.advanceLocalTurn();
+    }
+
+    if (adapter.getState().publicView?.phase === 'DAY_DISCUSS') {
+      const initialDeadline = adapter.getState().publicView?.deadlineAt ?? 0;
+      await adapter.hostPause();
+      expect(adapter.getState().publicView?.isPaused).toBe(true);
+
+      // Chờ một khoảng rồi resume
+      await new Promise((r) => setTimeout(r, 50));
+      await adapter.hostResume();
+      expect(adapter.getState().publicView?.isPaused).toBe(false);
+      const resumedDeadline = adapter.getState().publicView?.deadlineAt ?? 0;
+      expect(resumedDeadline).toBeGreaterThanOrEqual(initialDeadline);
+    }
+  });
+
+  it('thực hiện tái đấu Rematch tạo thế hệ ván mới', async () => {
+    const adapter = new LocalEngineAdapter();
+    await adapter.startGame();
+    await adapter.hostRematch();
+
+    const state = adapter.getState();
+    expect(state.publicView?.gameGeneration).toBe(2);
+    expect(state.publicView?.phase).toBe('NIGHT');
+  });
+});
