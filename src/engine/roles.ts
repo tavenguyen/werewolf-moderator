@@ -513,7 +513,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Các bạn chỉ thức dậy cùng nhau ở Đêm 1; từ Đêm 2 trở đi ngủ như dân thường.',
       'Nếu sau này có một người trong hội bị Sói nguyền biến thành Sói, những người còn lại sẽ không được hệ thống thông báo.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'rusty_knight',
@@ -631,7 +632,9 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Bất kể hình mẫu chết vì lý do gì (bị cắn, bị treo cổ hay trúng độc), ngay khi họ chết bạn sẽ chuyển sang phe Sói và từ đêm sau đi cắn cùng đàn.',
       'Nếu bạn chết trước hình mẫu, bạn chết như một người dân bình thường.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
+    multiDeviceOnly: true,
   },
   {
     id: 'angel',
@@ -764,7 +767,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Người được chọn hoàn toàn không biết mình là bạn đồng hành của bạn.',
       'Ban đêm bạn đi cắn cùng bầy Sói và phải tìm cách để đàn không cắn nhầm bạn đồng hành của mình.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'doppelganger',
@@ -821,7 +825,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Khi ván đấu kết thúc (dù phe Dân hay Sói thắng), nếu cả hai người bạn chọn đều đã chết và bạn còn sống, bạn sẽ thắng.',
       'Nếu một trong hai người đó còn sống, hoặc bạn chết trước khi ván kết thúc, bạn thua cuộc.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'drunk',

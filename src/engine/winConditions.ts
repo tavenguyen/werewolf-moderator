@@ -12,6 +12,46 @@ export function isCrossFactionCouple(p1: PlayerState, p2: PlayerState): boolean 
 }
 
 /**
+ * Gắn thêm Du côn (Hoodlum) vào danh sách thắng ké nếu đủ điều kiện:
+ * - Phe thắng phải là 1 trong 3 phe chính: VILLAGER, WEREWOLF, hoặc COUPLE.
+ * - Du côn còn sống và cả 2 mục tiêu trong hoodlumTargetIds đều đã chết.
+ * - Tuyệt đối không thắng ké vai độc tôn (ANGEL, TANNER, WHITE_WOLF) hay DRAW.
+ */
+function attachHoodlumWin(outcome: WinOutcome, state: GameState): WinOutcome {
+  if (
+    outcome.winner !== 'VILLAGER' &&
+    outcome.winner !== 'WEREWOLF' &&
+    outcome.winner !== 'COUPLE'
+  ) {
+    return outcome;
+  }
+
+  const updatedWinners = [...outcome.winningPlayerIds];
+  let updatedReason = outcome.reason;
+
+  const livingHoodlums = state.players.filter((p) => p.isAlive && p.roleId === 'hoodlum');
+  for (const hl of livingHoodlums) {
+    if (!hl.hoodlumTargetIds || hl.hoodlumTargetIds.length < 2) continue;
+    const [t1Id, t2Id] = hl.hoodlumTargetIds;
+    const t1 = state.players.find((p) => p.id === t1Id);
+    const t2 = state.players.find((p) => p.id === t2Id);
+
+    if (t1 && t2 && !t1.isAlive && !t2.isAlive) {
+      if (!updatedWinners.includes(hl.id)) {
+        updatedWinners.push(hl.id);
+      }
+      updatedReason += ` Du côn (${hl.name}) đã hoàn thành mục tiêu thanh toán và cùng giành chiến thắng!`;
+    }
+  }
+
+  return {
+    ...outcome,
+    winningPlayerIds: updatedWinners,
+    reason: updatedReason,
+  };
+}
+
+/**
  * Kiểm tra điều kiện Thắng / Thua / Hòa theo thứ tự ưu tiên tuyệt đối:
  * 1. Kẻ chán đời (Tanner) bị treo cổ ban ngày.
  * 2. Cả bàn cùng chết sạch trong chuỗi -> Hòa (DRAW).
@@ -66,14 +106,30 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     }
   }
 
-  // 3. Cặp đôi khác phe (Lover Couple) là đúng 2 người sống sót cuối cùng
-  if (alivePlayers.length === 2 && hasLivingCrossFactionCouple) {
-    const [p1, p2] = alivePlayers;
-    return {
-      winner: 'COUPLE',
-      reason: 'Tình yêu vượt qua ranh giới phe phái! Cặp đôi định mệnh là những người sống sót cuối cùng!',
-      winningPlayerIds: [p1.id, p2.id],
-    };
+  // 3. Cặp đôi khác phe (Lover Couple) là đúng 2 người sống sót cuối cùng (hoặc cùng Du côn đã hoàn thành mục tiêu)
+  if (hasLivingCrossFactionCouple) {
+    const nonCoupleAlive = alivePlayers.filter((p) => !livingCouple.some((c) => c.id === p.id));
+    const isOnlyLivingCoupleOrEligibleHoodlum =
+      nonCoupleAlive.length === 0 ||
+      nonCoupleAlive.every(
+        (p) =>
+          p.roleId === 'hoodlum' &&
+          p.hoodlumTargetIds &&
+          p.hoodlumTargetIds.length === 2 &&
+          p.hoodlumTargetIds.every((tId) => state.players.find((pl) => pl.id === tId && !pl.isAlive))
+      );
+
+    if (isOnlyLivingCoupleOrEligibleHoodlum) {
+      const [p1, p2] = livingCouple;
+      return attachHoodlumWin(
+        {
+          winner: 'COUPLE',
+          reason: 'Tình yêu vượt qua ranh giới phe phái! Cặp đôi định mệnh là những người sống sót cuối cùng!',
+          winningPlayerIds: [p1.id, p2.id],
+        },
+        state
+      );
+    }
   }
 
   // 4. Sói trắng (White Wolf) sống sót duy nhất (aliveCount === 1)
@@ -105,11 +161,14 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   // (Minion và Sorcerer không thể cắn; khi Sói thật chết hết, Dân thắng ngay)
   if (activeWolves.length === 0 && totalVillagers.length > 0) {
     const winners = state.players.filter((p) => p.faction === 'VILLAGER').map((p) => p.id);
-    return {
-      winner: 'VILLAGER',
-      reason: 'Toàn bộ Ma sói đã bị tiêu diệt! Phe Dân làng đã bảo vệ được ngôi làng bình yên!',
-      winningPlayerIds: winners,
-    };
+    return attachHoodlumWin(
+      {
+        winner: 'VILLAGER',
+        reason: 'Toàn bộ Ma sói đã bị tiêu diệt! Phe Dân làng đã bảo vệ được ngôi làng bình yên!',
+        winningPlayerIds: winners,
+      },
+      state
+    );
   }
 
   // 6. Phe Ma sói thắng: Số Sói cắn >= Số người không phải Sói còn sống (và ít nhất 1 Sói cắn còn sống)
@@ -119,11 +178,14 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   if (activeWolves.length >= livingNonWolves.length && activeWolves.length > 0) {
     // Toàn bộ phe Sói (kể cả Minion, Sorcerer dù còn sống hay đã chết) đều thắng cùng bầy
     const winners = state.players.filter((p) => p.faction === 'WEREWOLF').map((p) => p.id);
-    return {
-      winner: 'WEREWOLF',
-      reason: 'Ma sói đã áp đảo hoàn toàn dân làng. Ngôi làng chìm trong bóng đêm vĩnh hằng!',
-      winningPlayerIds: winners,
-    };
+    return attachHoodlumWin(
+      {
+        winner: 'WEREWOLF',
+        reason: 'Ma sói đã áp đảo hoàn toàn dân làng. Ngôi làng chìm trong bóng đêm vĩnh hằng!',
+        winningPlayerIds: winners,
+      },
+      state
+    );
   }
 
   return null;

@@ -97,16 +97,35 @@ export function processDeathCascade(
       state.historyLogs.push(`Trưởng làng (${victim.name}) đã qua đời và có cơ hội truyền lại danh hiệu!`);
     }
 
-    // 8. Tương thích vai mở rộng (nếu có trong ván)
-    const direWolf = state.players.find(
-      (p) => p.roleId === 'dire_wolf' && p.isAlive && p.companionId === victim.id
-    );
-    if (direWolf && !processedPlayerIds.has(direWolf.id)) {
-      pendingQueue.push({
-        playerId: direWolf.id,
-        cause: 'COMPANION_DEATH',
-        depth: next.depth + 1,
-      });
+    // 8. Đứa con hoang (Wild Child): mất thần tượng -> biến thành Ma sói ngay lập tức
+    for (const wc of state.players) {
+      if (
+        wc.isAlive &&
+        (wc.roleId === 'wild_child' || wc.initialRoleId === 'wild_child') &&
+        wc.faction !== 'WEREWOLF' &&
+        wc.roleModelId === victim.id
+      ) {
+        wc.faction = 'WEREWOLF';
+        wc.roleId = 'werewolf';
+        state.historyLogs.push(`Đứa con hoang (${wc.name}) mất đi thần tượng và đã biến thành Ma sói!`);
+      }
+    }
+
+    // 9. Sói tuyết (Dire Wolf): nếu người chết là bạn đồng hành -> Sói tuyết chết theo vì đau lòng
+    for (const dw of state.players) {
+      if (
+        (dw.roleId === 'dire_wolf' || dw.initialRoleId === 'dire_wolf') &&
+        dw.isAlive &&
+        dw.companionId === victim.id
+      ) {
+        if (!processedPlayerIds.has(dw.id)) {
+          pendingQueue.push({
+            playerId: dw.id,
+            cause: 'COMPANION_DEATH',
+            depth: next.depth + 1,
+          });
+        }
+      }
     }
 
     if (victim.roleId === 'rusty_knight' && next.cause === 'WOLF_PACK') {

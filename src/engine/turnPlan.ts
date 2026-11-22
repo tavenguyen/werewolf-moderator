@@ -57,6 +57,58 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
     });
   }
 
+  // 1b. Đứa con hoang (Wild Child) - Chỉ Đêm 1 (chọn 1 thần tượng)
+  if (round === 1 && hasRole('wild_child')) {
+    const aliveWildChild = state.players.find(
+      (p) => p.isAlive && p.roleId === 'wild_child' && !state.villagePowerStripped
+    );
+    plan.push({
+      roleId: 'wild_child',
+      turnKey: 'wild_child',
+      priority: 12,
+      titleVi: 'Đứa con hoang',
+      titleEn: 'Wild Child',
+      activePlayerIds: aliveWildChild ? [aliveWildChild.id] : [],
+      isFake: !aliveWildChild,
+      canAct: Boolean(aliveWildChild),
+      audioKey: 'night_wild_child',
+    });
+  }
+
+  // 1c. Du côn (Hoodlum) - Chỉ Đêm 1 (chọn 2 mục tiêu)
+  if (round === 1 && hasRole('hoodlum')) {
+    const aliveHoodlum = state.players.find((p) => p.isAlive && p.roleId === 'hoodlum');
+    plan.push({
+      roleId: 'hoodlum',
+      turnKey: 'hoodlum',
+      priority: 13,
+      titleVi: 'Du côn',
+      titleEn: 'Hoodlum',
+      activePlayerIds: aliveHoodlum ? [aliveHoodlum.id] : [],
+      isFake: !aliveHoodlum,
+      canAct: Boolean(aliveHoodlum),
+      audioKey: 'night_hoodlum',
+    });
+  }
+
+  // 1d. Hội Tam Điểm (Mason) - Chỉ Đêm 1 (tất cả Mason cùng thức nhận mặt nhau)
+  if (round === 1 && hasRole('mason')) {
+    const aliveMasons = state.players.filter(
+      (p) => p.isAlive && p.roleId === 'mason' && !state.villagePowerStripped
+    );
+    plan.push({
+      roleId: 'mason',
+      turnKey: 'mason',
+      priority: 14,
+      titleVi: 'Hội Tam Điểm',
+      titleEn: 'Mason',
+      activePlayerIds: aliveMasons.map((m) => m.id),
+      isFake: aliveMasons.length === 0,
+      canAct: aliveMasons.length > 0,
+      audioKey: 'night_mason',
+    });
+  }
+
   // 2. Kẻ phản bội (Minion) - Chỉ Đêm 1
   if (round === 1 && hasRole('minion')) {
     const aliveMinion = state.players.find((p) => p.isAlive && p.roleId === 'minion');
@@ -70,6 +122,22 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
       isFake: !aliveMinion,
       canAct: Boolean(aliveMinion),
       audioKey: 'night_minion',
+    });
+  }
+
+  // 2b. Sói tuyết (Dire Wolf) - Chỉ Đêm 1 (chọn 1 bạn đồng hành)
+  if (round === 1 && hasRole('dire_wolf')) {
+    const aliveDireWolf = state.players.find((p) => p.isAlive && p.roleId === 'dire_wolf');
+    plan.push({
+      roleId: 'dire_wolf',
+      turnKey: 'dire_wolf',
+      priority: 16,
+      titleVi: 'Sói tuyết',
+      titleEn: 'Dire Wolf',
+      activePlayerIds: aliveDireWolf ? [aliveDireWolf.id] : [],
+      isFake: !aliveDireWolf,
+      canAct: Boolean(aliveDireWolf),
+      audioKey: 'night_dire_wolf',
     });
   }
 
@@ -98,10 +166,13 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
       p.roleId === 'wolf_cub' ||
       p.roleId === 'dream_wolf' ||
       p.roleId === 'white_wolf' ||
+      p.roleId === 'dire_wolf' ||
       p.initialRoleId === 'werewolf' ||
       p.initialRoleId === 'wolf_cub' ||
       p.initialRoleId === 'dream_wolf' ||
-      p.initialRoleId === 'white_wolf'
+      p.initialRoleId === 'white_wolf' ||
+      p.initialRoleId === 'dire_wolf' ||
+      (p.faction === 'WEREWOLF' && p.roleId === 'werewolf')
   );
 
   if (hasWolfPackRole) {

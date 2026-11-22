@@ -173,6 +173,39 @@ export function resolveNight(
     }
   }
 
+  // 2b. Đứa con hoang chọn thần tượng (Wild Child - Chỉ Đêm 1)
+  if (nextState.roundNumber === 1 && actions.wildChild && !nextState.villagePowerStripped) {
+    const wc = nextState.players.find(
+      (p) => (p.roleId === 'wild_child' || p.initialRoleId === 'wild_child') && p.isAlive
+    );
+    if (wc && actions.wildChild.targetId) {
+      wc.roleModelId = actions.wildChild.targetId;
+      nextState.historyLogs.push(`Đứa con hoang (${wc.name}) đã chọn thần tượng bí mật.`);
+    }
+  }
+
+  // 2c. Sói tuyết chọn bạn đồng hành (Dire Wolf - Chỉ Đêm 1)
+  if (nextState.roundNumber === 1 && actions.direWolf) {
+    const dw = nextState.players.find(
+      (p) => (p.roleId === 'dire_wolf' || p.initialRoleId === 'dire_wolf') && p.isAlive
+    );
+    if (dw && actions.direWolf.targetId) {
+      dw.companionId = actions.direWolf.targetId;
+      nextState.historyLogs.push(`Sói tuyết (${dw.name}) đã bí mật chọn bạn đồng hành.`);
+    }
+  }
+
+  // 2d. Du côn chọn 2 mục tiêu (Hoodlum - Chỉ Đêm 1)
+  if (nextState.roundNumber === 1 && actions.hoodlum) {
+    const hl = nextState.players.find(
+      (p) => (p.roleId === 'hoodlum' || p.initialRoleId === 'hoodlum') && p.isAlive
+    );
+    if (hl && actions.hoodlum.target1 && actions.hoodlum.target2) {
+      hl.hoodlumTargetIds = [actions.hoodlum.target1, actions.hoodlum.target2];
+      nextState.historyLogs.push(`Du côn (${hl.name}) đã đưa 2 mục tiêu vào tầm ngắm.`);
+    }
+  }
+
   // =========================================================================
   // 3. KHIÊN BẢO VỆ (Bodyguard Shield)
   // =========================================================================
