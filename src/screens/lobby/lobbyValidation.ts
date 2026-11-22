@@ -13,7 +13,20 @@ export const DEFAULT_INITIAL_ROLES: RoleSelectionMap = {
 
 export type BalanceStatus = 'BALANCED' | 'LEAN_VILLAGE' | 'LEAN_WOLF';
 
-export const NIGHT_HUNTING_WOLF_IDS = ['werewolf', 'wolf_cub', 'dream_wolf'] as const;
+export const NIGHT_HUNTING_WOLF_IDS = [
+  'werewolf',
+  'wolf_cub',
+  'dream_wolf',
+  'lone_wolf',
+  'big_bad_wolf',
+  'wolf_accursed',
+  'dire_wolf',
+  'white_wolf',
+] as const;
+
+export const MUTUALLY_EXCLUSIVE_ROLES: [string, string][] = [
+  ['lone_wolf', 'white_wolf'],
+];
 
 export interface DeckMetrics {
   totalCards: number;
@@ -63,6 +76,9 @@ export function computeDeckMetrics(
       villagersCount += count;
     } else {
       thirdPartyCount += count;
+      if ((NIGHT_HUNTING_WOLF_IDS as readonly string[]).includes(roleId)) {
+        nightHuntingWolvesCount += count;
+      }
     }
   }
 
@@ -88,6 +104,11 @@ export function computeDeckMetrics(
   let statusMessage = '';
   let statusType: 'success' | 'warning' | 'error' = 'warning';
 
+  // Kiểm tra vai xung khắc (Mutually exclusive roles)
+  const conflictingPair = MUTUALLY_EXCLUSIVE_ROLES.find(
+    ([r1, r2]) => (selectedRoles[r1] ?? 0) > 0 && (selectedRoles[r2] ?? 0) > 0
+  );
+
   if (!isValidCardCount) {
     statusType = 'error';
     if (totalCards < 6) {
@@ -95,6 +116,11 @@ export function computeDeckMetrics(
     } else {
       statusMessage = `Tổng số lá bài không được vượt quá 16 lá (hiện có ${totalCards} lá).`;
     }
+  } else if (conflictingPair) {
+    statusType = 'error';
+    const r1Name = ROLES_BY_ID[conflictingPair[0]]?.nameVi ?? conflictingPair[0];
+    const r2Name = ROLES_BY_ID[conflictingPair[1]]?.nameVi ?? conflictingPair[1];
+    statusMessage = `Không thể chọn đồng thời ${r1Name} và ${r2Name} trong cùng một bộ bài.`;
   } else if (!hasNightHuntingWolf) {
     statusType = 'error';
     statusMessage = 'Bắt buộc phải có ít nhất 1 Sói săn đêm (Ma sói, Sói con hoặc Sói chiêm bao).';

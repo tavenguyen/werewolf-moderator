@@ -552,7 +552,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu phe Sói thắng mà vẫn còn những con Sói khác cùng sống với bạn, bạn không đạt được mục tiêu cá nhân.',
       'Tiên tri soi bạn ra Ma sói; Tiên tri hào quang soi bạn ra Người thường như Sói thường.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
 
   // =========================================================================
@@ -729,7 +730,9 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu người đó đã được Bảo vệ che chắn từ trước, phép nguyền bị chặn, bạn mất lượt nguyền và người đó không hóa Sói.',
       'Người bị nguyền thành công sẽ không chết; sáng ra làng có một đêm bình yên. Từ đêm sau, người đó mất hết kỹ năng cũ và đi cắn cùng bầy Sói.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
+    multiDeviceOnly: true,
   },
   {
     id: 'big_bad_wolf',
@@ -748,7 +751,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Ở lượt cắn riêng, bạn không được chọn trùng với người mà bầy Sói vừa cắn trước đó.',
       'Nếu Phù thủy dùng bình cứu diện rộng, Phù thủy có thể cứu sống cả hai người trong đêm đó.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'dire_wolf',

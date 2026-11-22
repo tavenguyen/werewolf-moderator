@@ -320,10 +320,13 @@ export function createPlayerPrivateView(
         });
       }
     }
-  } else if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
+  }
+
+  // 3. Hội Tam Điểm (Mason) nhận diện anh em
+  if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
     for (const pl of gameState.players) {
       if (pl.id === playerId) continue;
-      if (pl.initialRoleId === 'mason') {
+      if (pl.initialRoleId === 'mason' || pl.roleId === 'mason') {
         teammates.push({
           id: pl.id,
           name: pl.name,

@@ -96,6 +96,20 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
+  // Deadlock Fallback: Chỉ còn đúng 2 người sống là Sói cô đơn và Sói trắng -> Sói trắng thắng độc tôn
+  if (alivePlayers.length === 2) {
+    const hasLoneWolf = alivePlayers.some((p) => p.roleId === 'lone_wolf');
+    const hasWhiteWolf = alivePlayers.some((p) => p.roleId === 'white_wolf');
+    if (hasLoneWolf && hasWhiteWolf) {
+      const whiteWolf = alivePlayers.find((p) => p.roleId === 'white_wolf')!;
+      return {
+        winner: 'WHITE_WOLF',
+        reason: 'Sói trắng và Sói cô đơn là 2 kẻ sống sót cuối cùng. Sói trắng nắm độc quyền ám sát sói và giành chiến thắng độc tôn!',
+        winningPlayerIds: [whiteWolf.id],
+      };
+    }
+  }
+
   // Kiểm tra sự tồn tại của cặp đôi khác phe còn sống
   const livingCouple = alivePlayers.filter((p) => p.loverId);
   let hasLivingCrossFactionCouple = false;
@@ -132,7 +146,15 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     }
   }
 
-  // 4. Sói trắng (White Wolf) sống sót duy nhất (aliveCount === 1)
+  // 4. Sói cô đơn (Lone Wolf) / Sói trắng (White Wolf) sống sót duy nhất (aliveCount === 1)
+  if (alivePlayers.length === 1 && alivePlayers[0].roleId === 'lone_wolf') {
+    return {
+      winner: 'LONE_WOLF',
+      reason: 'Sói cô đơn đã tiêu diệt toàn bộ dân làng lẫn đồng loại và là kẻ sống sót duy nhất!',
+      winningPlayerIds: [alivePlayers[0].id],
+    };
+  }
+
   const whiteWolfAlive = alivePlayers.some((p) => p.roleId === 'white_wolf');
   if (alivePlayers.length === 1 && alivePlayers[0].roleId === 'white_wolf') {
     return {
@@ -176,6 +198,16 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     (p) => p.faction !== 'WEREWOLF' && p.roleId !== 'white_wolf'
   );
   if (activeWolves.length >= livingNonWolves.length && activeWolves.length > 0) {
+    // Sói cô đơn (Lone Wolf): Nếu chỉ còn 1 Sói cô đơn sống và vẫn còn Dân sống,
+    // hoãn kết thúc ván (trả về null) để bước tiếp vào ban đêm cho Sói cô đơn cắn nốt dân làng nhằm đạt chiến thắng độc tôn.
+    if (
+      activeWolves.length === 1 &&
+      activeWolves[0].roleId === 'lone_wolf' &&
+      livingNonWolves.length > 0
+    ) {
+      return null;
+    }
+
     // Toàn bộ phe Sói (kể cả Minion, Sorcerer dù còn sống hay đã chết) đều thắng cùng bầy
     const winners = state.players.filter((p) => p.faction === 'WEREWOLF').map((p) => p.id);
     return attachHoodlumWin(

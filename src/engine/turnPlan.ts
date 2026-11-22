@@ -14,6 +14,33 @@ export interface NightTurnPlanItem {
 }
 
 /**
+ * Danh sách các role Ma sói có khả năng cắn đêm trực tiếp.
+ * Không bao gồm minion hoặc sorcerer.
+ */
+export const BITING_WOLF_ROLES = new Set([
+  'werewolf',
+  'wolf_cub',
+  'white_wolf',
+  'lone_wolf',
+  'big_bad_wolf',
+  'wolf_accursed',
+  'dire_wolf',
+]);
+
+/**
+ * Kiểm tra xem có bất kỳ Ma sói cắn đêm nào đã chết hay chưa.
+ * Bao gồm werewolf, wolf_cub, white_wolf, lone_wolf, big_bad_wolf, wolf_accursed, dire_wolf,
+ * hoặc cursed / wild_child đã biến thành Ma Sói và chết với roleId='werewolf'.
+ * Không tính minion hoặc sorcerer.
+ */
+export function hasAnyBitingWolfDied(state: GameState): boolean {
+  return (
+    state.deaths.some((d) => BITING_WOLF_ROLES.has(d.roleId)) ||
+    state.players.some((p) => !p.isAlive && BITING_WOLF_ROLES.has(p.roleId))
+  );
+}
+
+/**
  * Kiểm tra xem có ít nhất một Ma sói khác (ngoài chính dream_wolf) đã chết hay chưa.
  * Bao gồm chết do treo cổ, trúng độc, tự cắn, Thợ săn bắn hoặc Sói trắng giết.
  */
@@ -160,19 +187,21 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
   }
 
   // 4. Bầy Ma sói (Werewolf Pack) - Mỗi đêm
+  const WOLF_PACK_ROLE_IDS = new Set([
+    'werewolf',
+    'wolf_cub',
+    'dream_wolf',
+    'white_wolf',
+    'dire_wolf',
+    'lone_wolf',
+    'big_bad_wolf',
+    'wolf_accursed',
+  ]);
   const hasWolfPackRole = state.players.some(
     (p) =>
-      p.roleId === 'werewolf' ||
-      p.roleId === 'wolf_cub' ||
-      p.roleId === 'dream_wolf' ||
-      p.roleId === 'white_wolf' ||
-      p.roleId === 'dire_wolf' ||
-      p.initialRoleId === 'werewolf' ||
-      p.initialRoleId === 'wolf_cub' ||
-      p.initialRoleId === 'dream_wolf' ||
-      p.initialRoleId === 'white_wolf' ||
-      p.initialRoleId === 'dire_wolf' ||
-      (p.faction === 'WEREWOLF' && p.roleId === 'werewolf')
+      WOLF_PACK_ROLE_IDS.has(p.roleId) ||
+      WOLF_PACK_ROLE_IDS.has(p.initialRoleId) ||
+      (p.faction === 'WEREWOLF' && p.roleId !== 'minion' && p.roleId !== 'sorcerer')
   );
 
   if (hasWolfPackRole) {
@@ -196,6 +225,45 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
       isFake: wakingWolves.length === 0,
       canAct: wakingWolves.length > 0,
       audioKey: 'night_werewolf',
+    });
+  }
+
+  // 4b. Sói nguyền (wolf_accursed) - Mỗi đêm (Priority 32)
+  if (hasRole('wolf_accursed')) {
+    const aliveAccursedWolf = state.players.find(
+      (p) => p.isAlive && p.roleId === 'wolf_accursed'
+    );
+    const canAct = Boolean(aliveAccursedWolf && !state.accursedWolfUsed);
+    plan.push({
+      roleId: 'wolf_accursed',
+      turnKey: 'wolf_accursed',
+      priority: 32,
+      titleVi: 'Sói nguyền',
+      titleEn: 'Accursed Wolf-Father',
+      activePlayerIds: canAct && aliveAccursedWolf ? [aliveAccursedWolf.id] : [],
+      isFake: !canAct,
+      canAct,
+      audioKey: 'night_wolf_accursed',
+    });
+  }
+
+  // 4c. Sói đại ca (big_bad_wolf) - Mỗi đêm (Priority 33)
+  if (hasRole('big_bad_wolf')) {
+    const aliveBigBadWolf = state.players.find(
+      (p) => p.isAlive && p.roleId === 'big_bad_wolf'
+    );
+    const bitingWolfDied = hasAnyBitingWolfDied(state);
+    const canAct = Boolean(aliveBigBadWolf && !bitingWolfDied);
+    plan.push({
+      roleId: 'big_bad_wolf',
+      turnKey: 'big_bad_wolf',
+      priority: 33,
+      titleVi: 'Sói đại ca',
+      titleEn: 'Big Bad Wolf',
+      activePlayerIds: canAct && aliveBigBadWolf ? [aliveBigBadWolf.id] : [],
+      isFake: !canAct,
+      canAct,
+      audioKey: 'night_big_bad_wolf',
     });
   }
 
