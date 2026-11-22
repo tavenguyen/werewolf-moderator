@@ -32,7 +32,12 @@ export default function CompactHostControlBar() {
   const isPaused = state.publicView?.isPaused ?? false;
   const isDayPhase = state.publicView?.phase === 'DAY_DISCUSS';
   const extensionsUsed = state.publicView?.extensionsUsed ?? 0;
+  const isHostPlayer = state.hostMode === 'PLAYER_HOST' || Boolean(state.hostView?.isHostPlayer);
+  const hostPlayerId = state.playerId || state.privateView?.playerId || state.hostView?.hostPlayerId;
   const livingPlayers = state.publicView?.players.filter((p) => p.isAlive) ?? [];
+  const eliminatablePlayers = isHostPlayer
+    ? livingPlayers.filter((p) => p.seatIndex !== 0 && p.id !== hostPlayerId)
+    : livingPlayers;
 
   const handleTogglePause = async () => {
     if (isPaused) {
@@ -152,7 +157,7 @@ export default function CompactHostControlBar() {
                   </button>
                 </div>
                 <div className="emergency-player-list">
-                  {livingPlayers.map((p) => (
+                  {eliminatablePlayers.map((p) => (
                     <button
                       key={p.id}
                       type="button"
@@ -163,8 +168,8 @@ export default function CompactHostControlBar() {
                       <span className="danger-text">Loại</span>
                     </button>
                   ))}
-                  {livingPlayers.length === 0 && (
-                    <span className="emergency-empty">Không có người chơi sống</span>
+                  {eliminatablePlayers.length === 0 && (
+                    <span className="emergency-empty">Không có người chơi khác để loại</span>
                   )}
                 </div>
               </div>

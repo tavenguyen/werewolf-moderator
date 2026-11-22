@@ -110,6 +110,7 @@ export function createHostBoardView(room: RoomState): HostBoardView {
   return {
     publicRoom,
     isHostPlayer: room.host.isPlayer,
+    hostPlayerId: room.host.playerId ?? null,
     canStart,
     canPause,
     canResume,

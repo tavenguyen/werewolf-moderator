@@ -37,6 +37,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
   const isSingleDevice = deviceMode === 'SINGLE_DEVICE';
   const isHost = state.isHost || !state.publicView;
   const isHostPlayer = !isSingleDevice && (state.hostMode === 'PLAYER_HOST' || Boolean(state.hostView?.isHostPlayer));
+  const hostPlayerId = state.playerId || state.privateView?.playerId || state.hostView?.hostPlayerId;
 
   // Tabs on Mobile
   const [activeMobileTab, setActiveMobileTab] = useState<'players' | 'deck'>('players');
@@ -411,41 +412,48 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                   </p>
                 </div>
               ) : (
-                players.map((player) => (
-                  <div className="compact-player-item" key={player.id}>
-                    <div className="player-left">
-                      <span className="seat-idx">#{String(player.seatIndex).padStart(2, '0')}</span>
-                      {!isSingleDevice && (
-                        <span
-                          className={`player-dot ${player.isConnected ? 'online' : 'offline'}`}
-                          title={player.isConnected ? 'Online' : 'Offline'}
-                        />
-                      )}
-                      <span className="player-name-text">{player.name}</span>
-                      {!isSingleDevice && isHostPlayer && player.seatIndex === 0 && (
-                        <span className="host-pill">HOST</span>
+                players.map((player) => {
+                  const isThisPlayerHost =
+                    !isSingleDevice &&
+                    isHostPlayer &&
+                    (player.seatIndex === 0 || player.id === hostPlayerId);
+
+                  return (
+                    <div className="compact-player-item" key={player.id}>
+                      <div className="player-left">
+                        <span className="seat-idx">#{String(player.seatIndex).padStart(2, '0')}</span>
+                        {!isSingleDevice && (
+                          <span
+                            className={`player-dot ${player.isConnected ? 'online' : 'offline'}`}
+                            title={player.isConnected ? 'Online' : 'Offline'}
+                          />
+                        )}
+                        <span className="player-name-text">{player.name}</span>
+                        {isThisPlayerHost && (
+                          <span className="host-pill">HOST</span>
+                        )}
+                      </div>
+
+                      {isHost && !isThisPlayerHost && (
+                        <button
+                          type="button"
+                          className="player-del-btn"
+                          onClick={() => {
+                            if (isSingleDevice) {
+                              actions.removeOfflinePlayer(player.id);
+                            } else {
+                              void actions.hostEmergencyEliminate(player.id);
+                            }
+                          }}
+                          title={`Bớt ${player.name}`}
+                          aria-label={`Bớt ${player.name}`}
+                        >
+                          ×
+                        </button>
                       )}
                     </div>
-
-                    {isHost && (
-                      <button
-                        type="button"
-                        className="player-del-btn"
-                        onClick={() => {
-                          if (isSingleDevice) {
-                            actions.removeOfflinePlayer(player.id);
-                          } else {
-                            void actions.hostEmergencyEliminate(player.id);
-                          }
-                        }}
-                        title={`Bớt ${player.name}`}
-                        aria-label={`Bớt ${player.name}`}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

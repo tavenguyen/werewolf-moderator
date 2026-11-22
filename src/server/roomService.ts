@@ -415,6 +415,11 @@ export class RoomService {
     if (!room) throw new Error('Bàn chưa tồn tại hoặc đã kết thúc.');
     if (room.host.hostToken !== hostToken) throw new Error('Chỉ Host mới có quyền loại khẩn cấp.');
 
+    // Chặn hoàn toàn trường hợp Host tự loại chính mình
+    if (room.host.isPlayer && room.host.playerId === targetPlayerId) {
+      throw new Error('Host không thể tự loại chính mình khỏi bàn.');
+    }
+
     const player = room.players.get(targetPlayerId);
     if (!player) throw new Error('Người chơi không tồn tại.');
 

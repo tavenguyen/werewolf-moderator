@@ -159,6 +159,7 @@ export interface PublicRoomView {
 export interface HostBoardView {
   publicRoom: PublicRoomView;
   isHostPlayer: boolean;
+  hostPlayerId?: PlayerId | null;
   canStart: boolean;
   canPause: boolean;
   canResume: boolean;

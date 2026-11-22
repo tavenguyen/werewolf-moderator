@@ -136,7 +136,12 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
     }
   };
 
+  const isHostPlayer = Boolean(hostView?.isHostPlayer);
+  const hostPlayerId = state.playerId || state.privateView?.playerId || hostView?.hostPlayerId;
   const livingPlayers = players.filter((p) => p.isAlive);
+  const eliminatablePlayers = isHostPlayer
+    ? livingPlayers.filter((p) => p.seatIndex !== 0 && p.id !== hostPlayerId)
+    : livingPlayers;
   const deadPlayers = players.filter((p) => !p.isAlive);
   const isUrgent = remainingTime <= 30;
 
@@ -223,7 +228,7 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             ) : (
               <div className="host-emergency-picker">
                 <strong>Chọn người chơi rời bàn khẩn cấp:</strong>
-                {livingPlayers.map((p) => (
+                {eliminatablePlayers.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => handleEmergencyEliminate(p.id, p.name)}
@@ -231,6 +236,11 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
                     #{p.seatIndex} {p.name}
                   </button>
                 ))}
+                {eliminatablePlayers.length === 0 && (
+                  <p style={{ fontSize: '12px', color: '#717885', margin: '4px 0' }}>
+                    Không có người chơi khác để trục xuất
+                  </p>
+                )}
                 <button className="host-cancel" onClick={() => setEmergencyOpen(false)}>
                   Hủy bỏ
                 </button>

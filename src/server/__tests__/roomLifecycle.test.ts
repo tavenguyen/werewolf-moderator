@@ -200,4 +200,51 @@ describe('Realtime Backend - Room Lifecycle & Authentication', () => {
     expect(hostLeave.ok).toBe(true);
     expect(roomService.getRoom(roomCode)).toBeUndefined();
   });
+
+  it('từ chối khi Host kiêm người chơi tự loại chính mình qua emergencyEliminate', async () => {
+    const hostClient = createClient();
+    const createRes: any = await new Promise((resolve) => {
+      hostClient.emit('room:create', { isPlayer: true, username: 'Host Alice' }, resolve);
+    });
+    expect(createRes.ok).toBe(true);
+    const roomCode = createRes.data.roomCode;
+    const hostToken = createRes.data.hostToken;
+    const hostPlayerId = createRes.data.playerId;
+
+    const playerClient = createClient();
+    const joinRes: any = await new Promise((resolve) => {
+      playerClient.emit('room:join', { roomCode, username: 'Player Bob' }, resolve);
+    });
+    expect(joinRes.ok).toBe(true);
+    const bobPlayerId = joinRes.data.playerId;
+
+    // 1. Host cố tình loại chính mình -> phải thất bại
+    const kickSelfRes: any = await new Promise((resolve) => {
+      hostClient.emit(
+        'host:emergencyEliminate',
+        { roomCode, token: hostToken, targetPlayerId: hostPlayerId },
+        resolve
+      );
+    });
+    expect(kickSelfRes.ok).toBe(false);
+    expect(kickSelfRes.error.message).toContain('Host không thể tự loại chính mình');
+
+    // Kiểm tra trực tiếp qua roomService: phải quăng Exception
+    expect(() => {
+      roomService.emergencyEliminate(roomCode, hostToken, hostPlayerId);
+    }).toThrow('Host không thể tự loại chính mình khỏi bàn.');
+
+    // 2. Host loại người chơi khác (Bob) -> thành công bình thường
+    const kickBobRes: any = await new Promise((resolve) => {
+      hostClient.emit(
+        'host:emergencyEliminate',
+        { roomCode, token: hostToken, targetPlayerId: bobPlayerId },
+        resolve
+      );
+    });
+    expect(kickBobRes.ok).toBe(true);
+    const room = roomService.getRoom(roomCode)!;
+    expect(room.players.has(bobPlayerId)).toBe(false);
+    expect(room.players.has(hostPlayerId)).toBe(true);
+  });
 });
