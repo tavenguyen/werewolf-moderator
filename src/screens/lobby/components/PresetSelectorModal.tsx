@@ -7,8 +7,6 @@ import {
 } from '../../../engine/presets';
 import './presetSelectorModal.css';
 
-export type PresetThemeFilter = 'ALL' | PresetTheme;
-
 export interface PresetSelectorModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,15 +15,38 @@ export interface PresetSelectorModalProps {
   isSingleDevice: boolean;
 }
 
-const PLAYER_COUNTS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+function getThemeNameVi(theme: PresetTheme): string {
+  switch (theme) {
+    case 'CLASSIC':
+      return 'Cổ điển';
+    case 'DEDUCTION':
+      return 'Trinh thám';
+    case 'CHAOS':
+      return 'Hỗn loạn';
+    case 'WOLVES':
+      return 'Bầy sói';
+  }
+}
 
-const THEME_OPTIONS: { id: PresetThemeFilter; label: string; icon: string }[] = [
-  { id: 'ALL', label: 'Tất cả', icon: '✨' },
-  { id: 'CLASSIC', label: 'Cổ điển', icon: '⚖️' },
-  { id: 'DEDUCTION', label: 'Trinh thám', icon: '🔍' },
-  { id: 'CHAOS', label: 'Hỗn loạn', icon: '🎭' },
-  { id: 'WOLVES', label: 'Bầy Sói', icon: '🐺' },
-];
+function formatRoleListString(roles: string[]): string {
+  const counts: Record<string, number> = {};
+  const order: string[] = [];
+  for (const rId of roles) {
+    if (!counts[rId]) {
+      order.push(rId);
+      counts[rId] = 0;
+    }
+    counts[rId] += 1;
+  }
+  return order
+    .map((rId) => {
+      const def = ROLES_BY_ID[rId];
+      const name = def?.nameVi || rId;
+      const count = counts[rId];
+      return count > 1 ? `${count} ${name}` : name;
+    })
+    .join(' · ');
+}
 
 export default function PresetSelectorModal({
   isOpen,
@@ -36,16 +57,15 @@ export default function PresetSelectorModal({
 }: PresetSelectorModalProps) {
   const normalizedCount = Math.max(6, Math.min(16, playerCount));
   const [selectedCount, setSelectedCount] = useState<number>(normalizedCount);
-  const [selectedTheme, setSelectedTheme] = useState<PresetThemeFilter>('ALL');
 
-  // Đồng bộ số người khi modal mở
+  // Tự động đồng bộ số người theo Lobby khi modal được mở
   useEffect(() => {
     if (isOpen) {
       setSelectedCount(Math.max(6, Math.min(16, playerCount)));
     }
   }, [isOpen, playerCount]);
 
-  // Khóa scroll body khi modal mở
+  // Khóa scroll body và hỗ trợ phím Escape
   useEffect(() => {
     if (!isOpen) return;
     const originalOverflow = document.body.style.overflow;
@@ -66,60 +86,10 @@ export default function PresetSelectorModal({
 
   if (!isOpen) return null;
 
-  // Lọc danh sách Preset theo số người và theme
-  const filteredPresets: RolePreset[] = ROLE_PRESETS.filter((preset) => {
-    if (preset.playerCount !== selectedCount) return false;
-    if (selectedTheme !== 'ALL' && preset.theme !== selectedTheme) return false;
-    return true;
-  });
-
-  // Chuyển mảng roles thành danh sách nhóm { roleId, count }
-  const groupRoles = (roles: string[]) => {
-    const counts: Record<string, number> = {};
-    for (const rId of roles) {
-      counts[rId] = (counts[rId] ?? 0) + 1;
-    }
-    return Object.entries(counts).map(([roleId, count]) => {
-      const def = ROLES_BY_ID[roleId];
-      return {
-        roleId,
-        name: def?.nameVi || roleId,
-        count,
-        faction: def?.faction || 'VILLAGER',
-      };
-    });
-  };
-
-  const getThemeBadgeLabel = (theme: PresetTheme) => {
-    switch (theme) {
-      case 'CLASSIC':
-        return '⚖️ Cổ điển';
-      case 'DEDUCTION':
-        return '🔍 Trinh thám';
-      case 'CHAOS':
-        return '🎭 Hỗn loạn';
-      case 'WOLVES':
-        return '🐺 Bầy Sói';
-    }
-  };
-
-  const getBalanceBadge = (score: number) => {
-    if (score === 0) {
-      return <span className="preset-balance-badge balanced">Cân bằng (0)</span>;
-    }
-    if (score > 0) {
-      return (
-        <span className="preset-balance-badge lean-village">
-          Cân bằng (+{score})
-        </span>
-      );
-    }
-    return (
-      <span className="preset-balance-badge lean-wolf">
-        Cân bằng ({score})
-      </span>
-    );
-  };
+  // Lọc 4 bộ bài mẫu theo số người chơi
+  const presetsForCount: RolePreset[] = ROLE_PRESETS.filter(
+    (preset) => preset.playerCount === selectedCount
+  );
 
   return (
     <div
@@ -134,153 +104,140 @@ export default function PresetSelectorModal({
         aria-labelledby="preset-modal-title"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Header 1 dòng phẳng: Tên modal bên trái, Bộ tăng giảm người & Nút × bên phải */}
         <div className="preset-modal-header">
-          <div className="preset-header-titles">
-            <h2 id="preset-modal-title" className="preset-modal-title">
-              <span className="title-icon">🎨</span>
-              Chọn Phong Cách Chơi
-            </h2>
-            <p className="preset-modal-subtitle">
-              44 tổ hợp vai trò đã cân bằng toán học chuẩn mực từ 6 đến 16 người
-            </p>
-          </div>
-          <button
-            type="button"
-            className="preset-modal-close-btn"
-            onClick={onClose}
-            aria-label="Đóng bảng gợi ý bộ bài"
-            title="Đóng"
-          >
-            ×
-          </button>
-        </div>
+          <h2 id="preset-modal-title" className="preset-modal-title">
+            Mẫu bộ bài
+          </h2>
 
-        {/* Tab bar chọn số lượng người chơi (6-16) */}
-        <div className="preset-player-tabs-bar" role="tablist" aria-label="Chọn số người chơi">
-          {PLAYER_COUNTS.map((count) => {
-            const isActive = count === selectedCount;
-            return (
+          <div className="preset-header-controls">
+            <div className="preset-counter-box" aria-label="Chọn số người chơi">
               <button
-                key={count}
                 type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`preset-player-tab ${isActive ? 'active' : ''}`}
-                onClick={() => setSelectedCount(count)}
+                className="preset-counter-btn"
+                disabled={selectedCount <= 6}
+                onClick={() => setSelectedCount((c) => Math.max(6, c - 1))}
+                aria-label="Giảm số người"
+                title="Giảm 1 người"
               >
-                {count} người
+                −
               </button>
-            );
-          })}
-        </div>
-
-        {/* Filter buttons theo Theme */}
-        <div className="preset-theme-filters" role="group" aria-label="Lọc theo phong cách">
-          {THEME_OPTIONS.map((opt) => {
-            const isActive = opt.id === selectedTheme;
-            return (
+              <span className="preset-counter-value">{selectedCount} người</span>
               <button
-                key={opt.id}
                 type="button"
-                className={`preset-theme-filter-btn ${isActive ? 'active' : ''}`}
-                onClick={() => setSelectedTheme(opt.id)}
+                className="preset-counter-btn"
+                disabled={selectedCount >= 16}
+                onClick={() => setSelectedCount((c) => Math.min(16, c + 1))}
+                aria-label="Tăng số người"
+                title="Tăng 1 người"
               >
-                <span>{opt.icon}</span>
-                <span>{opt.label}</span>
+                +
               </button>
-            );
-          })}
-        </div>
-
-        {/* Danh sách các card Preset */}
-        <div className="preset-cards-scroll-body">
-          {filteredPresets.length === 0 ? (
-            <div className="preset-empty-msg">
-              Không tìm thấy bộ bài nào phù hợp với bộ lọc hiện tại.
             </div>
-          ) : (
-            filteredPresets.map((preset) => {
-              const isMultiOnly = preset.isMultiDeviceOnly;
-              const isBlocked = isSingleDevice && isMultiOnly;
-              const groupedRoles = groupRoles(preset.roles);
 
-              return (
-                <article
-                  key={preset.id}
-                  className={`preset-card ${isBlocked ? 'disabled' : ''}`}
-                >
-                  {/* Card Header: Tên, Theme, Balance, MultiDevice */}
-                  <div className="preset-card-header">
-                    <div className="preset-card-title-group">
-                      <h3 className="preset-card-title">{preset.nameVi}</h3>
-                      <span className={`preset-theme-badge theme-${preset.theme}`}>
-                        {getThemeBadgeLabel(preset.theme)}
-                      </span>
-                      {getBalanceBadge(preset.balanceScore)}
-                      {isMultiOnly && (
+            <button
+              type="button"
+              className="preset-modal-close-btn"
+              onClick={onClose}
+              aria-label="Đóng"
+              title="Đóng"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* Danh sách 4 mẫu bài (2 dòng mỗi card, chạm thẳng để chọn) */}
+        <div className="preset-cards-list">
+          {presetsForCount.map((preset) => {
+            const isMultiOnly = Boolean(preset.isMultiDeviceOnly);
+            const isBlocked = isSingleDevice && isMultiOnly;
+            const balanceScore = preset.balanceScore;
+            const balanceText =
+              balanceScore === 0
+                ? 'Cân bằng (0)'
+                : `Cân bằng (${balanceScore > 0 ? `+${balanceScore}` : balanceScore})`;
+
+            const balanceStatusClass =
+              balanceScore === 0
+                ? 'balanced'
+                : balanceScore > 0
+                  ? 'lean-village'
+                  : 'lean-wolf';
+
+            return (
+              <div
+                key={preset.id}
+                className={`preset-card ${isBlocked ? 'disabled' : ''}`}
+                onClick={() => {
+                  if (isBlocked) return;
+                  onSelectPreset(preset.roles);
+                  onClose();
+                }}
+                role="button"
+                tabIndex={isBlocked ? -1 : 0}
+                onKeyDown={(e) => {
+                  if (!isBlocked && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    onSelectPreset(preset.roles);
+                    onClose();
+                  }
+                }}
+              >
+                {/* Dòng 1: Tên phong cách · Cân bằng (điểm) — Nút Chọn */}
+                <div className="preset-card-row1">
+                  <div className="preset-card-info">
+                    <strong className="preset-theme-name">
+                      {getThemeNameVi(preset.theme)}
+                    </strong>
+                    <span className="preset-sep">·</span>
+                    <span className={`preset-balance-text ${balanceStatusClass}`}>
+                      {balanceText}
+                    </span>
+                    {isMultiOnly && (
+                      <>
+                        <span className="preset-sep">·</span>
                         <span
-                          className="preset-multi-device-badge"
-                          title="Cần chế độ Nhiều máy do có vai trò ẩn bí mật"
+                          className={`preset-device-badge ${isBlocked ? 'blocked' : ''}`}
+                          title={
+                            isSingleDevice
+                              ? 'Bộ bài chứa vai ẩn bí mật, không hỗ trợ 1 máy'
+                              : 'Yêu cầu màn hình riêng'
+                          }
                         >
-                          📱 Chỉ Nhiều máy
+                          {isSingleDevice ? 'Chỉ nhiều máy' : 'Nhiều máy'}
                         </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Card Description */}
-                  {preset.descriptionVi && (
-                    <p className="preset-card-desc">{preset.descriptionVi}</p>
-                  )}
-
-                  {/* Danh sách thẻ vai dạng visual pills */}
-                  <div className="preset-pills-wrap" aria-label="Danh sách các vai trong bộ bài">
-                    {groupedRoles.map((role) => (
-                      <span
-                        key={role.roleId}
-                        className={`preset-role-pill faction-${role.faction}`}
-                      >
-                        <span>{role.name}</span>
-                        {role.count > 1 && (
-                          <span className="preset-role-multiplier">×{role.count}</span>
-                        )}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Card Footer: Cảnh báo 1 máy & Nút áp dụng */}
-                  <div className="preset-card-footer">
-                    {isBlocked ? (
-                      <div className="preset-single-device-warning">
-                        ⚠️ Chứa vai đặc biệt, chỉ hỗ trợ Nhiều máy
-                      </div>
-                    ) : (
-                      <div />
+                      </>
                     )}
-
-                    <button
-                      type="button"
-                      className="preset-apply-btn"
-                      disabled={isBlocked}
-                      onClick={() => {
-                        if (isBlocked) return;
-                        onSelectPreset(preset.roles);
-                        onClose();
-                      }}
-                      title={
-                        isBlocked
-                          ? 'Bộ bài không hỗ trợ chế độ 1 máy'
-                          : `Áp dụng bộ bài ${preset.nameVi} (${preset.playerCount} người)`
-                      }
-                    >
-                      {isBlocked ? 'Không khả dụng' : 'Áp dụng bộ bài này'}
-                    </button>
                   </div>
-                </article>
-              );
-            })
-          )}
+
+                  <button
+                    type="button"
+                    className="preset-select-btn"
+                    disabled={isBlocked}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isBlocked) return;
+                      onSelectPreset(preset.roles);
+                      onClose();
+                    }}
+                    title={
+                      isBlocked
+                        ? 'Chế độ 1 máy không hỗ trợ vai đặc biệt trong bộ bài này'
+                        : `Áp dụng mẫu ${getThemeNameVi(preset.theme)}`
+                    }
+                  >
+                    {isBlocked ? 'Không khả dụng' : 'Chọn'}
+                  </button>
+                </div>
+
+                {/* Dòng 2: Danh sách vai trò phẳng 1 dòng */}
+                <div className="preset-card-row2">
+                  {formatRoleListString(preset.roles)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
