@@ -110,6 +110,7 @@ export interface RoomState {
   lastVoteTally?: {
     tallies: Record<PlayerId, number>;
     abstainCount: number;
+    voterDetails?: Record<PlayerId, PlayerId[]>;
   };
 }
 
@@ -149,6 +150,7 @@ export interface PublicRoomView {
   lastVoteTally?: {
     tallies: Record<PlayerId, number>;
     abstainCount: number;
+    voterDetails?: Record<PlayerId, PlayerId[]>;
   };
   bearGrowled?: boolean;
   princeRevealed?: boolean;

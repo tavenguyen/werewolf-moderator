@@ -699,21 +699,26 @@ export class SocketGateway {
   }
 
   /**
-   * Bắt đầu pha Thảo luận ban ngày (180s, khóa vote 60s đầu).
+   * Bắt đầu pha Thảo luận ban ngày (tùy chỉnh thảo luận & khóa vote).
    */
   private startDayDiscussion(room: RoomState): void {
     if (room.gameState) {
       room.publicHistoryLogs.push(`Bắt đầu Ngày ${room.gameState.roundNumber}: Mở phiên thảo luận làng.`);
     }
+    const discussSec = room.settings.dayDiscussionSeconds ?? DEFAULT_DAY_DISCUSS_SEC;
+    const lockSec = room.settings.dayVoteLockSeconds ?? DEFAULT_VOTE_LOCK_SEC;
+
     this.timerManager.startDayDiscussTimer(
       room,
       () => {
         this.finalizeDayVote(room);
       },
       () => {
-        // Callback mở khóa biểu quyết sau 60s
+        // Callback mở khóa biểu quyết
         this.broadcastRoom(room);
-      }
+      },
+      discussSec,
+      lockSec
     );
   }
 
@@ -747,9 +752,10 @@ export class SocketGateway {
   public executeFinalizeDayVote(room: RoomState): void {
     if (!room.gameState) return;
 
-    // Tally vote kín: chỉ công bố map số phiếu + abstainCount, KHÔNG phát voter
+    // Tally vote kín: chỉ công bố map số phiếu + abstainCount, nếu bật revealVoterIdentities thì bổ sung voterDetails
     const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
     const tallies: Record<PlayerId, number> = {};
+    const voterDetails: Record<PlayerId, PlayerId[]> = {};
     let abstainCount = 0;
 
     for (const voter of livingVoters) {
@@ -758,10 +764,16 @@ export class SocketGateway {
         abstainCount += voter.voteWeight;
       } else {
         tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
+        if (!voterDetails[targetId]) voterDetails[targetId] = [];
+        voterDetails[targetId].push(voter.id);
       }
     }
 
-    room.lastVoteTally = { tallies, abstainCount };
+    if (room.settings.revealVoterIdentities) {
+      room.lastVoteTally = { tallies, abstainCount, voterDetails };
+    } else {
+      room.lastVoteTally = { tallies, abstainCount };
+    }
 
     const { outcome } = tallyDayVotes(room.gameState);
     room.publicHistoryLogs.push(outcome.reason);
@@ -832,6 +844,7 @@ export class SocketGateway {
       const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
       const runoffWeights = new Map<PlayerId, number>();
       const tallies: Record<PlayerId, number> = {};
+      const voterDetails: Record<PlayerId, PlayerId[]> = {};
       let abstainCount = 0;
 
       for (const voter of livingVoters) {
@@ -841,10 +854,16 @@ export class SocketGateway {
         } else {
           runoffWeights.set(targetId, (runoffWeights.get(targetId) ?? 0) + voter.voteWeight);
           tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
+          if (!voterDetails[targetId]) voterDetails[targetId] = [];
+          voterDetails[targetId].push(voter.id);
         }
       }
 
-      room.lastVoteTally = { tallies, abstainCount };
+      if (room.settings.revealVoterIdentities) {
+        room.lastVoteTally = { tallies, abstainCount, voterDetails };
+      } else {
+        room.lastVoteTally = { tallies, abstainCount };
+      }
 
       let executeTargetId: PlayerId | null = null;
       if (runoffWeights.size > 0) {

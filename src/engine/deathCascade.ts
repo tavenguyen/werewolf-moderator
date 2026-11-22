@@ -91,6 +91,10 @@ export function processDeathCascade(
         state.historyLogs.push(
           `Nhân bản (${victim.name}) bị Thợ săn bắn chết và không được nổ phát súng thứ 2!`
         );
+      } else if (next.cause === 'WITCH_POISON' && state.settings.hunterShootsOnPoison === false) {
+        state.historyLogs.push(
+          `Thợ săn (${victim.name}) chết vì trúng độc của Phù thủy trong giấc ngủ và không thể nổ súng!`
+        );
       } else {
         state.pendingHunterShotPlayerId = victim.id;
         state.historyLogs.push(`Thợ săn (${victim.name}) đã gục xuống và chuẩn bị nổ phát súng sau cùng!`);

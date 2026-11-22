@@ -303,8 +303,12 @@ export function resolveNight(
     const { target1, target2 } = actions.cupid;
     const p1 = nextState.players.find((p) => p.id === target1);
     const p2 = nextState.players.find((p) => p.id === target2);
+    const cupidPlayer = nextState.players.find((p) => p.roleId === 'cupid');
+    const isSelfMatch = cupidPlayer && (target1 === cupidPlayer.id || target2 === cupidPlayer.id);
 
-    if (p1 && p2 && p1.id !== p2.id && p1.isAlive && p2.isAlive) {
+    if (isSelfMatch && nextState.settings.allowCupidSelfMatch === false) {
+      nextState.historyLogs.push('Cupid tự ghép mình nhưng luật phòng cấm -> Mũi tên vô hiệu!');
+    } else if (p1 && p2 && p1.id !== p2.id && p1.isAlive && p2.isAlive) {
       p1.loverId = p2.id;
       p2.loverId = p1.id;
 
@@ -371,8 +375,13 @@ export function resolveNight(
   let protectedPlayerId: PlayerId | null = null;
   if (actions.bodyguard?.targetId && !nextState.villagePowerStripped) {
     const target = actions.bodyguard.targetId;
-    // Quy tắc: Không bảo vệ cùng 1 người 2 đêm liên tiếp
-    if (target !== nextState.lastProtectedPlayerId) {
+    const bodyguardPlayer = nextState.players.find((p) => p.roleId === 'bodyguard');
+    const isSelf = bodyguardPlayer && bodyguardPlayer.id === target;
+
+    if (isSelf && nextState.settings.allowBodyguardSelfProtect === false) {
+      nextState.historyLogs.push('Bảo vệ tự bảo vệ bản thân nhưng luật phòng cấm -> Khiên vô hiệu!');
+      nextState.lastProtectedPlayerId = null;
+    } else if (target !== nextState.lastProtectedPlayerId) {
       protectedPlayerId = target;
       nextState.lastProtectedPlayerId = target;
       events.push({
@@ -398,7 +407,9 @@ export function resolveNight(
 
   let rawWolfTargets: PlayerId[] = [];
   if (actions.wolfPack) {
-    if (actions.wolfPack.individualVotes) {
+    if (nextState.settings.firstNightNoKill && nextState.roundNumber === 1) {
+      nextState.historyLogs.push('Đêm 1 luật hòa bình: Ma sói chỉ nhận mặt, không có ai bị cắn chết!');
+    } else if (actions.wolfPack.individualVotes) {
       // Sói trắng (white_wolf) cũng được thức dậy và bỏ phiếu cùng bầy
       const livingWolves = nextState.players.filter((p) => {
         if (!p.isAlive) return false;
@@ -548,9 +559,31 @@ export function resolveNight(
   const witchPlayer = nextState.players.find((p) => p.roleId === 'witch');
 
   if (!nextState.villagePowerStripped && actions.witch) {
+    const disallowBoth = nextState.settings.allowWitchBothPotionsSameNight === false;
+    let healUsedThisNight = false;
+
     // 6a. Dùng bình Cứu
     if (actions.witch.heal && !nextState.witchHealUsed) {
       nextState.witchHealUsed = true;
+      healUsedThisNight = true;
+
+      // Kiểm tra biến thể "Thuốc quá liều" (witchDoubleProtectKills):
+      // Nếu mục tiêu vừa được Bảo vệ che chắn khỏi vết cắn Sói, vừa được Phù thủy cứu -> Quá liều tử vong!
+      if (
+        nextState.settings.witchDoubleProtectKills &&
+        protectedPlayerId &&
+        deduplicatedTargets.includes(protectedPlayerId)
+      ) {
+        const isDoubleProtected =
+          nextState.settings.witchHealMode === 'AOE' ||
+          actions.witch.healTargetId === protectedPlayerId;
+        if (isDoubleProtected) {
+          pendingDeaths.push({ playerId: protectedPlayerId, cause: 'WOLF_ATTACK' });
+          nextState.historyLogs.push(
+            `Mục tiêu [${protectedPlayerId}] vừa được Bảo vệ che chắn vừa được Phù thủy cứu -> Thuốc quá liều tử vong!`
+          );
+        }
+      }
 
       // Kiểm tra có cấm tự cứu không
       let eligibleHealTargets = [...wolfVictims];
@@ -606,17 +639,23 @@ export function resolveNight(
 
     // 6b. Dùng bình Độc
     if (actions.witch.poisonTargetId && !nextState.witchPoisonUsed) {
-      const pTarget = nextState.players.find((p) => p.id === actions.witch!.poisonTargetId);
-      if (pTarget && pTarget.isAlive) {
-        nextState.witchPoisonUsed = true;
-        poisonVictim = pTarget.id;
-        events.push({
-          type: 'WITCH_POISON',
-          sourceRole: 'witch',
-          targetPlayerId: pTarget.id,
-          isPublic: false,
-        });
-        nextState.historyLogs.push(`Phù thủy ném bình Độc vào mục tiêu [${poisonVictim}]!`);
+      if (disallowBoth && healUsedThisNight) {
+        nextState.historyLogs.push(
+          'Luật phòng cấm Phù thủy dùng 2 bình trong cùng 1 đêm -> Bình độc bị khóa lại!'
+        );
+      } else {
+        const pTarget = nextState.players.find((p) => p.id === actions.witch!.poisonTargetId);
+        if (pTarget && pTarget.isAlive) {
+          nextState.witchPoisonUsed = true;
+          poisonVictim = pTarget.id;
+          events.push({
+            type: 'WITCH_POISON',
+            sourceRole: 'witch',
+            targetPlayerId: pTarget.id,
+            isPublic: false,
+          });
+          nextState.historyLogs.push(`Phù thủy ném bình Độc vào mục tiêu [${poisonVictim}]!`);
+        }
       }
     }
   }
@@ -637,9 +676,13 @@ export function resolveNight(
       if (target) {
         const def = ROLES_BY_ID[target.roleId];
         let result = def?.seerResult ?? 'VILLAGER';
-        // Lycan soi ra Sói, Minion soi ra Dân
-        if (target.roleId === 'lycan') result = 'WEREWOLF';
-        if (target.roleId === 'minion') result = 'VILLAGER';
+        if (nextState.settings.seerRevealMode === 'EXACT_ROLE') {
+          result = target.roleId;
+        } else {
+          // Lycan soi ra Sói, Minion soi ra Dân
+          if (target.roleId === 'lycan') result = 'WEREWOLF';
+          if (target.roleId === 'minion') result = 'VILLAGER';
+        }
 
         infoResults.seerResult = {
           targetId: target.id,

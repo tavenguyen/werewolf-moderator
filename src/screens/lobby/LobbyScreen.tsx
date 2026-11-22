@@ -15,6 +15,10 @@ import {
   type RoleSelectionMap,
 } from './lobbyValidation';
 import PresetSelectorModal from './components/PresetSelectorModal';
+import RoomSettingsModal, {
+  getModifiedRulesCount,
+  RULE_PRESETS,
+} from './components/RoomSettingsModal';
 import './lobby.css';
 
 type Props = {
@@ -55,7 +59,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
 
   // Settings & QR
-  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -76,27 +80,12 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     customDeck: DEFAULT_INITIAL_ROLES,
   };
 
-  const DEFAULT_SETTINGS = {
-    revealOnDeath: false,
-    allowWolfSkip: false,
-    allowWolfFriendlyFire: false,
-    allowWitchSelfHeal: true,
-    witchWasteHealOnEmpty: false,
-    witchKnowsVictim: true,
-    witchHealMode: 'AOE',
-    tieVoteMode: 'ESCAPE',
-    ghostMode: false,
-    hasMayor: false,
-  };
-
-  const modifiedRulesCount = Object.entries(DEFAULT_SETTINGS).filter(
-    ([k, defVal]) => currentSettings[k as keyof typeof DEFAULT_SETTINGS] !== defVal
-  ).length;
-
   // Synchronized deck selection
   const [selectedRoles, setSelectedRoles] = useState<RoleSelectionMap>(() => {
     return currentSettings.customDeck || DEFAULT_INITIAL_ROLES;
   });
+
+  const modifiedRulesCount = getModifiedRulesCount(currentSettings, selectedRoles);
 
   // Non-host players sync deck from settings in real-time
   useEffect(() => {
@@ -140,18 +129,22 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     }
   };
 
-  const handleToggleSetting = async (key: keyof typeof currentSettings) => {
-    if (!isHost) return;
-    const nextVal = !currentSettings[key];
-    await actions.updateSettings({ [key]: nextVal });
-  };
-
   const handleUpdateSetting = async <K extends keyof typeof currentSettings>(
     key: K,
     value: (typeof currentSettings)[K]
   ) => {
     if (!isHost) return;
     await actions.updateSettings({ [key]: value });
+  };
+
+  const handleApplySettingsPatch = async (patch: Partial<typeof currentSettings>) => {
+    if (!isHost) return;
+    await actions.updateSettings(patch);
+  };
+
+  const handleResetSettingsToDefault = async () => {
+    if (!isHost) return;
+    await actions.updateSettings(RULE_PRESETS[0].patch);
   };
 
   const handleRoleCountChange = (roleId: string, delta: number) => {
@@ -518,6 +511,15 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                   >
                     Đặt lại
                   </button>
+                  <span className="action-divider" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="quick-action-text-btn"
+                    onClick={() => setSettingsModalOpen(true)}
+                    title={isHost ? 'Xem và tùy chỉnh luật phòng' : 'Xem cài đặt luật phòng (Chỉ xem)'}
+                  >
+                    {modifiedRulesCount > 0 ? `Luật phòng (${modifiedRulesCount})` : 'Luật phòng'}
+                  </button>
                 </div>
               </div>
 
@@ -643,139 +645,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                   <span className="adv-selected-badge">đang chọn {advancedCardsSelectedCount}</span>
                 )}
               </button>
-            </div>
-
-            {/* Tùy chỉnh luật nâng cao thu gọn */}
-            <div className="compact-settings-wrapper">
-              <button
-                type="button"
-                className="compact-settings-toggle"
-                onClick={() => setAdvancedSettingsOpen((v) => !v)}
-                aria-expanded={advancedSettingsOpen}
-              >
-                <div className="settings-toggle-left">
-                  <span className="settings-title-main">Tùy chỉnh luật phòng</span>
-                  <span className={`settings-status-badge ${modifiedRulesCount > 0 ? 'modified' : ''}`}>
-                    {modifiedRulesCount > 0 ? `Đã đổi ${modifiedRulesCount}` : 'Mặc định'}
-                  </span>
-                  {!isHost && (
-                    <span className="settings-readonly-badge">Chỉ xem</span>
-                  )}
-                </div>
-                <span className="toggle-arrow">{advancedSettingsOpen ? '▲' : '▼'}</span>
-              </button>
-
-              {advancedSettingsOpen && (
-                <div className="compact-settings-panel">
-                  {/* Nhóm 1: Phe Ma Sói */}
-                  <div className="settings-group">
-                    <div className="settings-group-title">Phe Ma Sói</div>
-                    <div className="settings-group-content">
-                      <RuleToggleRow
-                        title="Sói được bỏ cắn"
-                        desc="Cho phép đàn Sói không cắn ai để tạo đêm bình yên giả."
-                        checked={Boolean(currentSettings.allowWolfSkip)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('allowWolfSkip')}
-                      />
-                      <RuleToggleRow
-                        title="Sói cắn đồng đội"
-                        desc="Cho phép Sói tự cắn nhau để đánh lạc hướng Tiên tri và Dân."
-                        checked={Boolean(currentSettings.allowWolfFriendlyFire)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('allowWolfFriendlyFire')}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nhóm 2: Kỹ năng Phù Thủy */}
-                  <div className="settings-group">
-                    <div className="settings-group-title">Kỹ năng Phù Thủy</div>
-                    <div className="settings-group-content">
-                      <RuleToggleRow
-                        title="Phù thủy tự cứu"
-                        desc="Cho phép Phù thủy dùng bình cứu giải thoát cho chính mình."
-                        checked={Boolean(currentSettings.allowWitchSelfHeal)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('allowWitchSelfHeal')}
-                      />
-                      <RuleToggleRow
-                        title="Phù thủy biết nạn nhân"
-                        desc="Bật: Hiện tên người bị cắn. Tắt: Cứu mù theo phán đoán."
-                        checked={Boolean(currentSettings.witchKnowsVictim)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('witchKnowsVictim')}
-                      />
-                      <RuleSegmentedRow
-                        title="Cơ chế bình cứu"
-                        desc="AoE: Cứu mọi nạn nhân bị cắn. 1 người: Chọn cứu 1 nạn nhân."
-                        selectedValue={currentSettings.witchHealMode || 'AOE'}
-                        disabled={!isHost}
-                        options={[
-                          { value: 'AOE', label: 'Cứu tất cả (AoE)' },
-                          { value: 'SINGLE', label: 'Cứu 1 người' },
-                        ]}
-                        onChange={(val) => handleUpdateSetting('witchHealMode', val)}
-                      />
-                      {!currentSettings.witchKnowsVictim && (
-                        <RuleToggleRow
-                          title="Mất bình khi cứu trượt"
-                          desc="Khi cứu mù trúng đêm bình yên: Bật để mất bình, Tắt để hoàn lại."
-                          checked={Boolean(currentSettings.witchWasteHealOnEmpty)}
-                          disabled={!isHost}
-                          onToggle={() => handleToggleSetting('witchWasteHealOnEmpty')}
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Nhóm 3: Ban Ngày & Biểu Quyết */}
-                  <div className="settings-group">
-                    <div className="settings-group-title">Ban Ngày &amp; Biểu Quyết</div>
-                    <div className="settings-group-content">
-                      <RuleToggleRow
-                        title="Bầu Trưởng làng ngày 1"
-                        desc="Mở vòng tranh cử Trưởng làng (sở hữu 2 phiếu) vào sáng Ngày 1."
-                        checked={Boolean(currentSettings.hasMayor)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('hasMayor')}
-                      />
-                      <RuleSegmentedRow
-                        title="Hòa phiếu ban ngày"
-                        desc="Hòa là thoát: Không ai bị treo. Vote lại: Biện hộ 30s &amp; bầu lại."
-                        selectedValue={currentSettings.tieVoteMode || 'ESCAPE'}
-                        disabled={!isHost}
-                        options={[
-                          { value: 'ESCAPE', label: 'Hòa là thoát' },
-                          { value: 'RUNOFF', label: 'Vote lại' },
-                        ]}
-                        onChange={(val) => handleUpdateSetting('tieVoteMode', val)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nhóm 4: Cơ Chế & Thông Tin */}
-                  <div className="settings-group">
-                    <div className="settings-group-title">Cơ Chế &amp; Thông Tin</div>
-                    <div className="settings-group-content">
-                      <RuleToggleRow
-                        title="Lật vai khi chết"
-                        desc="Khuyên Tắt để tăng đất diễn giả danh vai trò và suy luận."
-                        checked={Boolean(currentSettings.revealOnDeath)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('revealOnDeath')}
-                      />
-                      <RuleToggleRow
-                        title="Góc nhìn người chết"
-                        desc="Ẩn vai người sống đối với màn hình của người đã chết (chống spoil)."
-                        checked={Boolean(currentSettings.ghostMode)}
-                        disabled={!isHost}
-                        onToggle={() => handleToggleSetting('ghostMode')}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </section>
@@ -1068,78 +937,18 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
         playerCount={metrics.realPlayersCount}
         isSingleDevice={isSingleDevice}
       />
-    </div>
-  );
-}
 
-function RuleToggleRow({
-  title,
-  desc,
-  checked,
-  disabled,
-  onToggle,
-}: {
-  title: string;
-  desc: string;
-  checked: boolean;
-  disabled?: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className={`rule-row ${disabled ? 'disabled' : ''}`}>
-      <div className="rule-info">
-        <span className="rule-name">{title}</span>
-        <span className="rule-desc">{desc}</span>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
-        className={`rule-toggle-switch ${checked ? 'active' : ''}`}
-        onClick={onToggle}
-        aria-label={title}
-      >
-        <span className="toggle-thumb" />
-      </button>
-    </div>
-  );
-}
-
-function RuleSegmentedRow<T extends string>({
-  title,
-  desc,
-  options,
-  selectedValue,
-  disabled,
-  onChange,
-}: {
-  title: string;
-  desc: string;
-  options: { value: T; label: string }[];
-  selectedValue: T;
-  disabled?: boolean;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className={`rule-row ${disabled ? 'disabled' : ''}`}>
-      <div className="rule-info">
-        <span className="rule-name">{title}</span>
-        <span className="rule-desc">{desc}</span>
-      </div>
-      <div className="rule-segmented-wrap" role="group" aria-label={title}>
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            disabled={disabled}
-            className={`rule-segmented-btn ${selectedValue === opt.value ? 'active' : ''}`}
-            onClick={() => onChange(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      {/* Room Rules & Settings Modal */}
+      <RoomSettingsModal
+        isOpen={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        isHost={isHost}
+        currentSettings={currentSettings}
+        onUpdateSetting={handleUpdateSetting}
+        onApplySettingsPatch={handleApplySettingsPatch}
+        onResetDefaults={handleResetSettingsToDefault}
+        selectedRoles={selectedRoles}
+      />
     </div>
   );
 }

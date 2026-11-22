@@ -304,9 +304,17 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
             <div className="tally-breakdown">
               {Object.entries(lastVoteTally.tallies).map(([pId, count]) => {
                 const p = players.find((pl) => pl.id === pId);
+                const voters = lastVoteTally.voterDetails?.[pId]
+                  ?.map((vId) => players.find((pl) => pl.id === vId)?.name || vId)
+                  .join(', ');
                 return (
                   <span key={pId} className="tally-badge">
                     #{p?.seatIndex} {p?.name}: <b>{count} phiếu</b>
+                    {voters && (
+                      <small className="tally-voters-list">
+                        ({voters})
+                      </small>
+                    )}
                   </span>
                 );
               })}

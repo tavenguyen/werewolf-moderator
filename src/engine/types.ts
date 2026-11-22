@@ -71,6 +71,26 @@ export interface RoomSettings {
   ghostMode: boolean;
   hasMayor: boolean;
   customDeck?: Record<string, number>;
+
+  // Variant rules - Bodyguard & Witch
+  allowBodyguardSelfProtect?: boolean;
+  allowWitchBothPotionsSameNight?: boolean;
+  witchDoubleProtectKills?: boolean;
+
+  // Variant rules - Seer, Cupid & Wolves
+  firstNightNoKill?: boolean;
+  seerRevealMode?: 'FACTION' | 'EXACT_ROLE';
+  allowCupidSelfMatch?: boolean;
+
+  // Variant rules - Day & Timing
+  dayDiscussionSeconds?: number;
+  dayVoteLockSeconds?: number;
+  revealVoterIdentities?: boolean;
+  lynchThreshold?: 'PLURALITY' | 'MAJORITY';
+
+  // Variant rules - Hunter
+  hunterShootsOnPoison?: boolean;
+  allowHunterSkipShot?: boolean;
 }
 
 export interface NightActions {

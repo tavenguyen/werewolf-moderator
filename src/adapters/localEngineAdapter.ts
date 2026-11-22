@@ -610,14 +610,15 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       clearInterval(this.dayTimerInterval);
     }
 
-    const durationSec = 180;
+    const durationSec = this.roomState.settings.dayDiscussionSeconds ?? 180;
+    const lockSec = this.roomState.settings.dayVoteLockSeconds ?? 60;
     const deadlineAt = Date.now() + durationSec * 1000;
     this.roomState.timers.deadlineAt = deadlineAt;
     this.roomState.timers.isPaused = false;
 
     if (this.roomState.gameState?.dayState) {
-      this.roomState.gameState.dayState.voteLocked = true;
-      this.roomState.gameState.dayState.voteLockRemainingSeconds = 60;
+      this.roomState.gameState.dayState.voteLocked = lockSec > 0;
+      this.roomState.gameState.dayState.voteLockRemainingSeconds = lockSec;
     }
 
     audioController.playTurnNarration('day_discuss');
@@ -631,12 +632,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       );
 
       if (this.roomState.gameState?.dayState) {
-        if (remainingSec <= durationSec - 60) {
+        if (remainingSec <= durationSec - lockSec) {
           this.roomState.gameState.dayState.voteLocked = false;
           this.roomState.gameState.dayState.voteLockRemainingSeconds = 0;
         } else {
           this.roomState.gameState.dayState.voteLockRemainingSeconds =
-            remainingSec - (durationSec - 60);
+            remainingSec - (durationSec - lockSec);
         }
       }
 
@@ -728,6 +729,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     // Tally ballots
     const ballots = this.roomState.gameState.dayState?.ballots ?? {};
     const tallies: Record<PlayerId, number> = {};
+    const voterDetails: Record<PlayerId, PlayerId[]> = {};
     let abstainCount = 0;
 
     for (const [voterId, target] of Object.entries(ballots)) {
@@ -737,17 +739,32 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         abstainCount += weight;
       } else {
         tallies[target] = (tallies[target] ?? 0) + weight;
+        if (!voterDetails[target]) voterDetails[target] = [];
+        voterDetails[target].push(voterId);
       }
     }
 
-    this.roomState.lastVoteTally = { tallies, abstainCount };
+    if (this.roomState.settings.revealVoterIdentities) {
+      this.roomState.lastVoteTally = { tallies, abstainCount, voterDetails };
+    } else {
+      this.roomState.lastVoteTally = { tallies, abstainCount };
+    }
 
     // Tìm người có nhiều phiếu nhất
     let executedTargetId: PlayerId | null = null;
     const sorted = Object.entries(tallies).sort((a, b) => b[1] - a[1]);
     if (sorted.length > 0) {
       if (sorted.length === 1 || (sorted[0] && sorted[1] && sorted[0][1] > sorted[1][1])) {
-        executedTargetId = sorted[0]?.[0] ?? null;
+        const topCandidate = sorted[0];
+        const livingCount = this.roomState.gameState.players.filter((p) => p.isAlive).length;
+        if (
+          this.roomState.settings.lynchThreshold === 'MAJORITY' &&
+          topCandidate[1] <= livingCount / 2
+        ) {
+          executedTargetId = null;
+        } else {
+          executedTargetId = topCandidate[0] ?? null;
+        }
       }
     }
 

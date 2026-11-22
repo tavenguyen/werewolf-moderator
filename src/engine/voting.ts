@@ -293,6 +293,21 @@ export function tallyDayVotes(state: GameState): {
 
   if (topCandidates.length === 1) {
     const targetPlayerId = topCandidates[0][0];
+
+    // Kiểm tra ngưỡng quá bán (MAJORITY) nếu được bật
+    if (nextState.settings.lynchThreshold === 'MAJORITY') {
+      const livingCount = nextState.players.filter((p) => p.isAlive).length;
+      if (highestWeight <= livingCount / 2) {
+        return {
+          nextState,
+          outcome: {
+            type: 'ESCAPE',
+            reason: `Mục tiêu [${targetPlayerId}] nhận nhiều phiếu nhất (${highestWeight}) nhưng chưa đạt quá bán (> ${Math.floor(livingCount / 2)}/${livingCount} phiếu). Cả làng tha bổng hôm nay.`,
+          },
+        };
+      }
+    }
+
     return {
       nextState,
       outcome: {
@@ -393,12 +408,26 @@ export function tallyRunoffVotes(state: GameState): {
   const top = sorted.filter((e) => e[1] === highest);
 
   if (top.length === 1) {
+    const targetPlayerId = top[0][0];
+    if (nextState.settings.lynchThreshold === 'MAJORITY') {
+      const livingCount = nextState.players.filter((p) => p.isAlive).length;
+      if (highest <= livingCount / 2) {
+        return {
+          nextState,
+          outcome: {
+            type: 'ESCAPE',
+            reason: `Mục tiêu [${targetPlayerId}] nhận nhiều phiếu nhất vòng Runoff (${highest}) nhưng chưa đạt quá bán (> ${Math.floor(livingCount / 2)}/${livingCount} phiếu). Thoát án treo cổ!`,
+          },
+        };
+      }
+    }
+
     return {
       nextState,
       outcome: {
         type: 'EXECUTE',
-        targetPlayerId: top[0][0],
-        reason: `Mục tiêu [${top[0][0]}] nhận số phiếu cao nhất ở vòng Runoff (${highest} phiếu).`,
+        targetPlayerId,
+        reason: `Mục tiêu [${targetPlayerId}] nhận số phiếu cao nhất ở vòng Runoff (${highest} phiếu).`,
       },
     };
   }
