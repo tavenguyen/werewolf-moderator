@@ -13,6 +13,23 @@ describe('AudioController & Fallbacks', () => {
     expect(NARRATION_PROMPTS.night_end).toBeDefined();
     expect(NARRATION_PROMPTS.day_discuss).toBeDefined();
 
+    expect(NARRATION_PROMPTS.night_wild_child).toBeDefined();
+    expect(NARRATION_PROMPTS.night_wild_child.subtitle).toBe(
+      'Đứa con hoang hãy thức dậy và chọn một người làm thần tượng.'
+    );
+    expect(NARRATION_PROMPTS.night_hoodlum).toBeDefined();
+    expect(NARRATION_PROMPTS.night_hoodlum.subtitle).toBe(
+      'Du côn hãy thức dậy và chọn hai kẻ thù cần trừ khử.'
+    );
+    expect(NARRATION_PROMPTS.night_mason).toBeDefined();
+    expect(NARRATION_PROMPTS.night_mason.subtitle).toBe(
+      'Hội Tam Điểm hãy cùng mở mắt nhận diện anh em.'
+    );
+    expect(NARRATION_PROMPTS.night_dire_wolf).toBeDefined();
+    expect(NARRATION_PROMPTS.night_dire_wolf.subtitle).toBe(
+      'Sói tuyết hãy thức dậy và chọn một người làm bạn đồng hành.'
+    );
+
     expect(NARRATION_PROMPTS.wolf_pack.subtitle).toContain('Ma Sói');
     expect(NARRATION_PROMPTS.seer.subtitle).toContain('Tiên tri');
     expect(NARRATION_PROMPTS.minion.subtitle).toContain('Kẻ phản bội');

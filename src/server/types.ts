@@ -1,15 +1,14 @@
 import type {
   DeathRecord,
-  Faction,
   GamePhase,
   GameState,
   NightActions,
   NightResolutionEvent,
   PlayerId,
   RoomSettings,
-  SeerResult,
   WinOutcome,
 } from '../engine/types';
+import type { Faction, SeerResult } from '../engine/roles';
 import type { NightTurnPlanItem } from '../engine/turnPlan';
 
 // -------------------------------------------------------------
@@ -182,6 +181,10 @@ export interface PlayerPrivateView {
     witchVictimId?: PlayerId | null; // Chỉ có khi Phù thủy thức và settings.witchKnowsVictim = true
     lastProtectedPlayerId?: PlayerId | null;
     elderHp?: number;
+    masonPartnerIds?: PlayerId[];
+    roleModelId?: PlayerId | null;
+    companionId?: PlayerId | null;
+    hoodlumTargetIds?: [PlayerId, PlayerId] | null;
   };
   teammates: Array<{ id: PlayerId; name: string; roleId: string }>;
   investigationResult?: {

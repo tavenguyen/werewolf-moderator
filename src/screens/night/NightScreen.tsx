@@ -16,6 +16,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
 
   const [mode, setMode] = useState<'sleep' | 'action' | 'my_role'>('sleep');
   const [selectedTargetId, setSelectedTargetId] = useState<PlayerId | null>(null);
+  const [hoodlumTargets, setHoodlumTargets] = useState<PlayerId[]>([]);
   const [witchPoisonTargetId, setWitchPoisonTargetId] = useState<PlayerId | null>(null);
   const [isWitchHeal, setIsWitchHeal] = useState(false);
   const [isShowingRole, setIsShowingRole] = useState(false);
@@ -33,6 +34,13 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const validTargets = privateView?.validTargets ?? [];
   const currentTurnInfo = publicView?.currentTurnInfo;
 
+  const currentTurnKey = privateView?.turnKey || privateView?.roleId || '';
+  const isMason = currentTurnKey === 'mason' || currentTurnKey === 'night_mason';
+  const isHoodlum = currentTurnKey === 'hoodlum' || currentTurnKey === 'night_hoodlum';
+  const isWildChild = currentTurnKey === 'wild_child' || currentTurnKey === 'night_wild_child';
+  const isDireWolf = currentTurnKey === 'dire_wolf' || currentTurnKey === 'night_dire_wolf';
+  const isWitch = currentTurnKey === 'witch';
+
   // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy
   const victimPlayerId = privateView?.skills?.witchVictimId;
   const victimPlayer = victimPlayerId
@@ -44,6 +52,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     if (canAct) {
       setMode('action');
       setHasSubmitted(false);
+      setSelectedTargetId(null);
+      setHoodlumTargets([]);
     } else {
       setMode('sleep');
     }
@@ -58,11 +68,38 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     if (!privateView) return;
 
     try {
-      if (privateView.turnKey === 'witch') {
+      if (isWitch) {
         await actions.sendNightAction('witch', {
           heal: isWitchHeal,
           healTargetId: isWitchHeal ? victimPlayerId : null,
           poisonTargetId: witchPoisonTargetId,
+        });
+      } else if (isHoodlum) {
+        if (hoodlumTargets.length !== 2 || hoodlumTargets[0] === hoodlumTargets[1]) {
+          setNotice('Vui lòng chọn đủ 2 người chơi khác nhau làm kẻ thù.');
+          return;
+        }
+        await actions.sendNightAction('hoodlum', {
+          target1: hoodlumTargets[0],
+          target2: hoodlumTargets[1],
+        });
+      } else if (isMason) {
+        await actions.sendNightAction('mason', {});
+      } else if (isWildChild) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 người làm thần tượng.');
+          return;
+        }
+        await actions.sendNightAction('wild_child', {
+          targetId: selectedTargetId,
+        });
+      } else if (isDireWolf) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 người làm bạn đồng hành.');
+          return;
+        }
+        await actions.sendNightAction('dire_wolf', {
+          targetId: selectedTargetId,
         });
       } else {
         await actions.sendNightAction(privateView.roleId, {
@@ -72,7 +109,16 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
       }
 
       setHasSubmitted(true);
-      setNotice('✓ Đã xác nhận hành động ban đêm thành công.');
+      const successMsg = isMason
+        ? '✓ Đã nhận diện anh em Hội Tam Điểm.'
+        : isWildChild
+        ? '✓ Đã chọn thần tượng thành công.'
+        : isDireWolf
+        ? '✓ Đã chọn bạn đồng hành thành công.'
+        : isHoodlum
+        ? '✓ Đã chọn 2 kẻ thù trừ khử thành công.'
+        : '✓ Đã xác nhận hành động ban đêm thành công.';
+      setNotice(successMsg);
       setTimeout(() => {
         setMode('sleep');
         setNotice('');
@@ -87,9 +133,33 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     actions.advanceLocalTurn();
     setHasSubmitted(false);
     setSelectedTargetId(null);
+    setHoodlumTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
   };
+
+  const handleSelectTarget = (tId: PlayerId) => {
+    if (isHoodlum) {
+      setHoodlumTargets((prev) => {
+        if (prev.includes(tId)) {
+          return prev.filter((id) => id !== tId);
+        }
+        if (prev.length < 2) {
+          return [...prev, tId];
+        }
+        return [prev[0], tId];
+      });
+    } else {
+      setSelectedTargetId((prev) => (prev === tId ? null : tId));
+    }
+  };
+
+  const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
+  const canConfirm = isHoodlum
+    ? isHoodlumValid
+    : isWildChild || isDireWolf
+    ? Boolean(selectedTargetId)
+    : true;
 
   return (
     <main className={`night-screen app-page ${mode === 'sleep' ? 'night-sleep' : ''}`}>
@@ -206,13 +276,88 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
               {isShowingRole ? (
                 <div className="revealed-role-box">
                   <span className="role-side-badge">
-                    {roleDef.faction === 'WEREWOLF' ? 'PHE MA SÓI' : 'PHE DÂN LÀNG'}
+                    {roleDef.faction === 'WEREWOLF'
+                      ? 'PHE MA SÓI'
+                      : roleDef.faction === 'THIRD_PARTY'
+                      ? 'PHE THỨ BA'
+                      : 'PHE DÂN LÀNG'}
                   </span>
                   <div className="role-icon-big">
-                    {roleDef.faction === 'WEREWOLF' ? '🐺' : myRoleId === 'seer' ? '🔮' : myRoleId === 'witch' ? '🧪' : myRoleId === 'bodyguard' ? '⚔️' : '🛡️'}
+                    {roleDef.faction === 'WEREWOLF'
+                      ? '🐺'
+                      : myRoleId === 'seer'
+                      ? '🔮'
+                      : myRoleId === 'witch'
+                      ? '🧪'
+                      : myRoleId === 'bodyguard'
+                      ? '⚔️'
+                      : myRoleId === 'mason'
+                      ? '🏛️'
+                      : myRoleId === 'wild_child'
+                      ? '👶'
+                      : myRoleId === 'dire_wolf'
+                      ? '❄️'
+                      : myRoleId === 'hoodlum'
+                      ? '🗡️'
+                      : '🛡️'}
                   </div>
                   <h2>{roleDef.nameVi}</h2>
                   <p>{roleDef.descriptionVi}</p>
+
+                  {myRoleId === 'mason' && (
+                    <div className="revealed-role-details">
+                      <strong>ANH EM HỘI TAM ĐIỂM:</strong>
+                      <span>
+                        {privateView?.skills?.masonPartnerIds && privateView.skills.masonPartnerIds.length > 0
+                          ? privateView.skills.masonPartnerIds
+                              .map((id) => {
+                                const p = publicView?.players.find((pl) => pl.id === id);
+                                return p ? `#${p.seatIndex} ${p.name}` : id;
+                              })
+                              .join(', ')
+                          : 'Bạn là thành viên Hội Tam Điểm duy nhất trong làng.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'wild_child' && privateView?.skills?.roleModelId && (
+                    <div className="revealed-role-details">
+                      <strong>THẦN TƯỢNG CỦA BẠN:</strong>
+                      <span>
+                        {(() => {
+                          const p = publicView?.players.find((pl) => pl.id === privateView.skills?.roleModelId);
+                          return p ? `#${p.seatIndex} ${p.name}` : 'Chưa chọn';
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'dire_wolf' && privateView?.skills?.companionId && (
+                    <div className="revealed-role-details">
+                      <strong>BẠN ĐỒNG HÀNH:</strong>
+                      <span>
+                        {(() => {
+                          const p = publicView?.players.find((pl) => pl.id === privateView.skills?.companionId);
+                          return p ? `#${p.seatIndex} ${p.name}` : 'Chưa chọn';
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'hoodlum' && privateView?.skills?.hoodlumTargetIds && (
+                    <div className="revealed-role-details">
+                      <strong>2 KẺ THÙ CẦN TRỪ KHỬ:</strong>
+                      <span>
+                        {(() => {
+                          const ids = privateView.skills.hoodlumTargetIds;
+                          const p1 = publicView?.players.find((pl) => pl.id === ids[0]);
+                          const p2 = publicView?.players.find((pl) => pl.id === ids[1]);
+                          return `${p1 ? `#${p1.seatIndex} ${p1.name}` : ids[0]} & ${p2 ? `#${p2.seatIndex} ${p2.name}` : ids[1]}`;
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
                   <small className="release-hint">Thả tay để che lại ngay lập tức</small>
                 </div>
               ) : (
@@ -241,128 +386,237 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
             </div>
           </div>
 
-          {/* Nạn nhân Phù Thủy nếu có */}
-          {privateView?.turnKey === 'witch' && victimPlayer && (
-            <div className="victim-card">
-              <div className="victim-info">
-                <div className="victim-glyph-wrap" aria-hidden="true">
-                  <span className="victim-glyph">☠</span>
-                </div>
-                <div className="victim-meta">
-                  <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
-                  <strong>#{victimPlayer.seatIndex} {victimPlayer.name}</strong>
+          {isMason ? (
+            <div className="mason-turn-panel">
+              <div className="mason-header-badge">
+                <span className="mason-symbol" aria-hidden="true">🏛️</span>
+                <div>
+                  <strong>HỘI TAM ĐIỂM (MASONS)</strong>
+                  <p>
+                    Tất cả thành viên trong Hội Tam Điểm đều thuộc phe Dân làng và biết mặt nhau từ Đêm 1.
+                  </p>
                 </div>
               </div>
-              <button
-                type="button"
-                className={`hold-button heal-button ${isWitchHeal ? 'is-complete' : ''}`}
-                onClick={() => setIsWitchHeal((prev) => !prev)}
-              >
-                <span>{isWitchHeal ? '✓ ĐÃ CHỌN DÙNG BÌNH CỨU' : 'DÙNG BÌNH TIÊN DƯỢC (CỨU)'}</span>
-              </button>
-            </div>
-          )}
 
-          {/* Chọn mục tiêu hợp lệ */}
-          <div className="target-heading">
-            <div>
-              <strong>CHỌN MỤC TIÊU HÀNH ĐỘNG</strong>
-              <small>Chỉ hiển thị các người chơi hợp lệ trong luật</small>
-            </div>
-            <span className="target-hint">
-              {selectedTargetId
-                ? `Mục tiêu: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
-                : 'Chưa chọn'}
-            </span>
-          </div>
+              <div className="mason-partners-container">
+                <div className="mason-list-header">
+                  <span className="mason-dot" aria-hidden="true" />
+                  <span>DANH SÁCH ANH EM TAM ĐIỂM CỦA BẠN</span>
+                </div>
 
-          <div className="target-grid">
-            {validTargets.map((tId) => {
-              const targetP = publicView?.players.find((p) => p.id === tId);
-              if (!targetP) return null;
-              const isSelected = selectedTargetId === tId;
-              return (
+                {privateView?.skills?.masonPartnerIds && privateView.skills.masonPartnerIds.length > 0 ? (
+                  <div className="mason-grid">
+                    {privateView.skills.masonPartnerIds.map((partnerId) => {
+                      const partner = publicView?.players.find((p) => p.id === partnerId);
+                      if (!partner) return null;
+                      return (
+                        <div key={partnerId} className="mason-card">
+                          <div className="mason-card-avatar" aria-hidden="true">🤝</div>
+                          <div className="mason-card-info">
+                            <span className="mason-seat-badge">Ghế #{partner.seatIndex}</span>
+                            <span className="mason-name">{partner.name}</span>
+                          </div>
+                          <span className="mason-partner-badge-green">ANH EM TAM ĐIỂM</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mason-single-note">
+                    <span>Không có anh em nào khác trong hội (bạn là thành viên duy nhất).</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="role-actions">
                 <button
                   type="button"
-                  key={tId}
-                  aria-pressed={isSelected}
-                  onClick={() => setSelectedTargetId(isSelected ? null : tId)}
-                  className={`target-card ${isSelected ? 'selected' : ''}`}
+                  className="primary-confirm-btn mason-confirm-btn"
+                  onClick={handleConfirmAction}
                 >
-                  <div className="target-meta">
-                    <span className="target-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
-                    <span className="target-name">{targetP.name}</span>
-                  </div>
-                  <span className="target-crosshair" aria-hidden="true">
-                    {isSelected ? '⦿' : '○'}
-                  </span>
+                  <span>✓ ĐÃ NHẬN DIỆN ANH EM</span>
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Nạn nhân Phù Thủy nếu có */}
+              {isWitch && victimPlayer && (
+                <div className="victim-card">
+                  <div className="victim-info">
+                    <div className="victim-glyph-wrap" aria-hidden="true">
+                      <span className="victim-glyph">☠</span>
+                    </div>
+                    <div className="victim-meta">
+                      <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
+                      <strong>#{victimPlayer.seatIndex} {victimPlayer.name}</strong>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`hold-button heal-button ${isWitchHeal ? 'is-complete' : ''}`}
+                    onClick={() => setIsWitchHeal((prev) => !prev)}
+                  >
+                    <span>{isWitchHeal ? '✓ ĐÃ CHỌN DÙNG BÌNH CỨU' : 'DÙNG BÌNH TIÊN DƯỢC (CỨU)'}</span>
+                  </button>
+                </div>
+              )}
 
-          {/* Bình độc dược cho Phù Thủy */}
-          {privateView?.turnKey === 'witch' && !privateView.skills?.witchPoisonUsed && (
-            <div className="witch-poison-section">
-              <strong>BÌNH ĐỘC DƯỢC</strong>
+              {/* Chọn mục tiêu hợp lệ */}
+              <div className="target-heading">
+                <div>
+                  <strong>
+                    {isHoodlum
+                      ? 'CHỌN 2 KẺ THÙ CẦN TRỪ KHỬ'
+                      : isWildChild
+                      ? 'CHỌN 1 THẦN TƯỢNG CỦA BẠN'
+                      : isDireWolf
+                      ? 'CHỌN 1 BẠN ĐỒNG HÀNH'
+                      : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
+                  </strong>
+                  <small>
+                    {isHoodlum
+                      ? 'Bạn chỉ thắng nếu cả 2 người này đều chết và bạn còn sống'
+                      : isWildChild
+                      ? 'Nếu người này chết, bạn sẽ biến thành Ma Sói từ đêm hôm sau'
+                      : isDireWolf
+                      ? 'Nếu người này chết, bạn sẽ chết theo ngay lập tức'
+                      : 'Chỉ hiển thị các người chơi hợp lệ trong luật'}
+                  </small>
+                </div>
+                <span className="target-hint">
+                  {isHoodlum
+                    ? hoodlumTargets.length === 0
+                      ? 'Chọn đúng 2 người khác nhau (0/2)'
+                      : hoodlumTargets.length === 1
+                      ? `Đã chọn 1/2: #${publicView?.players.find((p) => p.id === hoodlumTargets[0])?.seatIndex} ${publicView?.players.find((p) => p.id === hoodlumTargets[0])?.name}`
+                      : `Kẻ thù: #${publicView?.players.find((p) => p.id === hoodlumTargets[0])?.seatIndex} ${publicView?.players.find((p) => p.id === hoodlumTargets[0])?.name} & #${publicView?.players.find((p) => p.id === hoodlumTargets[1])?.seatIndex} ${publicView?.players.find((p) => p.id === hoodlumTargets[1])?.name}`
+                    : isWildChild
+                    ? selectedTargetId
+                      ? `Thần tượng: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người làm thần tượng'
+                    : isDireWolf
+                    ? selectedTargetId
+                      ? `Bạn đồng hành: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người làm bạn đồng hành'
+                    : selectedTargetId
+                    ? `Mục tiêu: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                    : 'Chưa chọn'}
+                </span>
+              </div>
+
               <div className="target-grid">
                 {validTargets.map((tId) => {
                   const targetP = publicView?.players.find((p) => p.id === tId);
                   if (!targetP) return null;
-                  const isPoisoned = witchPoisonTargetId === tId;
+                  const isSelected = isHoodlum
+                    ? hoodlumTargets.includes(tId)
+                    : selectedTargetId === tId;
+                  const hoodlumIdx = hoodlumTargets.indexOf(tId);
+
                   return (
                     <button
                       type="button"
-                      key={`poison-${tId}`}
-                      aria-pressed={isPoisoned}
-                      onClick={() => setWitchPoisonTargetId(isPoisoned ? null : tId)}
-                      className={`target-card ${isPoisoned ? 'selected poison-selected' : ''}`}
+                      key={tId}
+                      aria-pressed={isSelected}
+                      onClick={() => handleSelectTarget(tId)}
+                      className={`target-card ${isSelected ? 'selected' : ''} ${isHoodlum && isSelected ? 'hoodlum-selected' : ''}`}
                     >
-                      <span className="target-name">Đầu độc #{targetP.seatIndex} {targetP.name}</span>
-                      <span>{isPoisoned ? '☠' : '○'}</span>
+                      <div className="target-meta">
+                        <span className="target-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
+                        <span className="target-name">{targetP.name}</span>
+                      </div>
+                      <span className="target-crosshair" aria-hidden="true">
+                        {isHoodlum
+                          ? isSelected
+                            ? `🎯 #${hoodlumIdx + 1}`
+                            : '○'
+                          : isSelected
+                          ? '⦿'
+                          : '○'}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+
+              {/* Bình độc dược cho Phù Thủy */}
+              {isWitch && !privateView?.skills?.witchPoisonUsed && (
+                <div className="witch-poison-section">
+                  <strong>BÌNH ĐỘC DƯỢC</strong>
+                  <div className="target-grid">
+                    {validTargets.map((tId) => {
+                      const targetP = publicView?.players.find((p) => p.id === tId);
+                      if (!targetP) return null;
+                      const isPoisoned = witchPoisonTargetId === tId;
+                      return (
+                        <button
+                          type="button"
+                          key={`poison-${tId}`}
+                          aria-pressed={isPoisoned}
+                          onClick={() => setWitchPoisonTargetId(isPoisoned ? null : tId)}
+                          className={`target-card ${isPoisoned ? 'selected poison-selected' : ''}`}
+                        >
+                          <span className="target-name">Đầu độc #{targetP.seatIndex} {targetP.name}</span>
+                          <span>{isPoisoned ? '☠' : '○'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Kết quả Tiên Tri / Pháp Sư nếu đã soi */}
+              {privateView?.investigationResult && (
+                <div className="investigation-result-card">
+                  <span>KẾT QUẢ ĐIỀU TRA:</span>
+                  <strong>
+                    {typeof privateView.investigationResult.result === 'string'
+                      ? privateView.investigationResult.result === 'WEREWOLF'
+                        ? '🐺 LÀ MA SÓI'
+                        : '🛡️ LÀ NGƯỜI LÀNG'
+                      : privateView.investigationResult.result
+                      ? '🔮 ĐÚNG LÀ TIÊN TRI'
+                      : '❌ KHÔNG PHẢI TIÊN TRI'}
+                  </strong>
+                </div>
+              )}
+
+              <div className="role-actions">
+                <button
+                  type="button"
+                  className={`primary-confirm-btn ${!canConfirm ? 'disabled' : ''}`}
+                  disabled={!canConfirm}
+                  onClick={handleConfirmAction}
+                >
+                  <span>
+                    {isHoodlum
+                      ? isHoodlumValid
+                        ? 'XÁC NHẬN 2 KẺ THÙ'
+                        : `CHỌN ĐỦ 2 KẺ THÙ (${hoodlumTargets.length}/2)`
+                      : isWildChild
+                      ? 'XÁC NHẬN CHỌN THẦN TƯỢNG'
+                      : isDireWolf
+                      ? 'XÁC NHẬN CHỌN BẠN ĐỒNG HÀNH'
+                      : 'XÁC NHẬN HÀNH ĐỘNG'}
+                  </span>
+                </button>
+
+                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason'].includes(currentTurnKey) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setSelectedTargetId(null);
+                      void handleConfirmAction();
+                    }}
+                  >
+                    Bỏ qua không thực hiện (hoặc thổi nến)
+                  </button>
+                )}
+              </div>
+            </>
           )}
-
-          {/* Kết quả Tiên Tri / Pháp Sư nếu đã soi */}
-          {privateView?.investigationResult && (
-            <div className="investigation-result-card">
-              <span>KẾT QUẢ ĐIỀU TRA:</span>
-              <strong>
-                {typeof privateView.investigationResult.result === 'string'
-                  ? privateView.investigationResult.result === 'WEREWOLF'
-                    ? '🐺 LÀ MA SÓI'
-                    : '🛡️ LÀ NGƯỜI LÀNG'
-                  : privateView.investigationResult.result
-                  ? '🔮 ĐÚNG LÀ TIÊN TRI'
-                  : '❌ KHÔNG PHẢI TIÊN TRI'}
-              </strong>
-            </div>
-          )}
-
-          <div className="role-actions">
-            <button
-              type="button"
-              className="primary-confirm-btn"
-              onClick={handleConfirmAction}
-            >
-              <span>XÁC NHẬN HÀNH ĐỘNG</span>
-            </button>
-
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => {
-                setSelectedTargetId(null);
-                void handleConfirmAction();
-              }}
-            >
-              Bỏ qua không thực hiện (hoặc thổi nến)
-            </button>
-          </div>
 
           {notice && <p className="screen-notice" role="status">{notice}</p>}
         </section>

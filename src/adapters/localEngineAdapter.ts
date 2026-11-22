@@ -10,7 +10,7 @@ import {
 import { processDeathCascade } from '../engine/deathCascade';
 import { checkWinCondition } from '../engine/winConditions';
 import { ROLES_BY_ID } from '../engine/roles';
-import { generateNightTurnPlan, type NightTurnPlanItem } from '../engine/turnPlan';
+import { generateNightTurnPlan } from '../engine/turnPlan';
 import { getSmartPreset } from '../engine/presets';
 import {
   createHostBoardView,
@@ -251,7 +251,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   }
 
   public async joinRoom(
-    roomCode: string,
+    _roomCode: string,
     username: string
   ): Promise<{ playerId: PlayerId; seatIndex: number }> {
     const nextIdx = this.roomState.players.size + 1;
@@ -377,7 +377,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.emitState();
   }
 
-  public async sendNightAction(roleId: string, action: NightActionInput): Promise<void> {
+  public async sendNightAction(_roleId: string, action: NightActionInput): Promise<void> {
     const currentTurn = this.roomState.nightTurnPlan[this.roomState.currentNightTurnIndex];
     if (!currentTurn) return;
 
@@ -439,6 +439,28 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           healTargetId: action.healTargetId ?? null,
           poisonTargetId: action.poisonTargetId ?? null,
         };
+        break;
+      case 'wild_child':
+      case 'night_wild_child':
+        if (action.targetId) {
+          acc.wildChild = { targetId: action.targetId };
+        }
+        break;
+      case 'dire_wolf':
+      case 'night_dire_wolf':
+        if (action.targetId) {
+          acc.direWolf = { targetId: action.targetId };
+        }
+        break;
+      case 'hoodlum':
+      case 'night_hoodlum':
+        if (action.target1 && action.target2) {
+          acc.hoodlum = { target1: action.target1, target2: action.target2 };
+        }
+        break;
+      case 'mason':
+      case 'night_mason':
+        // Xác nhận lượt (acknowledgement)
         break;
     }
 
@@ -639,8 +661,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     let executedTargetId: PlayerId | null = null;
     const sorted = Object.entries(tallies).sort((a, b) => b[1] - a[1]);
     if (sorted.length > 0) {
-      if (sorted.length === 1 || sorted[0][1] > (sorted[1]?.[1] ?? 0)) {
-        executedTargetId = sorted[0][0];
+      if (sorted.length === 1 || (sorted[0] && sorted[1] && sorted[0][1] > sorted[1][1])) {
+        executedTargetId = sorted[0]?.[0] ?? null;
       }
     }
 

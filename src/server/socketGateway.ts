@@ -1068,6 +1068,32 @@ export class SocketGateway {
           poisonTargetId: action.poisonTargetId ?? null,
         };
         break;
+
+      case 'wild_child':
+      case 'night_wild_child':
+        if (action.targetId) {
+          acc.wildChild = { targetId: action.targetId };
+        }
+        break;
+
+      case 'dire_wolf':
+      case 'night_dire_wolf':
+        if (action.targetId) {
+          acc.direWolf = { targetId: action.targetId };
+        }
+        break;
+
+      case 'hoodlum':
+      case 'night_hoodlum':
+        if (action.target1 && action.target2) {
+          acc.hoodlum = { target1: action.target1, target2: action.target2 };
+        }
+        break;
+
+      case 'mason':
+      case 'night_mason':
+        // Xác nhận lượt (acknowledgement)
+        break;
     }
   }
 
@@ -1163,8 +1189,8 @@ export class SocketGateway {
     }
   }
 
-  private sendError(
-    cb: ((res: ServerResponse) => void) | undefined,
+  private sendError<T = unknown>(
+    cb: ((res: ServerResponse<T>) => void) | undefined,
     code: ServerErrorCode,
     message: string
   ): void {

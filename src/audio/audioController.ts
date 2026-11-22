@@ -39,6 +39,46 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
     subtitle: 'Sói Trắng, hãy thức dậy và chọn một người sói để cắn nếu muốn.',
     durationMs: 6000,
   },
+  night_wild_child: {
+    audioKey: 'night_wild_child',
+    subtitle: 'Đứa con hoang hãy thức dậy và chọn một người làm thần tượng.',
+    durationMs: 6000,
+  },
+  wild_child: {
+    audioKey: 'night_wild_child',
+    subtitle: 'Đứa con hoang hãy thức dậy và chọn một người làm thần tượng.',
+    durationMs: 6000,
+  },
+  night_hoodlum: {
+    audioKey: 'night_hoodlum',
+    subtitle: 'Du côn hãy thức dậy và chọn hai kẻ thù cần trừ khử.',
+    durationMs: 6000,
+  },
+  hoodlum: {
+    audioKey: 'night_hoodlum',
+    subtitle: 'Du côn hãy thức dậy và chọn hai kẻ thù cần trừ khử.',
+    durationMs: 6000,
+  },
+  night_mason: {
+    audioKey: 'night_mason',
+    subtitle: 'Hội Tam Điểm hãy cùng mở mắt nhận diện anh em.',
+    durationMs: 5000,
+  },
+  mason: {
+    audioKey: 'night_mason',
+    subtitle: 'Hội Tam Điểm hãy cùng mở mắt nhận diện anh em.',
+    durationMs: 5000,
+  },
+  night_dire_wolf: {
+    audioKey: 'night_dire_wolf',
+    subtitle: 'Sói tuyết hãy thức dậy và chọn một người làm bạn đồng hành.',
+    durationMs: 6000,
+  },
+  dire_wolf: {
+    audioKey: 'night_dire_wolf',
+    subtitle: 'Sói tuyết hãy thức dậy và chọn một người làm bạn đồng hành.',
+    durationMs: 6000,
+  },
   minion: {
     audioKey: 'minion',
     subtitle: 'Kẻ phản bội, hãy thức dậy và nhận diện bầy Ma Sói.',

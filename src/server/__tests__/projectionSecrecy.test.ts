@@ -287,4 +287,45 @@ describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
     expect(whiteWolfView).not.toBeNull();
     expect(whiteWolfView!.roleId).toBe('white_wolf');
   });
+
+  it('Phase 2 Projections: Mason, Wild Child, Dire Wolf, Hoodlum skills & targets', async () => {
+    const { roomCode } = await setupGame();
+    const room = roomService.getRoom(roomCode)!;
+
+    const [p1, p2, p3, p4, p5, p6] = room.gameState!.players;
+    p1.roleId = 'mason';
+    p1.initialRoleId = 'mason';
+    p2.roleId = 'mason';
+    p2.initialRoleId = 'mason';
+    p3.roleId = 'wild_child';
+    p3.initialRoleId = 'wild_child';
+    p3.roleModelId = p4.id;
+    p4.roleId = 'dire_wolf';
+    p4.initialRoleId = 'dire_wolf';
+    p4.companionId = p5.id;
+    p5.roleId = 'hoodlum';
+    p5.initialRoleId = 'hoodlum';
+    p5.hoodlumTargetIds = [p1.id, p2.id];
+
+    // 1. Mason p1
+    const p1View = createPlayerPrivateView(room, p1.id);
+    expect(p1View).not.toBeNull();
+    expect(p1View!.skills.masonPartnerIds).toEqual([p2.id]);
+    expect(p1View!.teammates.some((t) => t.id === p2.id && t.roleId === 'mason')).toBe(true);
+
+    // 2. Wild child p3
+    const p3View = createPlayerPrivateView(room, p3.id);
+    expect(p3View).not.toBeNull();
+    expect(p3View!.skills.roleModelId).toBe(p4.id);
+
+    // 3. Dire wolf p4
+    const p4View = createPlayerPrivateView(room, p4.id);
+    expect(p4View).not.toBeNull();
+    expect(p4View!.skills.companionId).toBe(p5.id);
+
+    // 4. Hoodlum p5
+    const p5View = createPlayerPrivateView(room, p5.id);
+    expect(p5View).not.toBeNull();
+    expect(p5View!.skills.hoodlumTargetIds).toEqual([p1.id, p2.id]);
+  });
 });

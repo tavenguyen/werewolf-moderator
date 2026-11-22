@@ -163,6 +163,33 @@ export function createPlayerPrivateView(
     elderHp: pState.elderHp,
   };
 
+  if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
+    skills.masonPartnerIds = gameState.players
+      .filter((p) => p.initialRoleId === 'mason' && p.id !== playerId)
+      .map((p) => p.id);
+  }
+
+  if (pState.roleId === 'wild_child' || pState.initialRoleId === 'wild_child') {
+    skills.roleModelId =
+      pState.roleModelId ?? (room.nightActionsAccumulator.wildChild?.targetId ?? null);
+  }
+
+  if (pState.roleId === 'dire_wolf' || pState.initialRoleId === 'dire_wolf') {
+    skills.companionId =
+      pState.companionId ?? (room.nightActionsAccumulator.direWolf?.targetId ?? null);
+  }
+
+  if (pState.roleId === 'hoodlum' || pState.initialRoleId === 'hoodlum') {
+    skills.hoodlumTargetIds =
+      pState.hoodlumTargetIds ??
+      (room.nightActionsAccumulator.hoodlum
+        ? [
+            room.nightActionsAccumulator.hoodlum.target1,
+            room.nightActionsAccumulator.hoodlum.target2,
+          ]
+        : null);
+  }
+
   let investigationResult: PlayerPrivateView['investigationResult'] = null;
 
   // Xử lý theo từng pha game
@@ -283,6 +310,17 @@ export function createPlayerPrivateView(
         });
       }
     }
+  } else if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
+    for (const pl of gameState.players) {
+      if (pl.id === playerId) continue;
+      if (pl.initialRoleId === 'mason') {
+        teammates.push({
+          id: pl.id,
+          name: pl.name,
+          roleId: 'mason',
+        });
+      }
+    }
   }
 
   return {
@@ -348,6 +386,18 @@ function calculateNightValidTargets(
 
     case 'witch':
       return livingPlayers.map((p) => p.id);
+
+    case 'wild_child':
+    case 'night_wild_child':
+    case 'dire_wolf':
+    case 'night_dire_wolf':
+    case 'hoodlum':
+    case 'night_hoodlum':
+      return livingPlayers.filter((p) => p.id !== playerId).map((p) => p.id);
+
+    case 'mason':
+    case 'night_mason':
+      return [];
 
     default:
       return [];

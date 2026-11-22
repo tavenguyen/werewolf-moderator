@@ -197,4 +197,88 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(state.publicView?.gameGeneration).toBe(2);
     expect(state.publicView?.phase).toBe('NIGHT');
   });
+
+  it('xử lý hành động đêm cho wild_child, dire_wolf, hoodlum, mason', async () => {
+    const adapter = createPopulatedAdapter(8);
+    await adapter.startGame();
+
+    // Giả lập trực tiếp các lượt
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+
+    // 1. wild_child
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'wild_child',
+        turnKey: 'wild_child',
+        priority: 12,
+        titleVi: 'Đứa con hoang',
+        titleEn: 'Wild Child',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_wild_child',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('wild_child', { targetId: 'player_2' });
+    expect(roomState.nightActionsAccumulator.wildChild).toEqual({ targetId: 'player_2' });
+
+    // 2. dire_wolf
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'dire_wolf',
+        turnKey: 'dire_wolf',
+        priority: 16,
+        titleVi: 'Sói tuyết',
+        titleEn: 'Dire Wolf',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_dire_wolf',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('dire_wolf', { targetId: 'player_3' });
+    expect(roomState.nightActionsAccumulator.direWolf).toEqual({ targetId: 'player_3' });
+
+    // 3. hoodlum
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'hoodlum',
+        turnKey: 'hoodlum',
+        priority: 13,
+        titleVi: 'Du côn',
+        titleEn: 'Hoodlum',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_hoodlum',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('hoodlum', { target1: 'player_2', target2: 'player_4' });
+    expect(roomState.nightActionsAccumulator.hoodlum).toEqual({
+      target1: 'player_2',
+      target2: 'player_4',
+    });
+
+    // 4. mason
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'mason',
+        turnKey: 'mason',
+        priority: 14,
+        titleVi: 'Hội Tam Điểm',
+        titleEn: 'Mason',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_mason',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    roomState.nightActionAcks.clear();
+    await adapter.sendNightAction('mason', {});
+    expect(roomState.nightActionAcks.has('player_1')).toBe(true);
+  });
 });
