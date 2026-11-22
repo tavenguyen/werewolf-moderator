@@ -445,6 +445,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .quick-action-text-btn {
@@ -457,6 +458,26 @@
   padding: 2px 4px;
   border-radius: 3px;
   transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.quick-action-text-btn:hover:not(:disabled) {
+  color: #c98638;
+}
+
+.quick-action-text-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.quick-action-text-btn.shuffling {
+  color: #f59e0b;
+  animation: diceSpin 0.5s ease-in-out infinite;
+}
+
+@keyframes diceSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .quick-action-text-btn:hover:not(:disabled) {

@@ -185,7 +185,14 @@ describe('lobbyValidation - getPresetRoleSelection (Auto-fill)', () => {
 
       // Luôn có ít nhất 1 Sói săn đêm
       const nightWolves =
-        (selection.werewolf || 0) + (selection.wolf_cub || 0) + (selection.dream_wolf || 0);
+        (selection.werewolf || 0) +
+        (selection.wolf_cub || 0) +
+        (selection.dream_wolf || 0) +
+        (selection.white_wolf || 0) +
+        (selection.dire_wolf || 0) +
+        (selection.lone_wolf || 0) +
+        (selection.big_bad_wolf || 0) +
+        (selection.wolf_accursed || 0);
       expect(nightWolves).toBeGreaterThanOrEqual(1);
     }
   });
@@ -200,6 +207,56 @@ describe('lobbyValidation - getPresetRoleSelection (Auto-fill)', () => {
     const over = getPresetRoleSelection(20);
     const totalOver = Object.values(over).reduce((sum, n) => sum + n, 0);
     expect(totalOver).toBe(16);
+  });
+
+  it('hỗ trợ các chủ đề phong cách chơi khác nhau (CLASSIC, DEDUCTION, CHAOS, WOLVES)', () => {
+    const classic8 = getPresetRoleSelection(8, 'CLASSIC');
+    const deduction8 = getPresetRoleSelection(8, 'DEDUCTION');
+    const chaos8 = getPresetRoleSelection(8, 'CHAOS');
+    const wolves8 = getPresetRoleSelection(8, 'WOLVES');
+
+    expect(Object.values(classic8).reduce((a, b) => a + b, 0)).toBe(8);
+    expect(Object.values(deduction8).reduce((a, b) => a + b, 0)).toBe(8);
+    expect(Object.values(chaos8).reduce((a, b) => a + b, 0)).toBe(8);
+    expect(Object.values(wolves8).reduce((a, b) => a + b, 0)).toBe(8);
+
+    // DEDUCTION 8 có Fox hoặc PI
+    expect((deduction8.fox || 0) + (deduction8.pi || 0)).toBeGreaterThan(0);
+
+    // CHAOS 8 có Pied Piper
+    expect(chaos8.pied_piper || 0).toBe(1);
+
+    // WOLVES 8 có Big Bad Wolf
+    expect(wolves8.big_bad_wolf || 0).toBe(1);
+  });
+
+  it('loại trừ hoàn toàn các vai multiDeviceOnly khi isSingleDevice === true', () => {
+    // 8 CHAOS mặc định có pied_piper (multiDeviceOnly)
+    const multiChaos8 = getPresetRoleSelection(8, 'CHAOS', false);
+    expect(multiChaos8.pied_piper).toBe(1);
+
+    // Khi bật isSingleDevice = true, 8 CHAOS bị loại và fallback sang preset an toàn (CLASSIC)
+    const singleChaos8 = getPresetRoleSelection(8, 'CHAOS', true);
+    expect(singleChaos8.pied_piper).toBeUndefined();
+    expect(Object.values(singleChaos8).reduce((a, b) => a + b, 0)).toBe(8);
+
+    // Kiểm tra tất cả các mốc 6-16 ở chế độ isSingleDevice = true
+    const multiOnlyRoles = [
+      'cursed',
+      'wild_child',
+      'wolf_accursed',
+      'doppelganger',
+      'pied_piper',
+      'cult_leader',
+      'drunk',
+    ];
+
+    for (let count = 6; count <= 16; count++) {
+      const selection = getPresetRoleSelection(count, undefined, true);
+      for (const forbidden of multiOnlyRoles) {
+        expect(selection[forbidden]).toBeUndefined();
+      }
+    }
   });
 });
 

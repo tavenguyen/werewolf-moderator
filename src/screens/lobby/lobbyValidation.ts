@@ -1,6 +1,8 @@
 import { ROLES, ROLES_BY_ID, type Faction, type RolePack } from '../../engine/roles';
-import { getSmartPreset } from '../../engine/presets';
+import { getSmartPreset, ROLE_PRESETS, type PresetTheme } from '../../engine/presets';
 import type { PublicPlayerView } from '../../server/types';
+
+export type { PresetTheme };
 
 export type RoleSelectionMap = Record<string, number>;
 
@@ -225,12 +227,39 @@ export function removeVietnameseTones(str: string): string {
     .trim();
 }
 
-export function getPresetRoleSelection(playerCount: number): RoleSelectionMap {
+export function getPresetRoleSelection(
+  playerCount: number,
+  theme?: PresetTheme,
+  isSingleDevice?: boolean
+): RoleSelectionMap {
   const count = Math.max(6, Math.min(16, playerCount));
-  const preset = getSmartPreset(count);
-  if (!preset) return { ...DEFAULT_INITIAL_ROLES };
+
+  // Lọc các preset theo số lượng người chơi
+  let candidates = ROLE_PRESETS.filter((p) => p.playerCount === count);
+
+  // Nếu ở chế độ 1 máy, loại trừ các preset yêu cầu nhiều máy
+  if (isSingleDevice) {
+    candidates = candidates.filter((p) => !p.isMultiDeviceOnly);
+  }
+
+  // Ưu tiên chọn theme được chỉ định
+  let preset = theme ? candidates.find((p) => p.theme === theme) : undefined;
+
+  // Nếu không chỉ định hoặc không tìm thấy, mặc định chọn CLASSIC
+  if (!preset) {
+    preset = candidates.find((p) => p.theme === 'CLASSIC');
+  }
+
+  // Nếu vẫn không có, lấy ứng viên đầu tiên còn lại
+  if (!preset && candidates.length > 0) {
+    preset = candidates[0];
+  }
+
+  const roles = preset?.roles ?? getSmartPreset(count)?.roles;
+  if (!roles) return { ...DEFAULT_INITIAL_ROLES };
+
   const map: RoleSelectionMap = {};
-  for (const rId of preset.roles) {
+  for (const rId of roles) {
     map[rId] = (map[rId] ?? 0) + 1;
   }
   return map;
