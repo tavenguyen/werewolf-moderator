@@ -1,0 +1,407 @@
+import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { RoomService } from '../roomService';
+import { TimerManager } from '../timerManager';
+import { SocketGateway } from '../socketGateway';
+import { createMockIoServer, type MockSocketIOServer, type MockClientSocket } from './mockSocket';
+import {
+  createPlayerPrivateView,
+  getWolfPackVictimCandidate,
+  getRawWolfPackVictim,
+} from '../projections';
+import type { RoomState } from '../types';
+
+describe('Realtime Backend - Projections & Targets for Phase 3 (wolf_accursed, big_bad_wolf, lone_wolf)', () => {
+  let mockIo: MockSocketIOServer;
+  let roomService: RoomService;
+  let timerManager: TimerManager;
+  let gateway: SocketGateway;
+  const clientSockets: MockClientSocket[] = [];
+
+  beforeEach(() => {
+    mockIo = createMockIoServer();
+    roomService = new RoomService();
+    timerManager = new TimerManager({ minNightDelaySec: 5, maxNightDelaySec: 5 });
+    gateway = new SocketGateway(mockIo as any, roomService, timerManager);
+    gateway.registerEvents();
+  });
+
+  afterEach(() => {
+    for (const c of clientSockets) {
+      c.disconnect();
+    }
+    clientSockets.length = 0;
+    roomService.destroy();
+    mockIo.close();
+  });
+
+  const createClient = (): MockClientSocket => {
+    const c = mockIo.createClientSocket();
+    clientSockets.push(c);
+    return c;
+  };
+
+  const setupGame = async (
+    roles: string[] = ['werewolf', 'werewolf', 'seer', 'witch', 'villager', 'villager']
+  ) => {
+    const hostClient = createClient();
+    const createRes: any = await new Promise((resolve) => {
+      hostClient.emit('room:create', { isPlayer: false }, resolve);
+    });
+    const roomCode = createRes.data.roomCode;
+    const hostToken = createRes.data.hostToken;
+
+    const players: Array<{ client: MockClientSocket; token: string; id: string }> = [];
+
+    for (let i = 1; i <= roles.length; i++) {
+      const client = createClient();
+      const joinRes: any = await new Promise((resolve) => {
+        client.emit('room:join', { roomCode, username: `Player ${i}` }, resolve);
+      });
+      players.push({
+        client,
+        token: joinRes.data.playerToken,
+        id: joinRes.data.playerId,
+      });
+    }
+
+    const startRes: any = await new Promise((resolve) => {
+      hostClient.emit(
+        'lobby:start',
+        { roomCode, token: hostToken, customRoleIds: roles },
+        resolve
+      );
+    });
+    expect(startRes.ok).toBe(true);
+
+    return { hostClient, roomCode, hostToken, players };
+  };
+
+  describe('getWolfPackVictimCandidate and getRawWolfPackVictim', () => {
+    it('trả về nạn nhân của bầy sói khi không bị che chở hay nguyền', () => {
+      const room: any = {
+        nightActionsAccumulator: {
+          wolfPack: { targets: ['player_3'] },
+        },
+      };
+
+      expect(getRawWolfPackVictim(room as RoomState)).toBe('player_3');
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBe('player_3');
+    });
+
+    it('getWolfPackVictimCandidate trả về null khi nạn nhân được Bảo vệ che chở', () => {
+      const room: any = {
+        nightActionsAccumulator: {
+          wolfPack: { targets: ['player_3'] },
+          bodyguard: { targetId: 'player_3' },
+        },
+      };
+
+      // Raw victim vẫn là player_3
+      expect(getRawWolfPackVictim(room as RoomState)).toBe('player_3');
+      // Candidate gửi cho Phù thủy bị ẩn (trả về null)
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBeNull();
+    });
+
+    it('getWolfPackVictimCandidate trả về null khi nạn nhân bị Sói nguyền nguyền rủa', () => {
+      const room: any = {
+        nightActionsAccumulator: {
+          wolfPack: { targets: ['player_4'] },
+          accursedWolf: { curseTargetId: 'player_4' },
+        },
+      };
+
+      expect(getRawWolfPackVictim(room as RoomState)).toBe('player_4');
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBeNull();
+    });
+
+    it('trả về null khi bầy sói chọn bỏ qua (isSkip = true)', () => {
+      const room: any = {
+        nightActionsAccumulator: {
+          wolfPack: { isSkip: true, targets: ['player_3'] },
+        },
+      };
+
+      expect(getRawWolfPackVictim(room as RoomState)).toBeNull();
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBeNull();
+    });
+  });
+
+  describe('Projections cho wolf_accursed', () => {
+    it('wolf_accursed nhận validTargets là duy nhất nạn nhân còn sống của bầy Sói', async () => {
+      const { roomCode, players } = await setupGame([
+        'werewolf',
+        'wolf_accursed',
+        'seer',
+        'witch',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const accursedWolf = room.gameState!.players.find((p) => p.roleId === 'wolf_accursed')!;
+      const victim = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+      // Giả lập bầy Sói đã cắn victim
+      room.nightActionsAccumulator.wolfPack = { targets: [victim.id] };
+
+      // Giả lập tới lượt wolf_accursed
+      room.nightTurnPlan = [
+        {
+          roleId: 'wolf_accursed',
+          turnKey: 'wolf_accursed',
+          priority: 32,
+          titleVi: 'Sói nguyền',
+          titleEn: 'Accursed Wolf',
+          activePlayerIds: [accursedWolf.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_wolf_accursed',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const privateView = createPlayerPrivateView(room, accursedWolf.id);
+      expect(privateView).not.toBeNull();
+      expect(privateView!.canActCurrentTurn).toBe(true);
+      expect(privateView!.validTargets).toEqual([victim.id]);
+      expect(privateView!.skills.wolfPackVictimId).toBe(victim.id);
+    });
+
+    it('wolf_accursed vẫn thấy validTargets là nạn nhân ngay cả khi Bảo vệ đã đỡ', async () => {
+      const { roomCode } = await setupGame([
+        'werewolf',
+        'wolf_accursed',
+        'seer',
+        'witch',
+        'bodyguard',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const accursedWolf = room.gameState!.players.find((p) => p.roleId === 'wolf_accursed')!;
+      const victim = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+      // Bầy Sói cắn victim, và Bảo vệ đã bảo vệ victim
+      room.nightActionsAccumulator.wolfPack = { targets: [victim.id] };
+      room.nightActionsAccumulator.bodyguard = { targetId: victim.id };
+
+      room.nightTurnPlan = [
+        {
+          roleId: 'wolf_accursed',
+          turnKey: 'wolf_accursed',
+          priority: 32,
+          titleVi: 'Sói nguyền',
+          titleEn: 'Accursed Wolf',
+          activePlayerIds: [accursedWolf.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_wolf_accursed',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const privateView = createPlayerPrivateView(room, accursedWolf.id);
+      expect(privateView).not.toBeNull();
+      // Wolf accursed vẫn nhắm vào victim (để sau này engine giải mã hoàn trả phép)
+      expect(privateView!.validTargets).toEqual([victim.id]);
+    });
+  });
+
+  describe('Projections cho big_bad_wolf', () => {
+    it('big_bad_wolf nhận validTargets là các người chơi còn sống, loại trừ chính mình, phe Sói và nạn nhân bầy Sói', async () => {
+      const { roomCode } = await setupGame([
+        'werewolf',
+        'big_bad_wolf',
+        'seer',
+        'witch',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const bigBadWolf = room.gameState!.players.find((p) => p.roleId === 'big_bad_wolf')!;
+      const regularWolf = room.gameState!.players.find((p) => p.roleId === 'werewolf')!;
+      const seer = room.gameState!.players.find((p) => p.roleId === 'seer')!;
+      const witch = room.gameState!.players.find((p) => p.roleId === 'witch')!;
+      const villagers = room.gameState!.players.filter((p) => p.roleId === 'villager');
+
+      // Bầy Sói đã cắn 1 người dân làng
+      const packVictim = villagers[0];
+      room.nightActionsAccumulator.wolfPack = { targets: [packVictim.id] };
+
+      room.nightTurnPlan = [
+        {
+          roleId: 'big_bad_wolf',
+          turnKey: 'big_bad_wolf',
+          priority: 33,
+          titleVi: 'Sói đại ca',
+          titleEn: 'Big Bad Wolf',
+          activePlayerIds: [bigBadWolf.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_big_bad_wolf',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const privateView = createPlayerPrivateView(room, bigBadWolf.id);
+      expect(privateView).not.toBeNull();
+      expect(privateView!.canActCurrentTurn).toBe(true);
+
+      // Mục tiêu hợp lệ phải bao gồm: seer, witch, villagers[1]
+      // Không bao gồm: bigBadWolf, regularWolf, packVictim (villagers[0])
+      expect(privateView!.validTargets).toContain(seer.id);
+      expect(privateView!.validTargets).toContain(witch.id);
+      expect(privateView!.validTargets).toContain(villagers[1].id);
+      expect(privateView!.validTargets).not.toContain(bigBadWolf.id);
+      expect(privateView!.validTargets).not.toContain(regularWolf.id);
+      expect(privateView!.validTargets).not.toContain(packVictim.id);
+    });
+
+    it('big_bad_wolf được phép chọn phe Sói nếu allowWolfFriendlyFire = true', async () => {
+      const { roomCode } = await setupGame([
+        'werewolf',
+        'big_bad_wolf',
+        'seer',
+        'witch',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+      room.settings.allowWolfFriendlyFire = true;
+
+      const bigBadWolf = room.gameState!.players.find((p) => p.roleId === 'big_bad_wolf')!;
+      const regularWolf = room.gameState!.players.find((p) => p.roleId === 'werewolf')!;
+      const seer = room.gameState!.players.find((p) => p.roleId === 'seer')!;
+
+      room.nightActionsAccumulator.wolfPack = { targets: [seer.id] };
+
+      room.nightTurnPlan = [
+        {
+          roleId: 'big_bad_wolf',
+          turnKey: 'big_bad_wolf',
+          priority: 33,
+          titleVi: 'Sói đại ca',
+          titleEn: 'Big Bad Wolf',
+          activePlayerIds: [bigBadWolf.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_big_bad_wolf',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const privateView = createPlayerPrivateView(room, bigBadWolf.id);
+      expect(privateView).not.toBeNull();
+      // Khi bật friendly fire, regularWolf xuất hiện trong danh sách validTargets
+      expect(privateView!.validTargets).toContain(regularWolf.id);
+      expect(privateView!.validTargets).not.toContain(seer.id);
+    });
+  });
+
+  describe('SocketGateway night:action cho wolf_accursed và big_bad_wolf', () => {
+    it('lưu accursedWolf trong accumulator khi gửi action qua socket', async () => {
+      const { roomCode, players } = await setupGame([
+        'werewolf',
+        'wolf_accursed',
+        'seer',
+        'witch',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const accursedWolf = room.gameState!.players.find((p) => p.roleId === 'wolf_accursed')!;
+      const wolfPlayer = players.find((p) => p.id === accursedWolf.id)!;
+      const victim = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+      room.nightTurnPlan = [
+        {
+          roleId: 'wolf_accursed',
+          turnKey: 'wolf_accursed',
+          priority: 32,
+          titleVi: 'Sói nguyền',
+          titleEn: 'Accursed Wolf',
+          activePlayerIds: [accursedWolf.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_wolf_accursed',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const actionRes: any = await new Promise((resolve) => {
+        wolfPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: wolfPlayer.token,
+            roleId: 'wolf_accursed',
+            action: { curseTargetId: victim.id },
+          },
+          resolve
+        );
+      });
+
+      expect(actionRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.accursedWolf).toEqual({
+        curseTargetId: victim.id,
+      });
+    });
+
+    it('lưu bigBadWolf trong accumulator khi gửi action qua socket', async () => {
+      const { roomCode, players } = await setupGame([
+        'werewolf',
+        'big_bad_wolf',
+        'seer',
+        'witch',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const bigBadWolf = room.gameState!.players.find((p) => p.roleId === 'big_bad_wolf')!;
+      const wolfPlayer = players.find((p) => p.id === bigBadWolf.id)!;
+      const victim = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+      room.nightTurnPlan = [
+        {
+          roleId: 'big_bad_wolf',
+          turnKey: 'big_bad_wolf',
+          priority: 33,
+          titleVi: 'Sói đại ca',
+          titleEn: 'Big Bad Wolf',
+          activePlayerIds: [bigBadWolf.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_big_bad_wolf',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const actionRes: any = await new Promise((resolve) => {
+        wolfPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: wolfPlayer.token,
+            roleId: 'big_bad_wolf',
+            action: { targetId: victim.id },
+          },
+          resolve
+        );
+      });
+
+      expect(actionRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.bigBadWolf).toEqual({
+        targetId: victim.id,
+      });
+    });
+  });
+});

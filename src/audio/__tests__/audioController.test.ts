@@ -30,6 +30,28 @@ describe('AudioController & Fallbacks', () => {
       'Sói tuyết hãy thức dậy và chọn một người làm bạn đồng hành.'
     );
 
+    expect(NARRATION_PROMPTS.night_wolf_accursed).toBeDefined();
+    expect(NARRATION_PROMPTS.night_wolf_accursed.subtitle).toBe(
+      'Sói nguyền hãy thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?'
+    );
+    expect(NARRATION_PROMPTS.night_wolf_accursed.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.wolf_accursed).toBeDefined();
+    expect(NARRATION_PROMPTS.wolf_accursed.subtitle).toBe(
+      'Sói nguyền hãy thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?'
+    );
+    expect(NARRATION_PROMPTS.wolf_accursed.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_big_bad_wolf).toBeDefined();
+    expect(NARRATION_PROMPTS.night_big_bad_wolf.subtitle).toBe(
+      'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.'
+    );
+    expect(NARRATION_PROMPTS.night_big_bad_wolf.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.big_bad_wolf).toBeDefined();
+    expect(NARRATION_PROMPTS.big_bad_wolf.subtitle).toBe(
+      'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.'
+    );
+    expect(NARRATION_PROMPTS.big_bad_wolf.durationMs).toBe(6000);
+
     expect(NARRATION_PROMPTS.wolf_pack.subtitle).toContain('Ma Sói');
     expect(NARRATION_PROMPTS.seer.subtitle).toContain('Tiên tri');
     expect(NARRATION_PROMPTS.minion.subtitle).toContain('Kẻ phản bội');

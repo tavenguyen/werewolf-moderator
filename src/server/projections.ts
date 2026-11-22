@@ -161,6 +161,7 @@ export function createPlayerPrivateView(
     witchPoisonUsed: gameState.witchPoisonUsed,
     lastProtectedPlayerId: gameState.lastProtectedPlayerId,
     elderHp: pState.elderHp,
+    accursedWolfUsed: gameState.accursedWolfUsed,
   };
 
   if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
@@ -204,7 +205,16 @@ export function createPlayerPrivateView(
         // Tính mục tiêu hợp lệ cho từng lượt
         validTargets = calculateNightValidTargets(room, playerId, currentTurn.turnKey);
 
-        // Nếu Phù thủy biết nạn nhân bị cắn đêm nay
+        // Lưu thông tin nạn nhân bầy Sói cho Sói nguyền và Phù thủy
+        if (
+          currentTurn.turnKey === 'wolf_accursed' ||
+          currentTurn.turnKey === 'night_wolf_accursed' ||
+          (currentTurn.turnKey === 'witch' && room.settings.witchKnowsVictim)
+        ) {
+          skills.wolfPackVictimId = getRawWolfPackVictim(room);
+        }
+
+        // Nếu Phù thủy biết nạn nhân bị cắn đêm nay (đã lọc qua Bảo vệ và Sói nguyền)
         if (currentTurn.turnKey === 'witch' && room.settings.witchKnowsVictim) {
           skills.witchVictimId = getWolfPackVictimCandidate(room);
         }
@@ -399,15 +409,44 @@ function calculateNightValidTargets(
     case 'night_mason':
       return [];
 
+    case 'big_bad_wolf':
+    case 'night_big_bad_wolf': {
+      const packVictim = getWolfPackVictimCandidate(room);
+      return livingPlayers
+        .filter((p) => {
+          if (p.id === playerId) return false;
+          if (packVictim && p.id === packVictim) return false;
+          if (!room.settings.allowWolfFriendlyFire) {
+            if (p.faction === 'WEREWOLF' || p.roleId === 'white_wolf') {
+              return false;
+            }
+          }
+          return true;
+        })
+        .map((p) => p.id);
+    }
+
+    case 'wolf_accursed':
+    case 'night_wolf_accursed': {
+      const victimId = getRawWolfPackVictim(room);
+      if (victimId) {
+        const victimPlayer = gameState.players.find((p) => p.id === victimId);
+        if (victimPlayer && victimPlayer.isAlive) {
+          return [victimId];
+        }
+      }
+      return [];
+    }
+
     default:
       return [];
   }
 }
 
 /**
- * Lấy mục tiêu sói cắn tạm thời để gửi cho Phù thủy biết.
+ * Lấy mục tiêu thô bầy sói đã vote cắn (chưa kiểm tra bảo vệ hay lời nguyền).
  */
-function getWolfPackVictimCandidate(room: RoomState): PlayerId | null {
+export function getRawWolfPackVictim(room: RoomState): PlayerId | null {
   const wolfActions = room.nightActionsAccumulator.wolfPack;
   if (!wolfActions || wolfActions.isSkip) return null;
 
@@ -430,6 +469,25 @@ function getWolfPackVictimCandidate(room: RoomState): PlayerId | null {
   }
 
   return null;
+}
+
+/**
+ * Lấy mục tiêu sói cắn tạm thời để gửi cho Phù thủy biết.
+ * Nếu nạn nhân trùng với bodyguard?.targetId hoặc accursedWolf?.curseTargetId:
+ * trả về null để Phù thủy không thấy người này bị cắn đêm nay (theo đúng đặc tả P50 preview).
+ */
+export function getWolfPackVictimCandidate(room: RoomState): PlayerId | null {
+  const rawVictim = getRawWolfPackVictim(room);
+  if (!rawVictim) return null;
+
+  const protectedId = room.nightActionsAccumulator.bodyguard?.targetId;
+  const cursedId = room.nightActionsAccumulator.accursedWolf?.curseTargetId;
+
+  if (rawVictim === protectedId || rawVictim === cursedId) {
+    return null;
+  }
+
+  return rawVictim;
 }
 
 /**

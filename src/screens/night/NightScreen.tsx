@@ -39,12 +39,22 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const isHoodlum = currentTurnKey === 'hoodlum' || currentTurnKey === 'night_hoodlum';
   const isWildChild = currentTurnKey === 'wild_child' || currentTurnKey === 'night_wild_child';
   const isDireWolf = currentTurnKey === 'dire_wolf' || currentTurnKey === 'night_dire_wolf';
+  const isWolfAccursed = currentTurnKey === 'wolf_accursed' || currentTurnKey === 'night_wolf_accursed';
+  const isBigBadWolf = currentTurnKey === 'big_bad_wolf' || currentTurnKey === 'night_big_bad_wolf';
   const isWitch = currentTurnKey === 'witch';
+
+  const [isCurseAction, setIsCurseAction] = useState<boolean | null>(null);
 
   // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy
   const victimPlayerId = privateView?.skills?.witchVictimId;
   const victimPlayer = victimPlayerId
     ? publicView?.players.find((p) => p.id === victimPlayerId)
+    : null;
+
+  // Lấy thông tin nạn nhân của bầy Sói cho Sói nguyền
+  const accursedVictimId = validTargets[0] || privateView?.skills?.wolfPackVictimId;
+  const accursedVictim = accursedVictimId
+    ? publicView?.players.find((p) => p.id === accursedVictimId)
     : null;
 
   // Tự động mở Action mode nếu đến lượt có thể hành động
@@ -54,6 +64,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
       setHasSubmitted(false);
       setSelectedTargetId(null);
       setHoodlumTargets([]);
+      setIsCurseAction(null);
     } else {
       setMode('sleep');
     }
@@ -101,6 +112,19 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
         await actions.sendNightAction('dire_wolf', {
           targetId: selectedTargetId,
         });
+      } else if (isWolfAccursed) {
+        const curseTargetId = isCurseAction && accursedVictimId ? accursedVictimId : null;
+        await actions.sendNightAction('wolf_accursed', {
+          curseTargetId,
+        });
+      } else if (isBigBadWolf) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 nạn nhân để cắn xé thêm.');
+          return;
+        }
+        await actions.sendNightAction('big_bad_wolf', {
+          targetId: selectedTargetId,
+        });
       } else {
         await actions.sendNightAction(privateView.roleId, {
           targetId: selectedTargetId,
@@ -117,6 +141,12 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
         ? '✓ Đã chọn bạn đồng hành thành công.'
         : isHoodlum
         ? '✓ Đã chọn 2 kẻ thù trừ khử thành công.'
+        : isWolfAccursed
+        ? isCurseAction
+          ? '✓ Đã nguyền nạn nhân thành Ma Sói.'
+          : '✓ Đã bỏ qua lượt nguyền, giữ lại phép.'
+        : isBigBadWolf
+        ? '✓ Đã chọn mục tiêu cắn thêm thành công.'
         : '✓ Đã xác nhận hành động ban đêm thành công.';
       setNotice(successMsg);
       setTimeout(() => {
@@ -136,6 +166,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     setHoodlumTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
+    setIsCurseAction(null);
   };
 
   const handleSelectTarget = (tId: PlayerId) => {
@@ -157,8 +188,10 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
   const canConfirm = isHoodlum
     ? isHoodlumValid
-    : isWildChild || isDireWolf
+    : isWildChild || isDireWolf || isBigBadWolf
     ? Boolean(selectedTargetId)
+    : isWolfAccursed
+    ? isCurseAction !== null || !accursedVictim
     : true;
 
   return (
@@ -358,6 +391,31 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                     </div>
                   )}
 
+                  {myRoleId === 'lone_wolf' && (
+                    <div className="revealed-role-details">
+                      <strong>MỤC TIÊU SÓI CÔ ĐƠN:</strong>
+                      <span>Bạn cắn cùng bầy Sói mỗi đêm, nhưng chỉ thắng nếu phe Sói thắng và bạn là người duy nhất sống sót.</span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'wolf_accursed' && (
+                    <div className="revealed-role-details">
+                      <strong>TRẠNG THÁI PHÉP NGUYỀN:</strong>
+                      <span>
+                        {privateView?.skills?.accursedWolfUsed
+                          ? 'Đã sử dụng phép nguyền'
+                          : 'Còn 1 lần nguyền biến nạn nhân thành Ma Sói'}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'big_bad_wolf' && (
+                    <div className="revealed-role-details">
+                      <strong>SÓI ĐẠI CA:</strong>
+                      <span>Được cắn thêm 1 nạn nhân mỗi đêm khi chưa có Ma Sói nào trong đàn bị chết.</span>
+                    </div>
+                  )}
+
                   <small className="release-hint">Thả tay để che lại ngay lập tức</small>
                 </div>
               ) : (
@@ -438,6 +496,79 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                 </button>
               </div>
             </div>
+          ) : isWolfAccursed ? (
+            <div className="wolf-accursed-turn-panel">
+              <div className="wolf-accursed-header-badge">
+                <span className="wolf-glyph" aria-hidden="true">🐺💉</span>
+                <div>
+                  <strong>SÓI NGUYỀN (ACCURSED WOLF)</strong>
+                  <p>
+                    Bạn có 1 lần duy nhất trong cả ván để truyền nọc độc biến nạn nhân của bầy Sói thành Ma Sói thay vì giết chết họ.
+                  </p>
+                </div>
+              </div>
+
+              {accursedVictim ? (
+                <div className="victim-card accursed-victim-card">
+                  <div className="victim-info">
+                    <div className="victim-glyph-wrap" aria-hidden="true">
+                      <span className="victim-glyph">🐺</span>
+                    </div>
+                    <div className="victim-meta">
+                      <small>NẠN NHÂN CỦA BẦY SÓI ĐÊM NAY</small>
+                      <strong>#{accursedVictim.seatIndex} {accursedVictim.name}</strong>
+                    </div>
+                  </div>
+
+                  <div className="accursed-decision-actions">
+                    <button
+                      type="button"
+                      className={`curse-button ${isCurseAction === true ? 'is-complete' : ''}`}
+                      onClick={() => setIsCurseAction(true)}
+                    >
+                      <span>{isCurseAction === true ? '✓ ĐÃ CHỌN NGUYỀN NẠN NHÂN' : 'NGUYỀN NẠN NHÂN (HÓA SÓI)'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`skip-curse-button ${isCurseAction === false ? 'is-complete' : ''}`}
+                      onClick={() => setIsCurseAction(false)}
+                    >
+                      <span>{isCurseAction === false ? '✓ ĐÃ CHỌN GIỮ LẠI PHÉP' : 'BỎ QUA / GIỮ LẠI PHÉP'}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="accursed-empty-note">
+                  <p>Bầy Sói đêm nay không cắn ai hoặc nạn nhân không hợp lệ để nguyền.</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setIsCurseAction(false);
+                    }}
+                  >
+                    Bỏ qua / Giữ lại phép nguyền
+                  </button>
+                </div>
+              )}
+
+              <div className="role-actions">
+                <button
+                  type="button"
+                  className={`primary-confirm-btn ${!canConfirm ? 'disabled' : ''}`}
+                  disabled={!canConfirm}
+                  onClick={handleConfirmAction}
+                >
+                  <span>
+                    {isCurseAction === true
+                      ? 'XÁC NHẬN NGUYỀN NẠN NHÂN'
+                      : isCurseAction === false
+                      ? 'XÁC NHẬN BỎ QUA LƯỢT NGUYỀN'
+                      : 'VUI LÒNG CHỌN NGUYỀN HOẶC BỎ QUA'}
+                  </span>
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {/* Nạn nhân Phù Thủy nếu có */}
@@ -472,6 +603,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'CHỌN 1 THẦN TƯỢNG CỦA BẠN'
                       : isDireWolf
                       ? 'CHỌN 1 BẠN ĐỒNG HÀNH'
+                      : isBigBadWolf
+                      ? 'CHỌN 1 MỤC TIÊU CẮN THÊM'
                       : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
                   </strong>
                   <small>
@@ -481,6 +614,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'Nếu người này chết, bạn sẽ biến thành Ma Sói từ đêm hôm sau'
                       : isDireWolf
                       ? 'Nếu người này chết, bạn sẽ chết theo ngay lập tức'
+                      : isBigBadWolf
+                      ? 'Cắn thêm một nạn nhân độc lập với bầy Sói'
                       : 'Chỉ hiển thị các người chơi hợp lệ trong luật'}
                   </small>
                 </div>
@@ -499,6 +634,10 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                     ? selectedTargetId
                       ? `Bạn đồng hành: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                       : 'Chọn 1 người làm bạn đồng hành'
+                    : isBigBadWolf
+                    ? selectedTargetId
+                      ? `Mục tiêu cắn thêm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người để cắn thêm'
                     : selectedTargetId
                     ? `Mục tiêu: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                     : 'Chưa chọn'}
@@ -598,11 +737,13 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'XÁC NHẬN CHỌN THẦN TƯỢNG'
                       : isDireWolf
                       ? 'XÁC NHẬN CHỌN BẠN ĐỒNG HÀNH'
+                      : isBigBadWolf
+                      ? 'XÁC NHẬN CẮN THÊM'
                       : 'XÁC NHẬN HÀNH ĐỘNG'}
                   </span>
                 </button>
 
-                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason'].includes(currentTurnKey) && (
+                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed'].includes(currentTurnKey) && (
                   <button
                     type="button"
                     className="secondary-button"

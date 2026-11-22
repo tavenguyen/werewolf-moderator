@@ -281,4 +281,63 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     await adapter.sendNightAction('mason', {});
     expect(roomState.nightActionAcks.has('player_1')).toBe(true);
   });
+
+  it('xử lý hành động đêm cho wolf_accursed và big_bad_wolf', async () => {
+    const adapter = createPopulatedAdapter(8);
+    await adapter.startGame();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+
+    // 1. wolf_accursed - nguyền nạn nhân
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'wolf_accursed',
+        turnKey: 'wolf_accursed',
+        priority: 32,
+        titleVi: 'Sói nguyền',
+        titleEn: 'Accursed Wolf',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_wolf_accursed',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('wolf_accursed', { curseTargetId: 'player_3' });
+    expect(roomState.nightActionsAccumulator.accursedWolf).toEqual({
+      curseTargetId: 'player_3',
+    });
+
+    // 2. wolf_accursed - bỏ qua / giữ lại phép nguyền
+    await adapter.sendNightAction('wolf_accursed', { curseTargetId: null });
+    expect(roomState.nightActionsAccumulator.accursedWolf).toEqual({
+      curseTargetId: null,
+    });
+
+    // 3. big_bad_wolf - cắn thêm 1 nạn nhân
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'big_bad_wolf',
+        turnKey: 'big_bad_wolf',
+        priority: 33,
+        titleVi: 'Sói đại ca',
+        titleEn: 'Big Bad Wolf',
+        activePlayerIds: ['player_2'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_big_bad_wolf',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('big_bad_wolf', { targetId: 'player_4' });
+    expect(roomState.nightActionsAccumulator.bigBadWolf).toEqual({
+      targetId: 'player_4',
+    });
+
+    // 4. big_bad_wolf - bỏ qua cắn thêm
+    await adapter.sendNightAction('big_bad_wolf', { targetId: null });
+    expect(roomState.nightActionsAccumulator.bigBadWolf).toEqual({
+      targetId: null,
+    });
+  });
 });

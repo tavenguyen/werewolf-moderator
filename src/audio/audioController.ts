@@ -79,6 +79,26 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
     subtitle: 'Sói tuyết hãy thức dậy và chọn một người làm bạn đồng hành.',
     durationMs: 6000,
   },
+  night_wolf_accursed: {
+    audioKey: 'night_wolf_accursed',
+    subtitle: 'Sói nguyền hãy thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?',
+    durationMs: 6000,
+  },
+  wolf_accursed: {
+    audioKey: 'night_wolf_accursed',
+    subtitle: 'Sói nguyền hãy thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?',
+    durationMs: 6000,
+  },
+  night_big_bad_wolf: {
+    audioKey: 'night_big_bad_wolf',
+    subtitle: 'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.',
+    durationMs: 6000,
+  },
+  big_bad_wolf: {
+    audioKey: 'night_big_bad_wolf',
+    subtitle: 'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.',
+    durationMs: 6000,
+  },
   minion: {
     audioKey: 'minion',
     subtitle: 'Kẻ phản bội, hãy thức dậy và nhận diện bầy Ma Sói.',

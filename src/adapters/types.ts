@@ -43,6 +43,7 @@ export interface NightActionInput {
   healTargetId?: PlayerId | null;
   poisonTargetId?: PlayerId | null;
   isSkip?: boolean;
+  curseTargetId?: PlayerId | null;
 }
 
 export interface GameSessionAdapter {

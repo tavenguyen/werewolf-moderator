@@ -1094,6 +1094,16 @@ export class SocketGateway {
       case 'night_mason':
         // Xác nhận lượt (acknowledgement)
         break;
+
+      case 'wolf_accursed':
+      case 'night_wolf_accursed':
+        acc.accursedWolf = { curseTargetId: action.curseTargetId ?? null };
+        break;
+
+      case 'big_bad_wolf':
+      case 'night_big_bad_wolf':
+        acc.bigBadWolf = { targetId: action.targetId ?? null };
+        break;
     }
   }
 

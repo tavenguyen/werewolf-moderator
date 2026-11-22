@@ -185,6 +185,8 @@ export interface PlayerPrivateView {
     roleModelId?: PlayerId | null;
     companionId?: PlayerId | null;
     hoodlumTargetIds?: [PlayerId, PlayerId] | null;
+    wolfPackVictimId?: PlayerId | null;
+    accursedWolfUsed?: boolean;
   };
   teammates: Array<{ id: PlayerId; name: string; roleId: string }>;
   investigationResult?: {
@@ -257,6 +259,7 @@ export interface ClientNightActionPayload {
     healTargetId?: PlayerId | null;
     poisonTargetId?: PlayerId | null;
     isSkip?: boolean;
+    curseTargetId?: PlayerId | null;
   };
 }
 
