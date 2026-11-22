@@ -50,6 +50,7 @@ export interface PlayerState {
   isCultMember?: boolean;
   isEnchanted?: boolean;
   infectedWithTetanus?: boolean;
+  tetanusInfectionRound?: number;
   toughGuyBittenNight?: number | null;
   roleModelId?: PlayerId | null;
   doppelgangerTargetId?: PlayerId | null;
@@ -176,6 +177,8 @@ export interface GameState {
   accursedWolfUsed: boolean;
   doubleVoteDay: boolean;
   villagePowerStripped: boolean;
+  bearGrowled?: boolean;
+  princeRevealed?: boolean;
   mayorId: PlayerId | null;
   pendingHunterShotPlayerId?: PlayerId | null;
   pendingMayorSuccessionPlayerId?: PlayerId | null;

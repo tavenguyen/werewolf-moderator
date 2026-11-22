@@ -23,7 +23,19 @@ export function isCrossFactionCouple(p1: PlayerState, p2: PlayerState): boolean 
 export function checkWinCondition(state: GameState): WinOutcome | null {
   const alivePlayers = state.players.filter((p) => p.isAlive);
 
-  // 1. Kẻ chán đời (Tanner) bị treo cổ ban ngày (VILLAGE_VOTE)
+  // 1. Thiên sứ (Angel) bị treo cổ ban ngày ngay trong Ngày 1 (VILLAGE_VOTE & roundNumber === 1)
+  const angelHangedDay1 = state.deaths.find(
+    (d) => d.roleId === 'angel' && d.cause === 'VILLAGE_VOTE' && d.roundNumber === 1
+  );
+  if (angelHangedDay1) {
+    return {
+      winner: 'ANGEL',
+      reason: 'Thiên sứ (Angel) đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng tối thượng!',
+      winningPlayerIds: [angelHangedDay1.playerId],
+    };
+  }
+
+  // 2. Kẻ chán đời (Tanner) bị treo cổ ban ngày (VILLAGE_VOTE)
   const tannerHanged = state.deaths.find(
     (d) => d.roleId === 'tanner' && d.cause === 'VILLAGE_VOTE'
   );
@@ -35,7 +47,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
-  // 2. Cả bàn cùng chết sạch -> Hòa cả làng (DRAW)
+  // 3. Cả bàn cùng chết sạch -> Hòa cả làng (DRAW)
   if (alivePlayers.length === 0) {
     return {
       winner: 'DRAW',
@@ -100,8 +112,11 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     };
   }
 
-  // 6. Phe Ma sói thắng: Số Sói cắn >= Số Dân (và ít nhất 1 Sói cắn còn sống)
-  if (activeWolves.length >= totalVillagers.length && activeWolves.length > 0) {
+  // 6. Phe Ma sói thắng: Số Sói cắn >= Số người không phải Sói còn sống (và ít nhất 1 Sói cắn còn sống)
+  const livingNonWolves = alivePlayers.filter(
+    (p) => p.faction !== 'WEREWOLF' && p.roleId !== 'white_wolf'
+  );
+  if (activeWolves.length >= livingNonWolves.length && activeWolves.length > 0) {
     // Toàn bộ phe Sói (kể cả Minion, Sorcerer dù còn sống hay đã chết) đều thắng cùng bầy
     const winners = state.players.filter((p) => p.faction === 'WEREWOLF').map((p) => p.id);
     return {

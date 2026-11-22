@@ -1,5 +1,6 @@
-import { isMvpRole, ROLES_BY_ID } from './roles';
+import { isBitingWolf, isMvpRole, ROLES_BY_ID } from './roles';
 import { processDeathCascade } from './deathCascade';
+import { getAliveNeighbors } from './seating';
 import { resolveNight, type NightResolutionOutput } from './nightResolution';
 import { createInitialDayState, passMayorTitle } from './voting';
 import type {
@@ -60,11 +61,10 @@ export function createInitialGameState(
 
   const players: PlayerState[] = playersInput.map((input, idx) => {
     const roleId = assignedRoleIds[idx] ?? 'villager';
-    if (!isMvpRole(roleId)) {
-      throw new Error(`Vai trò [${roleId}] chưa được hỗ trợ trong phiên bản Engine MVP`);
-    }
-
     const def = ROLES_BY_ID[roleId];
+    if (!def || !def.implementedInEngine) {
+      throw new Error(`Vai trò [${roleId}] chưa được hỗ trợ trong Game Engine`);
+    }
 
     return {
       id: input.id,
@@ -104,6 +104,26 @@ export function createInitialGameState(
 }
 
 /**
+ * Đánh giá tiếng gầm của Gấu thuần hóa (Bear Tamer):
+ * - Chỉ gầm nếu Bear Tamer còn sống và có ít nhất 1 Ma sói có khả năng cắn đêm ngồi cạnh.
+ * - Nếu chính Bear Tamer bị biến thành Ma Sói (ví dụ bị nguyền), gấu ngửi thấy mùi sói và luôn gầm.
+ * - Không gầm với Minion, Sorcerer hay Lycan.
+ */
+export function evaluateBearGrowl(state: GameState): boolean {
+  const bearTamer = state.players.find((p) => p.roleId === 'bear_tamer' && p.isAlive);
+  if (!bearTamer) return false;
+
+  if (bearTamer.faction === 'WEREWOLF') {
+    return true;
+  }
+
+  const neighbors = getAliveNeighbors(state.players, bearTamer.id);
+  if (!neighbors) return false;
+
+  return isBitingWolf(neighbors.left) || isBitingWolf(neighbors.right);
+}
+
+/**
  * Bắt đầu pha ban ngày (Day Phase):
  * Nếu Ngày 1 và bật hasMayor -> chuyển sang DAY_MAYOR_ELECTION;
  * Ngược lại -> chuyển sang DAY_DISCUSS.
@@ -111,6 +131,7 @@ export function createInitialGameState(
 export function startDayPhase(state: GameState): GameState {
   const nextState: GameState = structuredClone(state);
   nextState.dayState = createInitialDayState();
+  nextState.bearGrowled = evaluateBearGrowl(nextState);
 
   if (nextState.roundNumber === 1 && nextState.settings.hasMayor) {
     nextState.phase = 'DAY_MAYOR_ELECTION';
@@ -118,6 +139,10 @@ export function startDayPhase(state: GameState): GameState {
   } else {
     nextState.phase = 'DAY_DISCUSS';
     nextState.historyLogs.push(`Bắt đầu Ngày ${nextState.roundNumber}: Mở phiên thảo luận làng.`);
+  }
+
+  if (nextState.bearGrowled) {
+    nextState.historyLogs.push('Sáng sớm nay, tiếng gấu gầm dữ dội vang vọng khắp ngôi làng!');
   }
 
   return nextState;
@@ -164,7 +189,13 @@ export function executeNightPhase(
   const winOutcome = checkWinCondition(nextState);
   if (winOutcome) {
     nextState.phase = 'GAME_OVER';
+  } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
+    nextState.bearGrowled = evaluateBearGrowl(nextState);
   } else {
+    nextState.bearGrowled = evaluateBearGrowl(nextState);
+    if (nextState.bearGrowled) {
+      nextState.historyLogs.push('Sáng sớm nay, tiếng gấu gầm dữ dội vang vọng khắp ngôi làng!');
+    }
     nextState.dayState = createInitialDayState();
     if (nextState.roundNumber === 1 && nextState.settings.hasMayor) {
       nextState.phase = 'DAY_MAYOR_ELECTION';
@@ -192,6 +223,13 @@ export function executeDayVote(
   nextState.phase = 'DAY_VOTE';
 
   if (!targetPlayerId) {
+    if (state.roundNumber === 1) {
+      for (const p of nextState.players) {
+        if (p.isAlive && p.roleId === 'angel') {
+          p.faction = 'VILLAGER';
+        }
+      }
+    }
     nextState.historyLogs.push('Hòa phiếu hoặc bỏ phiếu trắng: Không ai bị treo cổ hôm nay.');
     nextState.roundNumber += 1;
     nextState.phase = 'NIGHT';
@@ -214,8 +252,31 @@ export function executeDayVote(
     return { nextState, survivedByReveal: true, winOutcome: checkWinCondition(nextState) };
   }
 
+  // 1b. Hoàng tử (Prince) lật bài thoát chết (giữ nguyên quyền vote)
+  if (target.roleId === 'prince' && !nextState.princeRevealed) {
+    nextState.princeRevealed = true;
+    nextState.historyLogs.push(
+      `Hoàng tử (${target.name}) lật bài thoát chết và giữ nguyên quyền bỏ phiếu!`
+    );
+    nextState.roundNumber += 1;
+    nextState.phase = 'NIGHT';
+    return { nextState, survivedByReveal: true, winOutcome: checkWinCondition(nextState) };
+  }
+
   // 2. Treo cổ đưa vào Death Cascade
   processDeathCascade(nextState, [{ playerId: target.id, cause: 'VILLAGE_VOTE' }]);
+
+  // Nếu Thiên sứ (Angel) sống sót qua Ngày 1, chuyển phe thành Dân làng thường
+  if (state.roundNumber === 1) {
+    for (const p of nextState.players) {
+      if (p.isAlive && p.roleId === 'angel') {
+        p.faction = 'VILLAGER';
+        nextState.historyLogs.push(
+          `Thiên sứ (${p.name}) đã sống sót qua Ngày 1 và hòa mình thành Dân làng thường.`
+        );
+      }
+    }
+  }
 
   // Nếu có Thợ săn chết (do bị treo cổ hoặc chết chùm), mở lượt bắn trước khi xét thắng
   if (nextState.pendingHunterShotPlayerId) {
@@ -234,6 +295,8 @@ export function executeDayVote(
   const winOutcome = checkWinCondition(nextState);
   if (winOutcome) {
     nextState.phase = 'GAME_OVER';
+  } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
+    nextState.bearGrowled = evaluateBearGrowl(nextState);
   } else {
     nextState.roundNumber += 1;
     nextState.phase = 'NIGHT';
@@ -277,11 +340,17 @@ export function executeHunterShot(
   const winOutcome = checkWinCondition(nextState);
   if (winOutcome) {
     nextState.phase = 'GAME_OVER';
+  } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
+    nextState.bearGrowled = evaluateBearGrowl(nextState);
   } else {
     nextState.phase = nextState.previousPhaseBeforeHunter ?? 'DAY_DISCUSS';
     if (nextState.phase === 'NIGHT') {
       nextState.roundNumber += 1;
     } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
+      nextState.bearGrowled = evaluateBearGrowl(nextState);
+      if (nextState.bearGrowled) {
+        nextState.historyLogs.push('Sáng sớm nay, tiếng gấu gầm dữ dội vang vọng khắp ngôi làng!');
+      }
       if (!nextState.dayState) {
         nextState.dayState = createInitialDayState();
       }
@@ -310,6 +379,8 @@ export function executeMayorSuccession(
   const winOutcome = checkWinCondition(nextState);
   if (winOutcome) {
     nextState.phase = 'GAME_OVER';
+  } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
+    nextState.bearGrowled = evaluateBearGrowl(nextState);
   }
 
   return { nextState, winOutcome };

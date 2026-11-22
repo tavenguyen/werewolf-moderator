@@ -113,6 +113,10 @@ export function processDeathCascade(
       const infectedWolf = findClockwiseAliveWolf(state.players, victim.id);
       if (infectedWolf) {
         infectedWolf.infectedWithTetanus = true;
+        infectedWolf.tetanusInfectionRound = state.roundNumber;
+        state.historyLogs.push(
+          'Kỵ sĩ gỉ sắt đã dùng thanh gươm gỉ gây vết thương nhiễm trùng cho một Ma sói!'
+        );
       }
     }
   }

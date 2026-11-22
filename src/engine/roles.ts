@@ -29,6 +29,8 @@ export interface RoleDefinition {
   edgeCases: string[];
   implementedInEngine: boolean;
   tier: RoleTier;
+  playableInUI: boolean;
+  multiDeviceOnly?: boolean;
 }
 
 export const CORE_ROLE_IDS = [
@@ -235,7 +237,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu trong ngày hôm sau bạn bị cả làng bỏ phiếu treo cổ, bạn sẽ chết ngay lập tức do án treo cổ chứ không đợi đến đêm.',
       'Nếu bạn bị Phù thủy ném độc, bạn chết ngay vào sáng hôm sau chứ không được hoãn lại như vết cắn.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'prince',
@@ -254,7 +257,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Bạn chỉ được tha chết một lần: nếu những ngày sau dân làng vẫn tiếp tục vote treo cổ bạn, bạn sẽ chết thật.',
       'Sau khi bạn lật bài thoát chết, ngày hôm đó kết thúc ngay và chuyển sang ban đêm mà không ai bị treo cổ.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
 
   // =========================================================================
@@ -373,7 +377,9 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Đêm bạn bị cắn, Tiên tri soi vào bạn vẫn thấy Dân; từ đêm sau khi bạn đã hóa Sói thì soi mới ra Sói.',
       'Nếu bạn bị Phù thủy ném độc hoặc Thợ săn bắn, bạn chết luôn chứ không biến thành Sói.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
+    multiDeviceOnly: true,
   },
   {
     id: 'tanner',
@@ -450,7 +456,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu bạn bị Sói cắn chết trong đêm, gấu sẽ im lặng vào sáng hôm sau.',
       'Nếu bạn bị Sói nguyền biến thành Sói, gấu ngửi thấy mùi Sói trên người bạn nên sáng nào nó cũng gầm.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'aura_seer',
@@ -525,7 +532,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu đêm bạn bị cắn mà được Phù thủy cứu sống, con Sói đó cũng không bị nhiễm bệnh.',
       'Hệ thống đếm theo vòng tròn chiều kim đồng hồ bắt đầu từ vị trí của bạn, bỏ qua người chết để tìm con Sói sống gần nhất.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'lone_wolf',
@@ -641,7 +649,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Bạn chỉ thắng nhanh ở chu kỳ đầu (Đêm 1 hoặc Ngày 1). Sau giờ vote Ngày 1 mà bạn vẫn sống, bạn thành Dân làng thường đến hết ván.',
       'Từ Đêm 2 trở đi, nếu bạn chết thì cũng tính như một người dân chết chứ không được thắng trận.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'pied_piper',
@@ -839,6 +848,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
 export const ROLES: RoleDefinition[] = RAW_ROLES.map((role) => ({
   ...role,
   tier: isCoreRole(role.id) ? 'core' : 'advanced',
+  playableInUI: (role as { playableInUI?: boolean }).playableInUI ?? role.implementedInEngine,
+  multiDeviceOnly: (role as { multiDeviceOnly?: boolean }).multiDeviceOnly ?? false,
 }));
 
 export const ROLES_BY_ID: Record<string, RoleDefinition> = Object.fromEntries(
@@ -847,4 +858,13 @@ export const ROLES_BY_ID: Record<string, RoleDefinition> = Object.fromEntries(
 
 export function calculateBalanceScore(roleIds: string[]): number {
   return roleIds.reduce((sum, id) => sum + (ROLES_BY_ID[id]?.balanceWeight ?? 0), 0);
+}
+
+export function isBitingWolf(player: { faction: Faction; roleId: string; isAlive?: boolean }): boolean {
+  if (player.roleId === 'minion' || player.roleId === 'sorcerer') return false;
+  return player.faction === 'WEREWOLF' || player.roleId === 'white_wolf';
+}
+
+export function isEngineSupportedRole(roleId: string): boolean {
+  return ROLES_BY_ID[roleId]?.implementedInEngine === true;
 }

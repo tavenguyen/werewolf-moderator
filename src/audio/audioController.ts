@@ -84,6 +84,21 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
     subtitle: 'Trưởng làng trước khi trút hơi thở cuối cùng, hãy trao lại huy hiệu cho người kế vị.',
     durationMs: 6000,
   },
+  day_bear_growl: {
+    audioKey: 'day_bear_growl',
+    subtitle: 'Sáng sớm nay, tiếng gấu gầm dữ dội vang vọng khắp làng! Có Ma Sói ngồi cạnh Người thuần gấu!',
+    durationMs: 5000,
+  },
+  day_prince_reveal: {
+    audioKey: 'day_prince_reveal',
+    subtitle: 'Người vừa bị kết án là Hoàng tử! Hoàng tử lật bài thoát chết, án phạt được bãi bỏ!',
+    durationMs: 6000,
+  },
+  angel_win: {
+    audioKey: 'angel_win',
+    subtitle: 'Thiên sứ đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng tối thượng!',
+    durationMs: 7000,
+  },
 };
 
 export class AudioController {

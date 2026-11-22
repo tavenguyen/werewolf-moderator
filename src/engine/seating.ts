@@ -1,4 +1,5 @@
 import type { PlayerState } from './types';
+import { isBitingWolf } from './roles';
 
 /**
  * Tìm 2 người hàng xóm CÒN SỐNG ngồi sát bên (trái và phải) theo sơ đồ ghế tròn.
@@ -61,7 +62,7 @@ export function findClockwiseAliveWolf(
     for (let i = 0; i < alivePlayers.length; i++) {
       const idx = (candIndex + i) % alivePlayers.length;
       const p = alivePlayers[idx];
-      if (p.faction === 'WEREWOLF') {
+      if (isBitingWolf(p)) {
         return p;
       }
     }
@@ -72,7 +73,7 @@ export function findClockwiseAliveWolf(
   for (let i = 1; i < alivePlayers.length; i++) {
     const idx = (startIndex + i) % alivePlayers.length;
     const p = alivePlayers[idx];
-    if (p.faction === 'WEREWOLF') {
+    if (isBitingWolf(p)) {
       return p;
     }
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES, ROLES_BY_ID, type Faction, type RoleDefinition } from '../../engine/roles';
+import { searchRoles } from '../../engine/roleSearch';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
 import type { ScreenName } from '../../navigation';
 import {
@@ -19,8 +20,8 @@ type Props = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-// 16 vai trò MVP đã được hỗ trợ trong Engine
-const SUPPORTED_ROLES = ROLES.filter((r) => r.implementedInEngine);
+// Các vai trò đã sẵn sàng hiển thị trên giao diện (playableInUI)
+const SUPPORTED_ROLES = ROLES.filter((r) => r.playableInUI);
 const CORE_ROLES = SUPPORTED_ROLES.filter((r) => r.tier === 'core');
 const ADVANCED_ROLES = SUPPORTED_ROLES.filter((r) => r.tier === 'advanced');
 
@@ -211,18 +212,10 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     }
   };
 
-  // Filtered Advanced Roles for Modal / Bottom Sheet
-  const cleanSearchQuery = removeVietnameseTones(searchQuery);
-  const filteredAdvancedRoles = ADVANCED_ROLES.filter((role) => {
-    if (modalFactionFilter !== 'ALL' && role.faction !== modalFactionFilter) {
-      return false;
-    }
-    if (!cleanSearchQuery) return true;
-
-    const normName = removeVietnameseTones(role.nameVi);
-    const normDesc = removeVietnameseTones(role.shortDesc);
-    const normEn = role.nameEn.toLowerCase();
-    return normName.includes(cleanSearchQuery) || normDesc.includes(cleanSearchQuery) || normEn.includes(cleanSearchQuery);
+  // Search & Filter Advanced Roles for Modal / Bottom Sheet
+  const searchResults = searchRoles(ADVANCED_ROLES, searchQuery, {
+    faction: modalFactionFilter,
+    onlyImplemented: true,
   });
 
   // Selected pill items for Khối A Dòng 2
@@ -689,9 +682,10 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
               <div className="sheet-search-wrap">
                 <input
                   type="text"
-                  placeholder="Tìm kiếm vai trò nâng cao (VD: soi, phu thuy, soi trang)..."
+                  placeholder="Tìm kiếm vai trò nâng cao (VD: soi, pt, witch, ban)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={(e) => e.target.select()}
                   className="sheet-search-input"
                   autoFocus
                 />
@@ -742,23 +736,24 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
 
             {/* Body cuộn độc lập */}
             <div className="sheet-scroll-body">
-              {filteredAdvancedRoles.length === 0 ? (
+              {searchResults.length === 0 ? (
                 <div className="sheet-empty-search">
                   <p>Không tìm thấy vai trò phù hợp</p>
                 </div>
               ) : (
                 <div className="compact-roles-list">
-                  {filteredAdvancedRoles.map((role) => {
+                  {searchResults.map(({ role, reason }) => {
                     const count = selectedRoles[role.id] ?? 0;
                     const isSelected = count > 0;
                     const isExpanded = expandedRoleId === role.id;
                     const weight = role.balanceWeight;
                     const weightFormatted = weight > 0 ? `+${weight}` : `${weight}`;
+                    const isMultiDeviceBlocked = Boolean(role.multiDeviceOnly && isSingleDevice);
 
                     return (
                       <div
                         key={role.id}
-                        className={`compact-role-row ${isSelected ? 'selected' : ''}`}
+                        className={`compact-role-row ${isSelected ? 'selected' : ''} ${isMultiDeviceBlocked ? 'role-row-blocked' : ''}`}
                       >
                         <div className="role-main-row">
                           <button
@@ -768,6 +763,19 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                             title="Bấm để xem nhanh kỹ năng"
                           >
                             <span className="role-title">{role.nameVi}</span>
+                            {role.multiDeviceOnly && (
+                              <span
+                                className={`role-device-badge ${isMultiDeviceBlocked ? 'blocked' : ''}`}
+                                title={isSingleDevice ? 'Chỉ khả dụng ở chế độ Nhiều máy' : 'Yêu cầu màn hình riêng'}
+                              >
+                                {isSingleDevice ? 'Chỉ nhiều máy' : 'Nhiều máy'}
+                              </span>
+                            )}
+                            {reason && reason.type !== 'name' && (
+                              <span className="role-match-badge" title={`${reason.label}: ${reason.value}`}>
+                                {reason.label}: "{reason.value}"
+                              </span>
+                            )}
                             <span className="role-weight-gray">{weightFormatted}</span>
                             <span className="inline-info-hint">{isExpanded ? '▲' : 'ℹ'}</span>
                           </button>
@@ -777,9 +785,15 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                               type="button"
                               role="switch"
                               aria-checked={isSelected}
-                              disabled={!isHost || (!isSelected && metrics.totalCards >= 16)}
+                              disabled={!isHost || isMultiDeviceBlocked || (!isSelected && metrics.totalCards >= 16)}
                               className={`compact-toggle-switch ${isSelected ? 'active' : ''}`}
-                              onClick={() => handleRoleToggle(role.id)}
+                              onClick={() => {
+                                if (isMultiDeviceBlocked) {
+                                  setNotice(`Vai [${role.nameVi}] chỉ khả dụng ở chế độ Nhiều máy.`);
+                                  return;
+                                }
+                                handleRoleToggle(role.id);
+                              }}
                               aria-label={`Chọn vai ${role.nameVi}`}
                             >
                               <span className="toggle-thumb" />

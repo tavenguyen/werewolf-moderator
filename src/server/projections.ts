@@ -68,6 +68,8 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     publicLogs: room.publicHistoryLogs ?? [],
     currentTurnInfo,
     lastVoteTally: room.lastVoteTally,
+    bearGrowled: gameState?.bearGrowled,
+    princeRevealed: gameState?.princeRevealed,
   };
 }
 

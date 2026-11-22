@@ -148,6 +148,8 @@ export interface PublicRoomView {
     tallies: Record<PlayerId, number>;
     abstainCount: number;
   };
+  bearGrowled?: boolean;
+  princeRevealed?: boolean;
 }
 
 export interface HostBoardView {

@@ -122,6 +122,32 @@ export function resolveNight(
     nextState.historyLogs.push('Một Ma sói đã ngã xuống; thế lực bóng đêm đang âm thầm trỗi dậy.');
   }
 
+  // 1b. KIỂM TRA UỐN VÁN (Tetanus) & NGƯỜI CỨNG CỎI SỤP ĐỔ (Tough Guy Collapse)
+  for (const p of nextState.players) {
+    if (
+      p.isAlive &&
+      p.infectedWithTetanus &&
+      p.tetanusInfectionRound !== undefined &&
+      nextState.roundNumber > p.tetanusInfectionRound
+    ) {
+      pendingDeaths.push({ playerId: p.id, cause: 'TETANUS' });
+      p.infectedWithTetanus = false;
+      nextState.historyLogs.push('Một Ma sói đã gục ngã vì vết thương uốn ván từ Kỵ sĩ gỉ sắt!');
+    }
+
+    if (
+      p.isAlive &&
+      p.roleId === 'tough_guy' &&
+      p.toughGuyBittenNight !== null &&
+      p.toughGuyBittenNight !== undefined &&
+      nextState.roundNumber > p.toughGuyBittenNight
+    ) {
+      pendingDeaths.push({ playerId: p.id, cause: 'TOUGH_GUY_COLLAPSE' });
+      p.toughGuyBittenNight = null;
+      nextState.historyLogs.push('Người cứng cỏi đã kiệt sức vì vết cắn đêm trước và gục ngã!');
+    }
+  }
+
   // =========================================================================
   // 2. GHÉP ĐÔI CUPID (Chỉ Đêm 1)
   // =========================================================================
@@ -374,6 +400,43 @@ export function resolveNight(
           details: 'Già làng chịu 1 vết cắn, còn 1 giáp',
         });
         nextState.historyLogs.push('Đêm qua làng có người bị tấn công nhưng đã kiên cường gượng dậy.');
+        continue;
+      }
+    }
+
+    // Kẻ bị nguyền (Cursed) biến thành Ma sói khi bị Sói cắn
+    if (victim.roleId === 'cursed') {
+      if (poisonVictim === victim.id) {
+        // Trúng độc Phù thủy thì chết vì độc, không hóa Sói
+        continue;
+      }
+      victim.faction = 'WEREWOLF';
+      victim.roleId = 'werewolf';
+      events.push({
+        type: 'AWAKENED',
+        targetPlayerId: victim.id,
+        isPublic: false,
+        details: 'Kẻ bị nguyền đã biến thành Ma sói!',
+      });
+      nextState.historyLogs.push('Một thế lực bóng đêm vừa trỗi dậy trong đêm...');
+      continue;
+    }
+
+    // Người cứng cỏi (Tough Guy) sống thêm 1 ngày sau khi bị cắn
+    if (victim.roleId === 'tough_guy') {
+      if (poisonVictim === victim.id) {
+        // Trúng độc Phù thủy thì chết ngay đêm nay vì độc
+        continue;
+      }
+      if (!victim.toughGuyBittenNight) {
+        victim.toughGuyBittenNight = nextState.roundNumber;
+        events.push({
+          type: 'SURVIVED',
+          targetPlayerId: victim.id,
+          isPublic: false,
+          details: 'Người cứng cỏi chịu vết cắn, sống thêm 1 ngày',
+        });
+        nextState.historyLogs.push('Người cứng cỏi đã bị tấn công nhưng vẫn kiên cường trụ lại.');
         continue;
       }
     }

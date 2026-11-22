@@ -223,6 +223,42 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
           </div>
         </section>
 
+        {/* Banner Gấu gầm (Bear Tamer) */}
+        {publicView?.bearGrowled !== undefined && (
+          <div
+            className={`day-event-banner ${publicView.bearGrowled ? 'bear-growled' : 'bear-calm'}`}
+            role="status"
+          >
+            <span className="banner-icon" aria-hidden="true">
+              {publicView.bearGrowled ? '🐻' : '🌿'}
+            </span>
+            <div className="banner-text">
+              {publicView.bearGrowled ? (
+                <>
+                  <strong>TIẾNG GẤU GẦM DỮ DỘI!</strong>
+                  <span>Gấu thuần hóa phát hiện có Ma Sói ngồi ngay cạnh bên!</span>
+                </>
+              ) : (
+                <>
+                  <strong>GẤU THUẦN HÓA YÊN LẶNG</strong>
+                  <span>Không có Ma Sói nào ngồi cạnh người thuần gấu sáng nay.</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Banner Hoàng tử lật thẻ (Prince) */}
+        {publicView?.princeRevealed && (
+          <div className="day-event-banner prince-revealed" role="status">
+            <span className="banner-icon" aria-hidden="true">👑</span>
+            <div className="banner-text">
+              <strong>HOÀNG TỬ ĐÃ LẬT THẺ!</strong>
+              <span>Án treo cổ bị bãi bỏ. Hoàng tử giữ nguyên quyền bỏ phiếu.</span>
+            </div>
+          </div>
+        )}
+
         {/* Kết quả biểu quyết gần nhất nếu có */}
         {lastVoteTally && (
           <section className="last-tally-card">
