@@ -768,7 +768,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                                 className={`role-device-badge ${isMultiDeviceBlocked ? 'blocked' : ''}`}
                                 title={isSingleDevice ? 'Chỉ khả dụng ở chế độ Nhiều máy' : 'Yêu cầu màn hình riêng'}
                               >
-                                {isSingleDevice ? 'Chỉ nhiều máy' : 'Nhiều máy'}
+                                {isSingleDevice ? 'Chỉ khả dụng ở chế độ Nhiều máy' : 'Nhiều máy'}
                               </span>
                             )}
                             {reason && reason.type !== 'name' && (

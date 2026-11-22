@@ -467,4 +467,71 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
       activate: false,
     });
   });
+
+  it('xử lý hành động đêm cho Phase 5: doppelganger, pied_piper, cult_leader', async () => {
+    const adapter = createPopulatedAdapter(8);
+    await adapter.startGame();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+
+    // 1. doppelganger - chọn 1 người làm bản sao
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'doppelganger',
+        turnKey: 'doppelganger',
+        priority: 11,
+        titleVi: 'Nhân bản',
+        titleEn: 'Doppelganger',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_doppelganger',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('doppelganger', { targetId: 'player_2' });
+    expect(roomState.nightActionsAccumulator.doppelganger).toEqual({
+      targetId: 'player_2',
+    });
+
+    // 2. pied_piper - chọn 2 người thôi miên
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'pied_piper',
+        turnKey: 'pied_piper',
+        priority: 60,
+        titleVi: 'Người thổi sáo',
+        titleEn: 'Pied Piper',
+        activePlayerIds: ['player_3'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_pied_piper',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('pied_piper', { targetIds: ['player_4', 'player_5'] });
+    expect(roomState.nightActionsAccumulator.piedPiper).toEqual({
+      targetIds: ['player_4', 'player_5'],
+    });
+
+    // 3. cult_leader - chọn 1 người kết nạp giáo phái
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'cult_leader',
+        turnKey: 'cult_leader',
+        priority: 62,
+        titleVi: 'Trưởng giáo phái',
+        titleEn: 'Cult Leader',
+        activePlayerIds: ['player_6'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_cult_leader',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('cult_leader', { targetId: 'player_7' });
+    expect(roomState.nightActionsAccumulator.cultLeader).toEqual({
+      targetId: 'player_7',
+    });
+  });
 });

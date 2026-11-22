@@ -39,6 +39,7 @@ export interface NightActionInput {
   targetId?: PlayerId | null;
   target1?: PlayerId;
   target2?: PlayerId;
+  targetIds?: PlayerId[];
   heal?: boolean;
   healTargetId?: PlayerId | null;
   poisonTargetId?: PlayerId | null;

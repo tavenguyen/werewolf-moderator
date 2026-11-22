@@ -168,6 +168,14 @@ export function createPlayerPrivateView(
     foxLostPower: Boolean(gameState.foxLostPower),
     piUsed: Boolean(gameState.piUsed),
     troublemakerUsed: Boolean(gameState.troublemakerUsed),
+    isEnchanted: Boolean(pState.isEnchanted),
+    isCultMember: Boolean(pState.isCultMember),
+    doppelgangerTargetId:
+      pState.doppelgangerTargetId ?? (room.nightActionsAccumulator.doppelganger?.targetId ?? null),
+    drunkRealRoleId:
+      (pState.roleId === 'drunk' || pState.initialRoleId === 'drunk') && gameState.roundNumber >= 3
+        ? (pState.drunkRealRoleId ?? null)
+        : undefined,
   };
 
   if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
@@ -491,6 +499,18 @@ function calculateNightValidTargets(
       }
       return [];
     }
+
+    case 'doppelganger':
+    case 'night_doppelganger':
+      return livingPlayers.filter((p) => p.id !== playerId).map((p) => p.id);
+
+    case 'pied_piper':
+    case 'night_pied_piper':
+      return livingPlayers.filter((p) => p.id !== playerId && !p.isEnchanted).map((p) => p.id);
+
+    case 'cult_leader':
+    case 'night_cult_leader':
+      return livingPlayers.filter((p) => p.id !== playerId && !p.isCultMember).map((p) => p.id);
 
     default:
       return [];

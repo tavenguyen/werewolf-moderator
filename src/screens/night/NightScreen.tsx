@@ -17,6 +17,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const [mode, setMode] = useState<'sleep' | 'action' | 'my_role'>('sleep');
   const [selectedTargetId, setSelectedTargetId] = useState<PlayerId | null>(null);
   const [hoodlumTargets, setHoodlumTargets] = useState<PlayerId[]>([]);
+  const [piedPiperTargets, setPiedPiperTargets] = useState<PlayerId[]>([]);
   const [witchPoisonTargetId, setWitchPoisonTargetId] = useState<PlayerId | null>(null);
   const [isWitchHeal, setIsWitchHeal] = useState(false);
   const [isShowingRole, setIsShowingRole] = useState(false);
@@ -46,6 +47,9 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const isFox = currentTurnKey === 'fox' || currentTurnKey === 'night_fox';
   const isSpellcaster = currentTurnKey === 'spellcaster' || currentTurnKey === 'night_spellcaster';
   const isTroublemaker = currentTurnKey === 'troublemaker' || currentTurnKey === 'night_troublemaker';
+  const isDoppelganger = currentTurnKey === 'doppelganger' || currentTurnKey === 'night_doppelganger';
+  const isPiedPiper = currentTurnKey === 'pied_piper' || currentTurnKey === 'night_pied_piper';
+  const isCultLeader = currentTurnKey === 'cult_leader' || currentTurnKey === 'night_cult_leader';
   const isWitch = currentTurnKey === 'witch';
 
   const [isCurseAction, setIsCurseAction] = useState<boolean | null>(null);
@@ -71,9 +75,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
       setHasSubmitted(false);
       setSelectedTargetId(null);
       setHoodlumTargets([]);
+      setPiedPiperTargets([]);
       setIsCurseAction(null);
-    setIsTroublemakerActive(null);
-    setIsFoxSkip(false);
       setIsTroublemakerActive(null);
       setIsFoxSkip(false);
     } else {
@@ -85,6 +88,9 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     document.body.classList.toggle('night-sleep-active', mode === 'sleep');
     return () => document.body.classList.remove('night-sleep-active');
   }, [mode]);
+
+  const maxPiedPiperTargets = Math.min(2, validTargets.length);
+  const isPiedPiperValid = piedPiperTargets.length === maxPiedPiperTargets && maxPiedPiperTargets > 0;
 
   const handleConfirmAction = async () => {
     if (!privateView) return;
@@ -181,6 +187,30 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
         await actions.sendNightAction('spellcaster', {
           targetId: selectedTargetId,
         });
+      } else if (isDoppelganger) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 người làm bản sao.');
+          return;
+        }
+        await actions.sendNightAction('doppelganger', {
+          targetId: selectedTargetId,
+        });
+      } else if (isPiedPiper) {
+        if (piedPiperTargets.length !== maxPiedPiperTargets) {
+          setNotice(`Vui lòng chọn đủ ${maxPiedPiperTargets} người để thôi miên.`);
+          return;
+        }
+        await actions.sendNightAction('pied_piper', {
+          targetIds: piedPiperTargets,
+        });
+      } else if (isCultLeader) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 người để kết nạp vào giáo phái.');
+          return;
+        }
+        await actions.sendNightAction('cult_leader', {
+          targetId: selectedTargetId,
+        });
       } else {
         await actions.sendNightAction(privateView.roleId, {
           targetId: selectedTargetId,
@@ -217,6 +247,12 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
         ? isTroublemakerActive
           ? '✓ Đã kích hoạt hỗn loạn: hôm nay làng sẽ treo cổ 2 người!'
           : '✓ Đã bỏ qua, giữ lại quyền năng cho đêm sau.'
+        : isDoppelganger
+        ? '✓ Đã chọn bản sao thành công.'
+        : isPiedPiper
+        ? '✓ Đã cất tiếng sáo thôi miên thành công.'
+        : isCultLeader
+        ? '✓ Đã kết nạp tín đồ mới thành công.'
         : '✓ Đã xác nhận hành động ban đêm thành công.';
       setNotice(successMsg);
       setTimeout(() => {
@@ -234,6 +270,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     setHasSubmitted(false);
     setSelectedTargetId(null);
     setHoodlumTargets([]);
+    setPiedPiperTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
     setIsCurseAction(null);
@@ -252,6 +289,20 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
         }
         return [prev[0], tId];
       });
+    } else if (isPiedPiper) {
+      const maxTargets = Math.min(2, validTargets.length);
+      setPiedPiperTargets((prev) => {
+        if (prev.includes(tId)) {
+          return prev.filter((id) => id !== tId);
+        }
+        if (prev.length < maxTargets) {
+          return [...prev, tId];
+        }
+        if (maxTargets === 1) {
+          return [tId];
+        }
+        return [prev[0], tId];
+      });
     } else {
       setSelectedTargetId((prev) => (prev === tId ? null : tId));
     }
@@ -260,6 +311,10 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
   const canConfirm = isHoodlum
     ? isHoodlumValid
+    : isPiedPiper
+    ? isPiedPiperValid
+    : isDoppelganger || isCultLeader
+    ? Boolean(selectedTargetId)
     : isWildChild || isDireWolf || isBigBadWolf || isAuraSeer || isPi || isSpellcaster
     ? Boolean(selectedTargetId)
     : isWolfAccursed
@@ -313,6 +368,16 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
           )}
         </nav>
       </header>
+
+      {/* Thông báo tỉnh rượu nổi bật nếu là Drunk ở Đêm 3+ */}
+      {privateView?.skills?.drunkRealRoleId && mode !== 'my_role' && (
+        <div className="drunk-sober-toast" onClick={() => setMode('my_role')}>
+          <span>
+            🍺 <b>Bạn đã tỉnh rượu!</b> Nhấn để xem vai trò thật:{' '}
+            <b>{ROLES_BY_ID[privateView.skills.drunkRealRoleId]?.nameVi || privateView.skills.drunkRealRoleId}</b>
+          </span>
+        </div>
+      )}
 
       {/* 1. Sleep Overlay (Thổi tắt ngọn nến) */}
       {mode === 'sleep' && (
@@ -372,6 +437,24 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
             </div>
           )}
 
+          {/* Banner chúc mừng tỉnh rượu nếu là Drunk ở Đêm 3+ */}
+          {privateView?.skills?.drunkRealRoleId && (
+            <div className="drunk-sober-banner" role="alert">
+              <div className="drunk-sober-icon">🍺✨</div>
+              <div className="drunk-sober-content">
+                <strong>CHÚC MỪNG BẠN ĐÃ TỈNH RƯỢU!</strong>
+                <p>
+                  Cơn say 2 đêm đã tan biến. Vai trò thực sự của bạn đã được đánh thức:{' '}
+                  <b className="drunk-real-role-name">
+                    {ROLES_BY_ID[privateView.skills.drunkRealRoleId]?.nameVi ||
+                      privateView.skills.drunkRealRoleId}
+                  </b>
+                  !
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="press-hold-card-wrapper">
             <button
               type="button"
@@ -391,6 +474,19 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'PHE THỨ BA'
                       : 'PHE DÂN LÀNG'}
                   </span>
+
+                  {/* Huy hiệu bùa chú bí mật */}
+                  {privateView?.skills?.isEnchanted && (
+                    <div className="status-badge enchanted-badge" title="Bạn đã bị Người thổi sáo thôi miên">
+                      🎵 Đã bị thôi miên
+                    </div>
+                  )}
+                  {privateView?.skills?.isCultMember && (
+                    <div className="status-badge cult-member-badge" title="Bạn đã được Trưởng giáo phái kết nạp">
+                      🕯️ Tín đồ Giáo phái
+                    </div>
+                  )}
+
                   <div className="role-icon-big">
                     {roleDef.faction === 'WEREWOLF'
                       ? '🐺'
@@ -408,6 +504,14 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? '❄️'
                       : myRoleId === 'hoodlum'
                       ? '🗡️'
+                      : myRoleId === 'pied_piper'
+                      ? '🎵'
+                      : myRoleId === 'cult_leader'
+                      ? '🕯️'
+                      : myRoleId === 'doppelganger'
+                      ? '👥'
+                      : myRoleId === 'drunk'
+                      ? '🍺'
                       : '🛡️'}
                   </div>
                   <h2>{roleDef.nameVi}</h2>
@@ -543,6 +647,48 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                     <div className="revealed-role-details">
                       <strong>TIÊN TRI TẬP SỰ:</strong>
                       <span>Khi Tiên tri thật chết hoặc hóa Sói, bạn sẽ thức tỉnh và kế thừa toàn bộ năng lực soi phe mỗi đêm.</span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'doppelganger' && (
+                    <div className="revealed-role-details">
+                      <strong>BẢN SAO CỦA BẠN:</strong>
+                      <span>
+                        {(() => {
+                          const targetId = privateView?.skills?.doppelgangerTargetId;
+                          const p = publicView?.players.find((pl) => pl.id === targetId);
+                          return p ? `#${p.seatIndex} ${p.name}` : targetId ? targetId : 'Chưa chọn';
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'pied_piper' && (
+                    <div className="revealed-role-details">
+                      <strong>NGƯỜI THỔI SÁO:</strong>
+                      <span>
+                        Mỗi đêm thôi miên tối đa 2 người. Bạn thắng độc tôn khi tất cả người chơi còn sống đều đã bị thôi miên!
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'cult_leader' && (
+                    <div className="revealed-role-details">
+                      <strong>TRƯỞNG GIÁO PHÁI:</strong>
+                      <span>
+                        Mỗi đêm kết nạp 1 tín đồ. Bạn thắng độc tôn khi tất cả người chơi còn sống đều là tín đồ của giáo phái!
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'drunk' && (
+                    <div className="revealed-role-details">
+                      <strong>KẺ SAY RƯỢU:</strong>
+                      <span>
+                        {privateView?.skills?.drunkRealRoleId
+                          ? `Bạn đã tỉnh rượu! Vai thật của bạn là: ${ROLES_BY_ID[privateView.skills.drunkRealRoleId]?.nameVi || privateView.skills.drunkRealRoleId}`
+                          : 'Cơn say vẫn còn nồng, bạn vẫn nghĩ mình là Dân làng. Đầu Đêm 3 bạn sẽ tỉnh rượu!'}
+                      </span>
                     </div>
                   )}
 
@@ -812,6 +958,12 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'CHỌN 1 NGHI PHẠM ĐỂ ĐIỀU TRA'
                       : isSpellcaster
                       ? 'CHỌN 1 NGƯỜI ĐỂ PHÙ PHÉP CÂM LẶNG'
+                      : isDoppelganger
+                      ? 'CHỌN 1 NGƯỜI LÀM BẢN SAO'
+                      : isPiedPiper
+                      ? `CHỌN NGƯỜI ĐỂ THÔI MIÊN (TỐI ĐA ${maxPiedPiperTargets})`
+                      : isCultLeader
+                      ? 'CHỌN 1 TÍN ĐỒ GIA NHẬP GIÁO PHÁI'
                       : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
                   </strong>
                   <small>
@@ -831,6 +983,12 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'Điều tra người này và 2 người ngồi cạnh xem có Ma Sói nào không (1 lần duy nhất)'
                       : isSpellcaster
                       ? 'Người này sẽ bị câm lặng hoàn toàn vào ngày mai (không chọn trùng người đêm trước)'
+                      : isDoppelganger
+                      ? 'Khi người này chết, bạn sẽ nhận vai trò và kỹ năng của họ từ đêm tiếp theo'
+                      : isPiedPiper
+                      ? 'Chọn những người còn sống chưa bị thôi miên. Bạn thắng khi toàn bộ người sống đều bị thôi miên'
+                      : isCultLeader
+                      ? 'Chọn người còn sống chưa vào giáo phái. Bạn thắng khi toàn bộ người sống đều vào giáo phái'
                       : 'Chỉ hiển thị các người chơi hợp lệ trong luật'}
                   </small>
                 </div>
@@ -871,6 +1029,16 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                     ? selectedTargetId
                       ? `Phù phép câm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                       : 'Chọn 1 người làm câm'
+                    : isDoppelganger
+                    ? selectedTargetId
+                      ? `Bản sao: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người làm bản sao'
+                    : isPiedPiper
+                    ? `Đã chọn: ${piedPiperTargets.length}/${maxPiedPiperTargets} người`
+                    : isCultLeader
+                    ? selectedTargetId
+                      ? `Tín đồ mới: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người kết nạp'
                     : selectedTargetId
                     ? `Mục tiêu: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                     : 'Chưa chọn'}
@@ -883,8 +1051,11 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                   if (!targetP) return null;
                   const isSelected = isHoodlum
                     ? hoodlumTargets.includes(tId)
+                    : isPiedPiper
+                    ? piedPiperTargets.includes(tId)
                     : selectedTargetId === tId;
                   const hoodlumIdx = hoodlumTargets.indexOf(tId);
+                  const piedPiperIdx = piedPiperTargets.indexOf(tId);
 
                   return (
                     <button
@@ -892,7 +1063,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       key={tId}
                       aria-pressed={isSelected}
                       onClick={() => handleSelectTarget(tId)}
-                      className={`target-card ${isSelected ? 'selected' : ''} ${isHoodlum && isSelected ? 'hoodlum-selected' : ''}`}
+                      className={`target-card ${isSelected ? 'selected' : ''} ${isHoodlum && isSelected ? 'hoodlum-selected' : ''} ${isPiedPiper && isSelected ? 'piedpiper-selected' : ''}`}
                     >
                       <div className="target-meta">
                         <span className="target-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
@@ -902,6 +1073,10 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                         {isHoodlum
                           ? isSelected
                             ? `🎯 #${hoodlumIdx + 1}`
+                            : '○'
+                          : isPiedPiper
+                          ? isSelected
+                            ? `🎵 #${piedPiperIdx + 1}`
                             : '○'
                           : isSelected
                           ? '⦿'
@@ -993,11 +1168,19 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'XÁC NHẬN ĐIỀU TRA NGHI PHẠM'
                       : isSpellcaster
                       ? 'XÁC NHẬN PHÙ PHÉP CÂM LẶNG'
+                      : isDoppelganger
+                      ? 'XÁC NHẬN CHỌN BẢN SAO'
+                      : isPiedPiper
+                      ? isPiedPiperValid
+                        ? `XÁC NHẬN THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
+                        : `CHỌN ĐỦ SỐ NGƯỜI THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
+                      : isCultLeader
+                      ? 'XÁC NHẬN KẾT NẠP TÍN ĐỒ'
                       : 'XÁC NHẬN HÀNH ĐỘNG'}
                   </span>
                 </button>
 
-                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi'].includes(currentTurnKey) && (
+                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi', 'doppelganger', 'night_doppelganger', 'pied_piper', 'night_pied_piper', 'cult_leader', 'night_cult_leader'].includes(currentTurnKey) && (
                   <button
                     type="button"
                     className="secondary-button"

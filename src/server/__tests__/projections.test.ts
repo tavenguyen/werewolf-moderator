@@ -656,5 +656,241 @@ describe('Realtime Backend - Projections & Targets for Phase 3 (wolf_accursed, b
         activate: true,
       });
     });
+
+    it('Phase 5 Projections: calculateNightValidTargets và skills cho Doppelganger, Pied Piper, Cult Leader, Drunk', async () => {
+      const { roomCode, players } = await setupGame([
+        'doppelganger',
+        'pied_piper',
+        'cult_leader',
+        'drunk',
+        'villager',
+        'werewolf',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const pDoppel = room.gameState!.players.find((p) => p.roleId === 'doppelganger')!;
+      const pPiper = room.gameState!.players.find((p) => p.roleId === 'pied_piper')!;
+      const pCult = room.gameState!.players.find((p) => p.roleId === 'cult_leader')!;
+      const pDrunk = room.gameState!.players.find((p) => p.roleId === 'drunk')!;
+      const pVillager = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+      // Đánh dấu pVillager đã bị thôi miên và đã vào giáo phái
+      pVillager.isEnchanted = true;
+      pCult.isEnchanted = false;
+      pVillager.isCultMember = true;
+      pDrunk.isCultMember = false;
+
+      // 1. Doppelganger valid targets: người sống khác mình
+      room.nightTurnPlan = [
+        {
+          roleId: 'doppelganger',
+          turnKey: 'doppelganger',
+          priority: 11,
+          titleVi: 'Nhân bản',
+          titleEn: 'Doppelganger',
+          activePlayerIds: [pDoppel.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_doppelganger',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const viewDoppel = createPlayerPrivateView(room, pDoppel.id)!;
+      expect(viewDoppel.validTargets).not.toContain(pDoppel.id);
+      expect(viewDoppel.validTargets).toContain(pPiper.id);
+      expect(viewDoppel.validTargets).toContain(pVillager.id);
+
+      // 2. Pied Piper valid targets: người sống chưa bị thôi miên và khác mình
+      room.nightTurnPlan = [
+        {
+          roleId: 'pied_piper',
+          turnKey: 'pied_piper',
+          priority: 60,
+          titleVi: 'Người thổi sáo',
+          titleEn: 'Pied Piper',
+          activePlayerIds: [pPiper.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_pied_piper',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const viewPiper = createPlayerPrivateView(room, pPiper.id)!;
+      expect(viewPiper.validTargets).not.toContain(pPiper.id);
+      expect(viewPiper.validTargets).not.toContain(pVillager.id); // Đã bị thôi miên
+      expect(viewPiper.validTargets).toContain(pCult.id); // Chưa bị thôi miên
+
+      // 3. Cult Leader valid targets: người sống chưa vào giáo phái và khác mình
+      room.nightTurnPlan = [
+        {
+          roleId: 'cult_leader',
+          turnKey: 'cult_leader',
+          priority: 62,
+          titleVi: 'Trưởng giáo phái',
+          titleEn: 'Cult Leader',
+          activePlayerIds: [pCult.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_cult_leader',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const viewCult = createPlayerPrivateView(room, pCult.id)!;
+      expect(viewCult.validTargets).not.toContain(pCult.id);
+      expect(viewCult.validTargets).not.toContain(pVillager.id); // Đã là thành viên
+      expect(viewCult.validTargets).toContain(pDrunk.id); // Chưa vào giáo phái
+
+      // 4. Skills projection: isEnchanted, isCultMember, doppelgangerTargetId
+      const viewVillager = createPlayerPrivateView(room, pVillager.id)!;
+      expect(viewVillager.skills.isEnchanted).toBe(true);
+      expect(viewVillager.skills.isCultMember).toBe(true);
+
+      pDoppel.doppelgangerTargetId = pVillager.id;
+      const viewDoppelAfter = createPlayerPrivateView(room, pDoppel.id)!;
+      expect(viewDoppelAfter.skills.doppelgangerTargetId).toBe(pVillager.id);
+
+      // 5. Drunk real role id: ở Đêm 1-2 chưa hiện, ở Đêm 3+ hiện
+      pDrunk.drunkRealRoleId = 'seer';
+      room.gameState!.roundNumber = 1;
+      const viewDrunkRound1 = createPlayerPrivateView(room, pDrunk.id)!;
+      expect(viewDrunkRound1.skills.drunkRealRoleId).toBeUndefined();
+
+      room.gameState!.roundNumber = 3;
+      const viewDrunkRound3 = createPlayerPrivateView(room, pDrunk.id)!;
+      expect(viewDrunkRound3.skills.drunkRealRoleId).toBe('seer');
+
+      // Người khác nhìn không thấy drunkRealRoleId
+      const viewVillagerRound3 = createPlayerPrivateView(room, pVillager.id)!;
+      expect(viewVillagerRound3.skills.drunkRealRoleId).toBeUndefined();
+    });
+
+    it('SocketGateway night:action xử lý chuẩn xác cho Phase 5 roles: doppelganger, pied_piper, cult_leader', async () => {
+      const { roomCode, players } = await setupGame([
+        'doppelganger',
+        'pied_piper',
+        'cult_leader',
+        'villager',
+        'villager',
+        'werewolf',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const pDoppel = room.gameState!.players.find((p) => p.roleId === 'doppelganger')!;
+      const pPiper = room.gameState!.players.find((p) => p.roleId === 'pied_piper')!;
+      const pCult = room.gameState!.players.find((p) => p.roleId === 'cult_leader')!;
+      const pVillagers = room.gameState!.players.filter((p) => p.roleId === 'villager');
+
+      const doppelPlayer = players.find((pl) => pl.id === pDoppel.id)!;
+      const piperPlayer = players.find((pl) => pl.id === pPiper.id)!;
+      const cultPlayer = players.find((pl) => pl.id === pCult.id)!;
+
+      // 1. Doppelganger
+      room.nightTurnPlan = [
+        {
+          roleId: 'doppelganger',
+          turnKey: 'doppelganger',
+          priority: 11,
+          titleVi: 'Nhân bản',
+          titleEn: 'Doppelganger',
+          activePlayerIds: [doppelPlayer.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_doppelganger',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const doppelRes: any = await new Promise((resolve) => {
+        doppelPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: doppelPlayer.token,
+            roleId: 'doppelganger',
+            action: { targetId: pVillagers[0].id },
+          },
+          resolve
+        );
+      });
+      expect(doppelRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.doppelganger).toEqual({
+        targetId: pVillagers[0].id,
+      });
+
+      // 2. Pied Piper
+      room.nightTurnPlan = [
+        {
+          roleId: 'pied_piper',
+          turnKey: 'pied_piper',
+          priority: 60,
+          titleVi: 'Người thổi sáo',
+          titleEn: 'Pied Piper',
+          activePlayerIds: [piperPlayer.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_pied_piper',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const piperRes: any = await new Promise((resolve) => {
+        piperPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: piperPlayer.token,
+            roleId: 'pied_piper',
+            action: { targetIds: [pVillagers[0].id, pVillagers[1].id] },
+          },
+          resolve
+        );
+      });
+      expect(piperRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.piedPiper).toEqual({
+        targetIds: [pVillagers[0].id, pVillagers[1].id],
+      });
+
+      // 3. Cult Leader
+      room.nightTurnPlan = [
+        {
+          roleId: 'cult_leader',
+          turnKey: 'cult_leader',
+          priority: 62,
+          titleVi: 'Trưởng giáo phái',
+          titleEn: 'Cult Leader',
+          activePlayerIds: [cultPlayer.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_cult_leader',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const cultRes: any = await new Promise((resolve) => {
+        cultPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: cultPlayer.token,
+            roleId: 'cult_leader',
+            action: { targetId: pVillagers[1].id },
+          },
+          resolve
+        );
+      });
+      expect(cultRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.cultLeader).toEqual({
+        targetId: pVillagers[1].id,
+      });
+    });
   });
 });

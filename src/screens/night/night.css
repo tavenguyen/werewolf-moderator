@@ -1059,3 +1059,89 @@ body.night-sleep-active {
   flex-direction: column;
   gap: 12px;
 }
+
+/* Phase 5: Huy hiệu bùa chú bí mật & Thông báo tỉnh rượu */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin: 6px auto;
+  text-transform: uppercase;
+}
+
+.enchanted-badge {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid #a855f7;
+  color: #d8b4fe;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
+}
+
+.cult-member-badge {
+  background: rgba(234, 179, 8, 0.2);
+  border: 1px solid #eab308;
+  color: #fde047;
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.3);
+}
+
+.drunk-sober-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.15));
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.2);
+}
+
+.drunk-sober-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.drunk-sober-content strong {
+  display: block;
+  font-size: 14px;
+  color: #fbbf24;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.drunk-sober-content p {
+  margin: 0;
+  font-size: 12px;
+  color: #fef3c7;
+  line-height: 1.4;
+}
+
+.drunk-real-role-name {
+  color: #38bdf8;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.drunk-sober-toast {
+  background: rgba(245, 158, 11, 0.9);
+  color: #1c1917;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin: 4px 16px;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.target-card.piedpiper-selected {
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
+}

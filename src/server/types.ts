@@ -196,6 +196,10 @@ export interface PlayerPrivateView {
     foxLostPower?: boolean;
     piUsed?: boolean;
     troublemakerUsed?: boolean;
+    isEnchanted?: boolean;
+    isCultMember?: boolean;
+    doppelgangerTargetId?: PlayerId | null;
+    drunkRealRoleId?: string | null;
   };
   teammates: Array<{ id: PlayerId; name: string; roleId: string }>;
   investigationResult?: {
@@ -266,6 +270,7 @@ export interface ClientNightActionPayload {
     targetId?: PlayerId | null;
     target1?: PlayerId;
     target2?: PlayerId;
+    targetIds?: PlayerId[];
     heal?: boolean;
     healTargetId?: PlayerId | null;
     poisonTargetId?: PlayerId | null;

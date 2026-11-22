@@ -108,6 +108,51 @@ describe('AudioController & Fallbacks', () => {
     );
     expect(NARRATION_PROMPTS.troublemaker.durationMs).toBe(6000);
 
+    // Phase 5: 4 vai Phe Thứ Ba & Biến đổi Động
+    expect(NARRATION_PROMPTS.night_doppelganger).toBeDefined();
+    expect(NARRATION_PROMPTS.night_doppelganger.subtitle).toBe(
+      'Nhân bản hãy thức dậy và chọn một người làm bản sao.'
+    );
+    expect(NARRATION_PROMPTS.night_doppelganger.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.doppelganger).toBeDefined();
+    expect(NARRATION_PROMPTS.doppelganger.subtitle).toBe(
+      'Nhân bản hãy thức dậy và chọn một người làm bản sao.'
+    );
+    expect(NARRATION_PROMPTS.doppelganger.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_pied_piper).toBeDefined();
+    expect(NARRATION_PROMPTS.night_pied_piper.subtitle).toBe(
+      'Người thổi sáo hãy thức dậy và cất lên khúc nhạc mê hoặc.'
+    );
+    expect(NARRATION_PROMPTS.night_pied_piper.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.pied_piper).toBeDefined();
+    expect(NARRATION_PROMPTS.pied_piper.subtitle).toBe(
+      'Người thổi sáo hãy thức dậy và cất lên khúc nhạc mê hoặc.'
+    );
+    expect(NARRATION_PROMPTS.pied_piper.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_cult_leader).toBeDefined();
+    expect(NARRATION_PROMPTS.night_cult_leader.subtitle).toBe(
+      'Trưởng giáo phái hãy thức dậy và tìm kiếm tín đồ mới.'
+    );
+    expect(NARRATION_PROMPTS.night_cult_leader.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.cult_leader).toBeDefined();
+    expect(NARRATION_PROMPTS.cult_leader.subtitle).toBe(
+      'Trưởng giáo phái hãy thức dậy và tìm kiếm tín đồ mới.'
+    );
+    expect(NARRATION_PROMPTS.cult_leader.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_drunk).toBeDefined();
+    expect(NARRATION_PROMPTS.night_drunk.subtitle).toBe(
+      'Kẻ say rượu, cơn say vẫn còn nồng, hãy tiếp tục ngủ say.'
+    );
+    expect(NARRATION_PROMPTS.night_drunk.durationMs).toBe(5000);
+    expect(NARRATION_PROMPTS.drunk).toBeDefined();
+    expect(NARRATION_PROMPTS.drunk.subtitle).toBe(
+      'Kẻ say rượu, cơn say vẫn còn nồng, hãy tiếp tục ngủ say.'
+    );
+    expect(NARRATION_PROMPTS.drunk.durationMs).toBe(5000);
+
     // Apprentice Seer dùng chung lời thoại của Seer
     expect(NARRATION_PROMPTS.apprentice_seer).toBeDefined();
     expect(NARRATION_PROMPTS.apprentice_seer.audioKey).toBe('seer');

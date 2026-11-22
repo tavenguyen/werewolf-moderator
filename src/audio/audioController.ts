@@ -149,6 +149,46 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
     subtitle: 'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?',
     durationMs: 6000,
   },
+  night_doppelganger: {
+    audioKey: 'night_doppelganger',
+    subtitle: 'Nhân bản hãy thức dậy và chọn một người làm bản sao.',
+    durationMs: 6000,
+  },
+  doppelganger: {
+    audioKey: 'night_doppelganger',
+    subtitle: 'Nhân bản hãy thức dậy và chọn một người làm bản sao.',
+    durationMs: 6000,
+  },
+  night_pied_piper: {
+    audioKey: 'night_pied_piper',
+    subtitle: 'Người thổi sáo hãy thức dậy và cất lên khúc nhạc mê hoặc.',
+    durationMs: 6000,
+  },
+  pied_piper: {
+    audioKey: 'night_pied_piper',
+    subtitle: 'Người thổi sáo hãy thức dậy và cất lên khúc nhạc mê hoặc.',
+    durationMs: 6000,
+  },
+  night_cult_leader: {
+    audioKey: 'night_cult_leader',
+    subtitle: 'Trưởng giáo phái hãy thức dậy và tìm kiếm tín đồ mới.',
+    durationMs: 6000,
+  },
+  cult_leader: {
+    audioKey: 'night_cult_leader',
+    subtitle: 'Trưởng giáo phái hãy thức dậy và tìm kiếm tín đồ mới.',
+    durationMs: 6000,
+  },
+  night_drunk: {
+    audioKey: 'night_drunk',
+    subtitle: 'Kẻ say rượu, cơn say vẫn còn nồng, hãy tiếp tục ngủ say.',
+    durationMs: 5000,
+  },
+  drunk: {
+    audioKey: 'night_drunk',
+    subtitle: 'Kẻ say rượu, cơn say vẫn còn nồng, hãy tiếp tục ngủ say.',
+    durationMs: 5000,
+  },
   night_apprentice_seer: {
     audioKey: 'seer',
     subtitle: 'Tiên tri, hãy thức dậy và chọn một người để soi phe.',

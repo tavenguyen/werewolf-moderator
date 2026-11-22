@@ -1168,6 +1168,27 @@ export class SocketGateway {
       case 'night_troublemaker':
         acc.troublemaker = { activate: Boolean(action.activate) };
         break;
+
+      case 'doppelganger':
+      case 'night_doppelganger':
+        if (action.targetId) {
+          acc.doppelganger = { targetId: action.targetId };
+        }
+        break;
+
+      case 'pied_piper':
+      case 'night_pied_piper':
+        if (action.targetIds) {
+          acc.piedPiper = { targetIds: action.targetIds };
+        }
+        break;
+
+      case 'cult_leader':
+      case 'night_cult_leader':
+        if (action.targetId) {
+          acc.cultLeader = { targetId: action.targetId };
+        }
+        break;
     }
   }
 
