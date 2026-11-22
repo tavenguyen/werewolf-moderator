@@ -52,6 +52,69 @@ describe('AudioController & Fallbacks', () => {
     );
     expect(NARRATION_PROMPTS.big_bad_wolf.durationMs).toBe(6000);
 
+    // Phase 4: 6 vai Dân Làng Điều tra & Can thiệp
+    expect(NARRATION_PROMPTS.night_aura_seer).toBeDefined();
+    expect(NARRATION_PROMPTS.night_aura_seer.subtitle).toBe(
+      'Tiên tri hào quang hãy thức dậy và quan sát vầng hào quang.'
+    );
+    expect(NARRATION_PROMPTS.night_aura_seer.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.aura_seer).toBeDefined();
+    expect(NARRATION_PROMPTS.aura_seer.subtitle).toBe(
+      'Tiên tri hào quang hãy thức dậy và quan sát vầng hào quang.'
+    );
+    expect(NARRATION_PROMPTS.aura_seer.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_pi).toBeDefined();
+    expect(NARRATION_PROMPTS.night_pi.subtitle).toBe(
+      'Thám tử hãy thức dậy và điều tra nghi phạm.'
+    );
+    expect(NARRATION_PROMPTS.night_pi.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.pi).toBeDefined();
+    expect(NARRATION_PROMPTS.pi.subtitle).toBe(
+      'Thám tử hãy thức dậy và điều tra nghi phạm.'
+    );
+    expect(NARRATION_PROMPTS.pi.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_fox).toBeDefined();
+    expect(NARRATION_PROMPTS.night_fox.subtitle).toBe(
+      'Con cáo hãy thức dậy và đánh hơi tìm bầy Sói.'
+    );
+    expect(NARRATION_PROMPTS.night_fox.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.fox).toBeDefined();
+    expect(NARRATION_PROMPTS.fox.subtitle).toBe(
+      'Con cáo hãy thức dậy và đánh hơi tìm bầy Sói.'
+    );
+    expect(NARRATION_PROMPTS.fox.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_spellcaster).toBeDefined();
+    expect(NARRATION_PROMPTS.night_spellcaster.subtitle).toBe(
+      'Người phù phép hãy thức dậy và chọn một người câm lặng hôm nay.'
+    );
+    expect(NARRATION_PROMPTS.night_spellcaster.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.spellcaster).toBeDefined();
+    expect(NARRATION_PROMPTS.spellcaster.subtitle).toBe(
+      'Người phù phép hãy thức dậy và chọn một người câm lặng hôm nay.'
+    );
+    expect(NARRATION_PROMPTS.spellcaster.durationMs).toBe(6000);
+
+    expect(NARRATION_PROMPTS.night_troublemaker).toBeDefined();
+    expect(NARRATION_PROMPTS.night_troublemaker.subtitle).toBe(
+      'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?'
+    );
+    expect(NARRATION_PROMPTS.night_troublemaker.durationMs).toBe(6000);
+    expect(NARRATION_PROMPTS.troublemaker).toBeDefined();
+    expect(NARRATION_PROMPTS.troublemaker.subtitle).toBe(
+      'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?'
+    );
+    expect(NARRATION_PROMPTS.troublemaker.durationMs).toBe(6000);
+
+    // Apprentice Seer dùng chung lời thoại của Seer
+    expect(NARRATION_PROMPTS.apprentice_seer).toBeDefined();
+    expect(NARRATION_PROMPTS.apprentice_seer.audioKey).toBe('seer');
+    expect(NARRATION_PROMPTS.apprentice_seer.subtitle).toBe(
+      'Tiên tri, hãy thức dậy và chọn một người để soi phe.'
+    );
+
     expect(NARRATION_PROMPTS.wolf_pack.subtitle).toContain('Ma Sói');
     expect(NARRATION_PROMPTS.seer.subtitle).toContain('Tiên tri');
     expect(NARRATION_PROMPTS.minion.subtitle).toContain('Kẻ phản bội');

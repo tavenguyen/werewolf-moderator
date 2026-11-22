@@ -102,6 +102,9 @@ export interface RoomState {
   // Kết quả điều tra tạm thời trong đêm (chỉ gửi riêng cho người có quyền)
   seerInvestigationResult?: { targetId: PlayerId; result: SeerResult };
   sorcererInvestigationResult?: { targetId: PlayerId; isSeer: boolean };
+  auraInvestigationResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
+  piInvestigationResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
+  foxInvestigationResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
 
   // Kết quả vote công khai sau cùng
   lastVoteTally?: {
@@ -149,6 +152,8 @@ export interface PublicRoomView {
   };
   bearGrowled?: boolean;
   princeRevealed?: boolean;
+  mutedPlayerId?: PlayerId | null;
+  doubleVoteDay?: boolean;
 }
 
 export interface HostBoardView {
@@ -187,11 +192,17 @@ export interface PlayerPrivateView {
     hoodlumTargetIds?: [PlayerId, PlayerId] | null;
     wolfPackVictimId?: PlayerId | null;
     accursedWolfUsed?: boolean;
+    isMuted?: boolean;
+    foxLostPower?: boolean;
+    piUsed?: boolean;
+    troublemakerUsed?: boolean;
   };
   teammates: Array<{ id: PlayerId; name: string; roleId: string }>;
   investigationResult?: {
     targetId: PlayerId;
-    result: SeerResult | boolean;
+    result: SeerResult | boolean | 'NORMAL' | 'SPECIAL';
+    hasWerewolf?: boolean;
+    inspectedPlayerIds?: PlayerId[];
   } | null;
 }
 
@@ -260,6 +271,7 @@ export interface ClientNightActionPayload {
     poisonTargetId?: PlayerId | null;
     isSkip?: boolean;
     curseTargetId?: PlayerId | null;
+    activate?: boolean;
   };
 }
 

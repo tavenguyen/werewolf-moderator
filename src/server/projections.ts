@@ -70,6 +70,8 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     lastVoteTally: room.lastVoteTally,
     bearGrowled: gameState?.bearGrowled,
     princeRevealed: gameState?.princeRevealed,
+    mutedPlayerId: gameState?.mutedPlayerId ?? null,
+    doubleVoteDay: Boolean(gameState?.doubleVoteDay),
   };
 }
 
@@ -162,6 +164,10 @@ export function createPlayerPrivateView(
     lastProtectedPlayerId: gameState.lastProtectedPlayerId,
     elderHp: pState.elderHp,
     accursedWolfUsed: gameState.accursedWolfUsed,
+    isMuted: pState.id === gameState.mutedPlayerId || Boolean(pState.isMuted),
+    foxLostPower: Boolean(gameState.foxLostPower),
+    piUsed: Boolean(gameState.piUsed),
+    troublemakerUsed: Boolean(gameState.troublemakerUsed),
   };
 
   if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
@@ -227,6 +233,31 @@ export function createPlayerPrivateView(
       investigationResult = {
         targetId: room.sorcererInvestigationResult.targetId,
         result: room.sorcererInvestigationResult.isSeer,
+      };
+    } else if (
+      (pState.roleId === 'aura_seer' || pState.initialRoleId === 'aura_seer') &&
+      room.auraInvestigationResult
+    ) {
+      investigationResult = room.auraInvestigationResult;
+    } else if (
+      (pState.roleId === 'fox' || pState.initialRoleId === 'fox') &&
+      room.foxInvestigationResult
+    ) {
+      investigationResult = {
+        targetId: room.foxInvestigationResult.targetId,
+        result: room.foxInvestigationResult.hasWerewolf,
+        hasWerewolf: room.foxInvestigationResult.hasWerewolf,
+        inspectedPlayerIds: room.foxInvestigationResult.inspectedPlayerIds,
+      };
+    } else if (
+      (pState.roleId === 'pi' || pState.initialRoleId === 'pi') &&
+      room.piInvestigationResult
+    ) {
+      investigationResult = {
+        targetId: room.piInvestigationResult.targetId,
+        result: room.piInvestigationResult.hasWerewolf,
+        hasWerewolf: room.piInvestigationResult.hasWerewolf,
+        inspectedPlayerIds: room.piInvestigationResult.inspectedPlayerIds,
       };
     }
   } else if (gameState.phase === 'DAY_MAYOR_ELECTION') {
@@ -410,6 +441,26 @@ function calculateNightValidTargets(
 
     case 'mason':
     case 'night_mason':
+      return [];
+
+    case 'aura_seer':
+    case 'night_aura_seer':
+      return livingPlayers.filter((p) => p.id !== playerId).map((p) => p.id);
+
+    case 'fox':
+    case 'night_fox':
+    case 'pi':
+    case 'night_pi':
+      return livingPlayers.map((p) => p.id);
+
+    case 'spellcaster':
+    case 'night_spellcaster':
+      return livingPlayers
+        .filter((p) => !gameState.lastMutedPlayerId || p.id !== gameState.lastMutedPlayerId)
+        .map((p) => p.id);
+
+    case 'troublemaker':
+    case 'night_troublemaker':
       return [];
 
     case 'big_bad_wolf':

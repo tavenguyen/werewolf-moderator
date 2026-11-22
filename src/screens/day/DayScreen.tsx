@@ -259,6 +259,44 @@ export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
           </div>
         )}
 
+        {/* Banner Người bị phù phép câm lặng (Spellcaster) */}
+        {publicView?.mutedPlayerId && (() => {
+          const mutedPlayer = players.find((p) => p.id === publicView.mutedPlayerId);
+          if (!mutedPlayer || !mutedPlayer.isAlive) return null;
+          return (
+            <div className="day-event-banner muted-player-banner" role="status" style={{ borderLeft: '4px solid #ef4444' }}>
+              <span className="banner-icon" aria-hidden="true">🔇</span>
+              <div className="banner-text">
+                <strong>NGƯỜI CHƠI BỊ PHÙ PHÉP CÂM LẶNG!</strong>
+                <span>
+                  #{mutedPlayer.seatIndex} {mutedPlayer.name} đã bị phù phép câm lặng hôm nay! Người này không được phát biểu trong phiên thảo luận làng.
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Banner Kẻ phá rối kích hoạt treo cổ 2 người (Troublemaker) */}
+        {publicView?.doubleVoteDay && (
+          <div className="day-event-banner double-vote-banner" role="status" style={{ borderLeft: '4px solid #eab308' }}>
+            <span className="banner-icon" aria-hidden="true">⚡</span>
+            <div className="banner-text">
+              <strong>KẺ PHÁ RỐI ĐÃ HÀNH ĐỘNG!</strong>
+              <span>Hôm nay làng sẽ treo cổ 2 người có số phiếu cao nhất thay vì 1 người!</span>
+            </div>
+          </div>
+        )}
+
+        {/* Cảnh báo riêng cho người bị câm */}
+        {(privateView?.skills?.isMuted || state.playerId === publicView?.mutedPlayerId) && (
+          <div className="personal-mute-warning" role="alert" style={{ background: '#2d1515', border: '1px solid #dc2626', borderRadius: 8, padding: 12, margin: '8px 0', color: '#fca5a5' }}>
+            <strong>🔇 BẠN ĐÃ BỊ PHÙ PHÉP CÂM LẶNG!</strong>
+            <p style={{ margin: '4px 0 0', fontSize: 13 }}>
+              Bạn tuyệt đối không được nói hay phát biểu trong buổi sáng hôm nay. Tuy nhiên, bạn vẫn có đầy đủ quyền biểu quyết bỏ phiếu treo cổ như bình thường.
+            </p>
+          </div>
+        )}
+
         {/* Kết quả biểu quyết gần nhất nếu có */}
         {lastVoteTally && (
           <section className="last-tally-card">

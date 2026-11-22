@@ -41,9 +41,16 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const isDireWolf = currentTurnKey === 'dire_wolf' || currentTurnKey === 'night_dire_wolf';
   const isWolfAccursed = currentTurnKey === 'wolf_accursed' || currentTurnKey === 'night_wolf_accursed';
   const isBigBadWolf = currentTurnKey === 'big_bad_wolf' || currentTurnKey === 'night_big_bad_wolf';
+  const isAuraSeer = currentTurnKey === 'aura_seer' || currentTurnKey === 'night_aura_seer';
+  const isPi = currentTurnKey === 'pi' || currentTurnKey === 'night_pi';
+  const isFox = currentTurnKey === 'fox' || currentTurnKey === 'night_fox';
+  const isSpellcaster = currentTurnKey === 'spellcaster' || currentTurnKey === 'night_spellcaster';
+  const isTroublemaker = currentTurnKey === 'troublemaker' || currentTurnKey === 'night_troublemaker';
   const isWitch = currentTurnKey === 'witch';
 
   const [isCurseAction, setIsCurseAction] = useState<boolean | null>(null);
+  const [isTroublemakerActive, setIsTroublemakerActive] = useState<boolean | null>(null);
+  const [isFoxSkip, setIsFoxSkip] = useState(false);
 
   // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy
   const victimPlayerId = privateView?.skills?.witchVictimId;
@@ -65,6 +72,10 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
       setSelectedTargetId(null);
       setHoodlumTargets([]);
       setIsCurseAction(null);
+    setIsTroublemakerActive(null);
+    setIsFoxSkip(false);
+      setIsTroublemakerActive(null);
+      setIsFoxSkip(false);
     } else {
       setMode('sleep');
     }
@@ -125,6 +136,51 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
         await actions.sendNightAction('big_bad_wolf', {
           targetId: selectedTargetId,
         });
+      } else if (isTroublemaker) {
+        if (isTroublemakerActive === null) {
+          setNotice('Vui lòng chọn Kích hoạt hoặc Bỏ qua.');
+          return;
+        }
+        await actions.sendNightAction('troublemaker', {
+          activate: isTroublemakerActive,
+        });
+      } else if (isFox) {
+        if (isFoxSkip) {
+          await actions.sendNightAction('fox', { isSkip: true });
+        } else {
+          if (!selectedTargetId) {
+            setNotice('Vui lòng chọn 1 người làm tâm điểm để Con Cáo đánh hơi hoặc bấm Bỏ qua.');
+            return;
+          }
+          await actions.sendNightAction('fox', {
+            targetId: selectedTargetId,
+            isSkip: false,
+          });
+        }
+      } else if (isAuraSeer) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 người để quan sát vầng hào quang.');
+          return;
+        }
+        await actions.sendNightAction('aura_seer', {
+          targetId: selectedTargetId,
+        });
+      } else if (isPi) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 nghi phạm để điều tra cụm 3 người.');
+          return;
+        }
+        await actions.sendNightAction('pi', {
+          targetId: selectedTargetId,
+        });
+      } else if (isSpellcaster) {
+        if (!selectedTargetId) {
+          setNotice('Vui lòng chọn 1 người để phù phép câm lặng.');
+          return;
+        }
+        await actions.sendNightAction('spellcaster', {
+          targetId: selectedTargetId,
+        });
       } else {
         await actions.sendNightAction(privateView.roleId, {
           targetId: selectedTargetId,
@@ -147,6 +203,20 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
           : '✓ Đã bỏ qua lượt nguyền, giữ lại phép.'
         : isBigBadWolf
         ? '✓ Đã chọn mục tiêu cắn thêm thành công.'
+        : isAuraSeer
+        ? '✓ Đã quan sát hào quang người chơi thành công.'
+        : isFox
+        ? isFoxSkip
+          ? '✓ Con cáo đã bỏ qua lượt đánh hơi đêm nay.'
+          : '✓ Con cáo đã đánh hơi cụm 3 người thành công.'
+        : isPi
+        ? '✓ Thám tử đã điều tra cụm nghi phạm thành công.'
+        : isSpellcaster
+        ? '✓ Đã phù phép câm lặng người chơi thành công.'
+        : isTroublemaker
+        ? isTroublemakerActive
+          ? '✓ Đã kích hoạt hỗn loạn: hôm nay làng sẽ treo cổ 2 người!'
+          : '✓ Đã bỏ qua, giữ lại quyền năng cho đêm sau.'
         : '✓ Đã xác nhận hành động ban đêm thành công.';
       setNotice(successMsg);
       setTimeout(() => {
@@ -167,6 +237,8 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
     setIsCurseAction(null);
+    setIsTroublemakerActive(null);
+    setIsFoxSkip(false);
   };
 
   const handleSelectTarget = (tId: PlayerId) => {
@@ -188,10 +260,14 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
   const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
   const canConfirm = isHoodlum
     ? isHoodlumValid
-    : isWildChild || isDireWolf || isBigBadWolf
+    : isWildChild || isDireWolf || isBigBadWolf || isAuraSeer || isPi || isSpellcaster
     ? Boolean(selectedTargetId)
     : isWolfAccursed
     ? isCurseAction !== null || !accursedVictim
+    : isTroublemaker
+    ? isTroublemakerActive !== null
+    : isFox
+    ? isFoxSkip || Boolean(selectedTargetId)
     : true;
 
   return (
@@ -416,6 +492,60 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                     </div>
                   )}
 
+                  {myRoleId === 'aura_seer' && (
+                    <div className="revealed-role-details">
+                      <strong>TIÊN TRI HÀO QUANG:</strong>
+                      <span>Mỗi đêm quan sát 1 người để nhận biết họ là Người thường (Dân thường/Sói thường) hay có Hào quang đặc biệt.</span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'fox' && (
+                    <div className="revealed-role-details">
+                      <strong>CON CÁO:</strong>
+                      <span>
+                        {privateView?.skills?.foxLostPower
+                          ? 'Đã mất khứu giác đánh hơi do đã từng chỉ vào cụm an toàn.'
+                          : 'Mỗi đêm chọn 1 người làm tâm điểm để đánh hơi bầy Sói trong cụm 3 người. Nếu cụm an toàn, bạn sẽ mất phép.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'pi' && (
+                    <div className="revealed-role-details">
+                      <strong>THÁM TỬ TƯ (P.I.):</strong>
+                      <span>
+                        {privateView?.skills?.piUsed
+                          ? 'Đã sử dụng lượt điều tra duy nhất.'
+                          : 'Còn 1 lần duy nhất trong cả ván để điều tra 1 nghi phạm và 2 người ngồi cạnh xem có Ma Sói không.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'spellcaster' && (
+                    <div className="revealed-role-details">
+                      <strong>NGƯỜI PHÙ PHÉP:</strong>
+                      <span>Mỗi đêm chọn 1 người để cấm họ phát biểu vào ban ngày hôm sau (không được chọn trùng người 2 đêm liên tiếp).</span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'troublemaker' && (
+                    <div className="revealed-role-details">
+                      <strong>KẺ PHÁ RỐI:</strong>
+                      <span>
+                        {privateView?.skills?.troublemakerUsed
+                          ? 'Đã kích hoạt hỗn loạn.'
+                          : 'Còn 1 lần duy nhất trong ván để kích hoạt treo cổ 2 người trong ngày hôm sau thay vì 1 người.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {myRoleId === 'apprentice_seer' && (
+                    <div className="revealed-role-details">
+                      <strong>TIÊN TRI TẬP SỰ:</strong>
+                      <span>Khi Tiên tri thật chết hoặc hóa Sói, bạn sẽ thức tỉnh và kế thừa toàn bộ năng lực soi phe mỗi đêm.</span>
+                    </div>
+                  )}
+
                   <small className="release-hint">Thả tay để che lại ngay lập tức</small>
                 </div>
               ) : (
@@ -569,6 +699,52 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                 </button>
               </div>
             </div>
+          ) : isTroublemaker ? (
+            <div className="troublemaker-turn-panel wolf-accursed-turn-panel">
+              <div className="troublemaker-header-badge wolf-accursed-header-badge">
+                <span className="troublemaker-glyph wolf-glyph" aria-hidden="true">⚡🎭</span>
+                <div>
+                  <strong>KẺ PHÁ RỐI (TROUBLEMAKER)</strong>
+                  <p>
+                    Bạn có 1 lần duy nhất trong cả ván để gây hỗn loạn, khiến cả làng phải biểu quyết treo cổ 2 người trong ngày hôm sau thay vì 1 người!
+                  </p>
+                </div>
+              </div>
+
+              <div className="troublemaker-decision-actions accursed-decision-actions">
+                <button
+                  type="button"
+                  className={`curse-button ${isTroublemakerActive === true ? 'is-complete' : ''}`}
+                  onClick={() => setIsTroublemakerActive(true)}
+                >
+                  <span>{isTroublemakerActive === true ? '✓ ĐÃ CHỌN KÍCH HOẠT TREO CỔ 2 NGƯỜI' : '⚡ KÍCH HOẠT TREO CỔ 2 NGƯỜI'}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`skip-curse-button ${isTroublemakerActive === false ? 'is-complete' : ''}`}
+                  onClick={() => setIsTroublemakerActive(false)}
+                >
+                  <span>{isTroublemakerActive === false ? '✓ ĐÃ CHỌN GIỮ LẠI CHO ĐÊM SAU' : 'BỎ QUA / GIỮ LẠI CHO ĐÊM SAU'}</span>
+                </button>
+              </div>
+
+              <div className="role-actions">
+                <button
+                  type="button"
+                  className={`primary-confirm-btn ${!canConfirm ? 'disabled' : ''}`}
+                  disabled={!canConfirm}
+                  onClick={handleConfirmAction}
+                >
+                  <span>
+                    {isTroublemakerActive === true
+                      ? 'XÁC NHẬN KÍCH HOẠT HỖN LOẠN'
+                      : isTroublemakerActive === false
+                      ? 'XÁC NHẬN BỎ QUA ĐÊM NAY'
+                      : 'VUI LÒNG CHỌN KÍCH HOẠT HOẶC BỎ QUA'}
+                  </span>
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {/* Nạn nhân Phù Thủy nếu có */}
@@ -593,6 +769,29 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                 </div>
               )}
 
+              {/* Thông báo Con Cáo mất phép hoặc nút bỏ qua */}
+              {isFox && privateView?.skills?.foxLostPower && (
+                <div className="fox-lost-power-banner" style={{ background: '#261b1b', border: '1px solid #7f1d1d', borderRadius: 8, padding: 12, margin: '8px 0', color: '#fca5a5', fontSize: 13 }}>
+                  <span>⚠️ Con cáo đã mất khứu giác đánh hơi vĩnh viễn do đã từng đánh hơi cụm an toàn không có Ma Sói.</span>
+                </div>
+              )}
+
+              {isFox && !privateView?.skills?.foxLostPower && (
+                <div style={{ margin: '8px 0' }}>
+                  <button
+                    type="button"
+                    className={`skip-curse-button ${isFoxSkip ? 'is-complete' : ''}`}
+                    onClick={() => {
+                      setIsFoxSkip((prev) => !prev);
+                      if (!isFoxSkip) setSelectedTargetId(null);
+                    }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8 }}
+                  >
+                    <span>{isFoxSkip ? '✓ ĐÃ CHỌN BỎ QUA ĐÊM NAY' : 'BỎ QUA KHÔNG ĐÁNH HƠI ĐÊM NAY (BẢO TOÀN PHÉP)'}</span>
+                  </button>
+                </div>
+              )}
+
               {/* Chọn mục tiêu hợp lệ */}
               <div className="target-heading">
                 <div>
@@ -605,6 +804,14 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'CHỌN 1 BẠN ĐỒNG HÀNH'
                       : isBigBadWolf
                       ? 'CHỌN 1 MỤC TIÊU CẮN THÊM'
+                      : isAuraSeer
+                      ? 'CHỌN 1 NGƯỜI ĐỂ QUAN SÁT HÀO QUANG'
+                      : isFox
+                      ? 'CHỌN 1 NGƯỜI LÀM TÂM ĐIỂM ĐÁNH HƠI'
+                      : isPi
+                      ? 'CHỌN 1 NGHI PHẠM ĐỂ ĐIỀU TRA'
+                      : isSpellcaster
+                      ? 'CHỌN 1 NGƯỜI ĐỂ PHÙ PHÉP CÂM LẶNG'
                       : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
                   </strong>
                   <small>
@@ -616,6 +823,14 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'Nếu người này chết, bạn sẽ chết theo ngay lập tức'
                       : isBigBadWolf
                       ? 'Cắn thêm một nạn nhân độc lập với bầy Sói'
+                      : isAuraSeer
+                      ? 'Nhận biết người đó là Người thường (Dân/Sói thường) hay có Hào quang Đặc biệt'
+                      : isFox
+                      ? 'Đánh hơi người này và 2 người ngồi cạnh xem có Ma Sói nào không. Có thể chọn chính mình'
+                      : isPi
+                      ? 'Điều tra người này và 2 người ngồi cạnh xem có Ma Sói nào không (1 lần duy nhất)'
+                      : isSpellcaster
+                      ? 'Người này sẽ bị câm lặng hoàn toàn vào ngày mai (không chọn trùng người đêm trước)'
                       : 'Chỉ hiển thị các người chơi hợp lệ trong luật'}
                   </small>
                 </div>
@@ -638,6 +853,24 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                     ? selectedTargetId
                       ? `Mục tiêu cắn thêm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                       : 'Chọn 1 người để cắn thêm'
+                    : isAuraSeer
+                    ? selectedTargetId
+                      ? `Soi hào quang: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người để soi hào quang'
+                    : isFox
+                    ? isFoxSkip
+                      ? 'Đã chọn bỏ qua đánh hơi'
+                      : selectedTargetId
+                      ? `Tâm điểm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người làm tâm điểm'
+                    : isPi
+                    ? selectedTargetId
+                      ? `Nghi phạm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 nghi phạm'
+                    : isSpellcaster
+                    ? selectedTargetId
+                      ? `Phù phép câm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người làm câm'
                     : selectedTargetId
                     ? `Mục tiêu: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                     : 'Chưa chọn'}
@@ -705,18 +938,29 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                 </div>
               )}
 
-              {/* Kết quả Tiên Tri / Pháp Sư nếu đã soi */}
+              {/* Kết quả Điều tra (Tiên Tri / Pháp Sư / Tiên Tri Hào Quang / Con Cáo / Thám Tử) */}
               {privateView?.investigationResult && (
                 <div className="investigation-result-card">
                   <span>KẾT QUẢ ĐIỀU TRA:</span>
                   <strong>
-                    {typeof privateView.investigationResult.result === 'string'
-                      ? privateView.investigationResult.result === 'WEREWOLF'
-                        ? '🐺 LÀ MA SÓI'
-                        : '🛡️ LÀ NGƯỜI LÀNG'
-                      : privateView.investigationResult.result
-                      ? '🔮 ĐÚNG LÀ TIÊN TRI'
-                      : '❌ KHÔNG PHẢI TIÊN TRI'}
+                    {(() => {
+                      const inv = privateView.investigationResult;
+                      if (inv.result === 'SPECIAL') {
+                        return '🔮 HÀO QUANG ĐẶC BIỆT (Tím)';
+                      }
+                      if (inv.result === 'NORMAL') {
+                        return '⚪ HÀO QUANG BÌNH THƯỜNG (Xám)';
+                      }
+                      if (typeof inv.hasWerewolf === 'boolean') {
+                        return inv.hasWerewolf
+                          ? '🐺 CÓ MA SÓI TRONG CỤM 3 NGƯỜI!'
+                          : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI TRONG CỤM!';
+                      }
+                      if (typeof inv.result === 'string') {
+                        return inv.result === 'WEREWOLF' ? '🐺 LÀ MA SÓI' : '🛡️ LÀ NGƯỜI LÀNG';
+                      }
+                      return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
+                    })()}
                   </strong>
                 </div>
               )}
@@ -739,11 +983,21 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       ? 'XÁC NHẬN CHỌN BẠN ĐỒNG HÀNH'
                       : isBigBadWolf
                       ? 'XÁC NHẬN CẮN THÊM'
+                      : isAuraSeer
+                      ? 'XÁC NHẬN SOI HÀO QUANG'
+                      : isFox
+                      ? isFoxSkip
+                        ? 'XÁC NHẬN BỎ QUA ĐÊM NAY'
+                        : 'XÁC NHẬN ĐÁNH HƠI CỤM 3 NGƯỜI'
+                      : isPi
+                      ? 'XÁC NHẬN ĐIỀU TRA NGHI PHẠM'
+                      : isSpellcaster
+                      ? 'XÁC NHẬN PHÙ PHÉP CÂM LẶNG'
                       : 'XÁC NHẬN HÀNH ĐỘNG'}
                   </span>
                 </button>
 
-                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed'].includes(currentTurnKey) && (
+                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi'].includes(currentTurnKey) && (
                   <button
                     type="button"
                     className="secondary-button"

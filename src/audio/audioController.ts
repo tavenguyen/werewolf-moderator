@@ -99,6 +99,66 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
     subtitle: 'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.',
     durationMs: 6000,
   },
+  night_aura_seer: {
+    audioKey: 'night_aura_seer',
+    subtitle: 'Tiên tri hào quang hãy thức dậy và quan sát vầng hào quang.',
+    durationMs: 6000,
+  },
+  aura_seer: {
+    audioKey: 'night_aura_seer',
+    subtitle: 'Tiên tri hào quang hãy thức dậy và quan sát vầng hào quang.',
+    durationMs: 6000,
+  },
+  night_pi: {
+    audioKey: 'night_pi',
+    subtitle: 'Thám tử hãy thức dậy và điều tra nghi phạm.',
+    durationMs: 6000,
+  },
+  pi: {
+    audioKey: 'night_pi',
+    subtitle: 'Thám tử hãy thức dậy và điều tra nghi phạm.',
+    durationMs: 6000,
+  },
+  night_fox: {
+    audioKey: 'night_fox',
+    subtitle: 'Con cáo hãy thức dậy và đánh hơi tìm bầy Sói.',
+    durationMs: 6000,
+  },
+  fox: {
+    audioKey: 'night_fox',
+    subtitle: 'Con cáo hãy thức dậy và đánh hơi tìm bầy Sói.',
+    durationMs: 6000,
+  },
+  night_spellcaster: {
+    audioKey: 'night_spellcaster',
+    subtitle: 'Người phù phép hãy thức dậy và chọn một người câm lặng hôm nay.',
+    durationMs: 6000,
+  },
+  spellcaster: {
+    audioKey: 'night_spellcaster',
+    subtitle: 'Người phù phép hãy thức dậy và chọn một người câm lặng hôm nay.',
+    durationMs: 6000,
+  },
+  night_troublemaker: {
+    audioKey: 'night_troublemaker',
+    subtitle: 'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?',
+    durationMs: 6000,
+  },
+  troublemaker: {
+    audioKey: 'night_troublemaker',
+    subtitle: 'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?',
+    durationMs: 6000,
+  },
+  night_apprentice_seer: {
+    audioKey: 'seer',
+    subtitle: 'Tiên tri, hãy thức dậy và chọn một người để soi phe.',
+    durationMs: 6000,
+  },
+  apprentice_seer: {
+    audioKey: 'seer',
+    subtitle: 'Tiên tri, hãy thức dậy và chọn một người để soi phe.',
+    durationMs: 6000,
+  },
   minion: {
     audioKey: 'minion',
     subtitle: 'Kẻ phản bội, hãy thức dậy và nhận diện bầy Ma Sói.',

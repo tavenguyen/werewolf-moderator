@@ -340,4 +340,131 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
       targetId: null,
     });
   });
+
+  it('xử lý hành động đêm cho Phase 4: aura_seer, pi, fox, spellcaster, troublemaker', async () => {
+    const adapter = createPopulatedAdapter(8);
+    await adapter.startGame();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+
+    // 1. aura_seer - soi người chơi
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'aura_seer',
+        turnKey: 'aura_seer',
+        priority: 41,
+        titleVi: 'Tiên tri hào quang',
+        titleEn: 'Aura Seer',
+        activePlayerIds: ['player_1'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_aura_seer',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('aura_seer', { targetId: 'player_2' });
+    expect(roomState.nightActionsAccumulator.auraSeer).toEqual({
+      targetId: 'player_2',
+    });
+    expect(roomState.auraInvestigationResult).toBeDefined();
+    expect(roomState.auraInvestigationResult?.targetId).toBe('player_2');
+
+    // 2. pi - điều tra cụm 3 người
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'pi',
+        turnKey: 'pi',
+        priority: 42,
+        titleVi: 'Thám tử',
+        titleEn: 'P.I.',
+        activePlayerIds: ['player_3'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_pi',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('pi', { targetId: 'player_3' });
+    expect(roomState.nightActionsAccumulator.pi).toEqual({
+      targetId: 'player_3',
+    });
+    expect(roomState.piInvestigationResult).toBeDefined();
+    expect(roomState.piInvestigationResult?.targetId).toBe('player_3');
+    expect(Array.isArray(roomState.piInvestigationResult?.inspectedPlayerIds)).toBe(true);
+
+    // 3. fox - đánh hơi chọn mục tiêu và bỏ qua
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'fox',
+        turnKey: 'fox',
+        priority: 43,
+        titleVi: 'Con cáo',
+        titleEn: 'Fox',
+        activePlayerIds: ['player_4'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_fox',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('fox', { targetId: 'player_4', isSkip: false });
+    expect(roomState.nightActionsAccumulator.fox).toEqual({
+      targetId: 'player_4',
+      isSkip: false,
+    });
+    expect(roomState.foxInvestigationResult).toBeDefined();
+    expect(roomState.foxInvestigationResult?.targetId).toBe('player_4');
+
+    // Fox bỏ qua
+    await adapter.sendNightAction('fox', { targetId: null, isSkip: true });
+    expect(roomState.nightActionsAccumulator.fox).toEqual({
+      targetId: '',
+      isSkip: true,
+    });
+
+    // 4. spellcaster - phù phép làm câm 1 người
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'spellcaster',
+        turnKey: 'spellcaster',
+        priority: 55,
+        titleVi: 'Người phù phép',
+        titleEn: 'Spellcaster',
+        activePlayerIds: ['player_5'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_spellcaster',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('spellcaster', { targetId: 'player_6' });
+    expect(roomState.nightActionsAccumulator.spellcaster).toEqual({
+      targetId: 'player_6',
+    });
+
+    // 5. troublemaker - kích hoạt hỗn loạn hoặc bỏ qua
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'troublemaker',
+        turnKey: 'troublemaker',
+        priority: 58,
+        titleVi: 'Kẻ phá rối',
+        titleEn: 'Troublemaker',
+        activePlayerIds: ['player_7'],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_troublemaker',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    await adapter.sendNightAction('troublemaker', { activate: true });
+    expect(roomState.nightActionsAccumulator.troublemaker).toEqual({
+      activate: true,
+    });
+
+    await adapter.sendNightAction('troublemaker', { activate: false });
+    expect(roomState.nightActionsAccumulator.troublemaker).toEqual({
+      activate: false,
+    });
+  });
 });

@@ -404,4 +404,257 @@ describe('Realtime Backend - Projections & Targets for Phase 3 (wolf_accursed, b
       });
     });
   });
+
+  describe('Phase 4 Projections & Targets (aura_seer, pi, fox, spellcaster, troublemaker)', () => {
+    it('validTargets chính xác cho các vai Phase 4', async () => {
+      const { roomCode, players } = await setupGame([
+        'aura_seer',
+        'pi',
+        'fox',
+        'spellcaster',
+        'troublemaker',
+        'werewolf',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const pAura = room.gameState!.players.find((p) => p.roleId === 'aura_seer')!;
+      const pPi = room.gameState!.players.find((p) => p.roleId === 'pi')!;
+      const pFox = room.gameState!.players.find((p) => p.roleId === 'fox')!;
+      const pSpell = room.gameState!.players.find((p) => p.roleId === 'spellcaster')!;
+      const pTrouble = room.gameState!.players.find((p) => p.roleId === 'troublemaker')!;
+
+      // 1. aura_seer: không soi chính mình
+      room.nightTurnPlan = [
+        {
+          roleId: 'aura_seer',
+          turnKey: 'aura_seer',
+          priority: 41,
+          titleVi: 'Tiên tri hào quang',
+          titleEn: 'Aura Seer',
+          activePlayerIds: [pAura.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_aura_seer',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      let view = createPlayerPrivateView(room, pAura.id);
+      expect(view!.validTargets).not.toContain(pAura.id);
+      expect(view!.validTargets).toContain(pPi.id);
+
+      // 2. pi & fox: được chọn chính mình (allowSelfTarget: true)
+      room.nightTurnPlan = [
+        {
+          roleId: 'pi',
+          turnKey: 'pi',
+          priority: 42,
+          titleVi: 'Thám tử',
+          titleEn: 'P.I.',
+          activePlayerIds: [pPi.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_pi',
+        },
+      ];
+      view = createPlayerPrivateView(room, pPi.id);
+      expect(view!.validTargets).toContain(pPi.id);
+
+      room.nightTurnPlan = [
+        {
+          roleId: 'fox',
+          turnKey: 'fox',
+          priority: 43,
+          titleVi: 'Con cáo',
+          titleEn: 'Fox',
+          activePlayerIds: [pFox.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_fox',
+        },
+      ];
+      view = createPlayerPrivateView(room, pFox.id);
+      expect(view!.validTargets).toContain(pFox.id);
+
+      // 3. spellcaster: không chọn người bị câm đêm trước (lastMutedPlayerId)
+      room.gameState!.lastMutedPlayerId = pAura.id;
+      room.nightTurnPlan = [
+        {
+          roleId: 'spellcaster',
+          turnKey: 'spellcaster',
+          priority: 55,
+          titleVi: 'Người phù phép',
+          titleEn: 'Spellcaster',
+          activePlayerIds: [pSpell.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_spellcaster',
+        },
+      ];
+      view = createPlayerPrivateView(room, pSpell.id);
+      expect(view!.validTargets).not.toContain(pAura.id);
+      expect(view!.validTargets).toContain(pFox.id);
+
+      // 4. troublemaker: validTargets = []
+      room.nightTurnPlan = [
+        {
+          roleId: 'troublemaker',
+          turnKey: 'troublemaker',
+          priority: 58,
+          titleVi: 'Kẻ phá rối',
+          titleEn: 'Troublemaker',
+          activePlayerIds: [pTrouble.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_troublemaker',
+        },
+      ];
+      view = createPlayerPrivateView(room, pTrouble.id);
+      expect(view!.validTargets).toEqual([]);
+    });
+
+    it('createPlayerPrivateView trả về skills và investigationResult chính xác', async () => {
+      const { roomCode } = await setupGame([
+        'aura_seer',
+        'pi',
+        'fox',
+        'spellcaster',
+        'troublemaker',
+        'werewolf',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const pAura = room.gameState!.players.find((p) => p.roleId === 'aura_seer')!;
+      const pPi = room.gameState!.players.find((p) => p.roleId === 'pi')!;
+      const pFox = room.gameState!.players.find((p) => p.roleId === 'fox')!;
+      const pSpell = room.gameState!.players.find((p) => p.roleId === 'spellcaster')!;
+      const pTrouble = room.gameState!.players.find((p) => p.roleId === 'troublemaker')!;
+
+      room.gameState!.mutedPlayerId = pSpell.id;
+      room.gameState!.foxLostPower = true;
+      room.gameState!.piUsed = true;
+      room.gameState!.troublemakerUsed = true;
+
+      const viewSpell = createPlayerPrivateView(room, pSpell.id);
+      expect(viewSpell!.skills.isMuted).toBe(true);
+
+      const viewFox = createPlayerPrivateView(room, pFox.id);
+      expect(viewFox!.skills.foxLostPower).toBe(true);
+
+      const viewPi = createPlayerPrivateView(room, pPi.id);
+      expect(viewPi!.skills.piUsed).toBe(true);
+
+      const viewTrouble = createPlayerPrivateView(room, pTrouble.id);
+      expect(viewTrouble!.skills.troublemakerUsed).toBe(true);
+
+      // Test investigation results
+      room.auraInvestigationResult = { targetId: pPi.id, result: 'SPECIAL' };
+      const viewAura = createPlayerPrivateView(room, pAura.id);
+      expect(viewAura!.investigationResult).toEqual({
+        targetId: pPi.id,
+        result: 'SPECIAL',
+      });
+
+      room.foxInvestigationResult = {
+        targetId: pFox.id,
+        hasWerewolf: true,
+        inspectedPlayerIds: [pFox.id],
+      };
+      const viewFoxResult = createPlayerPrivateView(room, pFox.id);
+      expect(viewFoxResult!.investigationResult?.hasWerewolf).toBe(true);
+
+      room.piInvestigationResult = {
+        targetId: pPi.id,
+        hasWerewolf: false,
+        inspectedPlayerIds: [pPi.id],
+      };
+      const viewPiResult = createPlayerPrivateView(room, pPi.id);
+      expect(viewPiResult!.investigationResult?.hasWerewolf).toBe(false);
+    });
+
+    it('SocketGateway night:action xử lý chuẩn xác cho Phase 4 roles', async () => {
+      const { roomCode, players } = await setupGame([
+        'aura_seer',
+        'pi',
+        'fox',
+        'spellcaster',
+        'troublemaker',
+        'werewolf',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+
+      const pAura = room.gameState!.players.find((p) => p.roleId === 'aura_seer')!;
+      const pTrouble = room.gameState!.players.find((p) => p.roleId === 'troublemaker')!;
+      const auraPlayer = players.find((pl) => pl.id === pAura.id)!;
+      const troublePlayer = players.find((pl) => pl.id === pTrouble.id)!;
+      const targetPlayer = room.gameState!.players.find((p) => p.id !== pAura.id)!;
+
+      // Gửi action aura_seer
+      room.nightTurnPlan = [
+        {
+          roleId: 'aura_seer',
+          turnKey: 'aura_seer',
+          priority: 41,
+          titleVi: 'Tiên tri hào quang',
+          titleEn: 'Aura Seer',
+          activePlayerIds: [auraPlayer.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_aura_seer',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const auraRes: any = await new Promise((resolve) => {
+        auraPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: auraPlayer.token,
+            roleId: 'aura_seer',
+            action: { targetId: targetPlayer.id },
+          },
+          resolve
+        );
+      });
+      expect(auraRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.auraSeer).toEqual({
+        targetId: targetPlayer.id,
+      });
+
+      // Gửi action troublemaker activate
+      room.nightTurnPlan = [
+        {
+          roleId: 'troublemaker',
+          turnKey: 'troublemaker',
+          priority: 58,
+          titleVi: 'Kẻ phá rối',
+          titleEn: 'Troublemaker',
+          activePlayerIds: [troublePlayer.id],
+          isFake: false,
+          canAct: true,
+          audioKey: 'night_troublemaker',
+        },
+      ];
+      room.currentNightTurnIndex = 0;
+      room.nightActionAcks.clear();
+
+      const troubleRes: any = await new Promise((resolve) => {
+        troublePlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: troublePlayer.token,
+            roleId: 'troublemaker',
+            action: { activate: true },
+          },
+          resolve
+        );
+      });
+      expect(troubleRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.troublemaker).toEqual({
+        activate: true,
+      });
+    });
+  });
 });

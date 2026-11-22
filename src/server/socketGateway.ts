@@ -10,6 +10,8 @@ import {
   tallyMayorElection,
 } from '../engine/voting';
 import { ROLES_BY_ID } from '../engine/roles';
+import { getAliveNeighbors } from '../engine/seating';
+import { isWerewolfForInvestigation } from '../engine/nightResolution';
 import {
   createHostBoardView,
   createPlayerPrivateView,
@@ -888,6 +890,9 @@ export class SocketGateway {
     room.nightActionAcks.clear();
     room.seerInvestigationResult = undefined;
     room.sorcererInvestigationResult = undefined;
+    room.auraInvestigationResult = undefined;
+    room.foxInvestigationResult = undefined;
+    room.piInvestigationResult = undefined;
 
     this.startCurrentNightTurnTimer(room);
     this.broadcastRoom(room);
@@ -1103,6 +1108,65 @@ export class SocketGateway {
       case 'big_bad_wolf':
       case 'night_big_bad_wolf':
         acc.bigBadWolf = { targetId: action.targetId ?? null };
+        break;
+
+      case 'aura_seer':
+      case 'night_aura_seer':
+        if (action.targetId) {
+          acc.auraSeer = { targetId: action.targetId };
+          const target = gameState.players.find((p) => p.id === action.targetId);
+          if (target) {
+            const isSpecial = target.roleId !== 'villager' && target.roleId !== 'werewolf';
+            room.auraInvestigationResult = {
+              targetId: action.targetId,
+              result: isSpecial ? 'SPECIAL' : 'NORMAL',
+            };
+          }
+        }
+        break;
+
+      case 'pi':
+      case 'night_pi':
+        if (action.targetId) {
+          acc.pi = { targetId: action.targetId };
+          const neighbors = getAliveNeighbors(gameState.players, action.targetId);
+          const group = neighbors ? neighbors.group : [];
+          const inspectedPlayerIds = group.map((p) => p.id);
+          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+          room.piInvestigationResult = {
+            targetId: action.targetId,
+            hasWerewolf,
+            inspectedPlayerIds,
+          };
+        }
+        break;
+
+      case 'fox':
+      case 'night_fox':
+        acc.fox = { targetId: action.targetId ?? '', isSkip: action.isSkip };
+        if (action.targetId && !action.isSkip) {
+          const neighbors = getAliveNeighbors(gameState.players, action.targetId);
+          const group = neighbors ? neighbors.group : [];
+          const inspectedPlayerIds = group.map((p) => p.id);
+          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+          room.foxInvestigationResult = {
+            targetId: action.targetId,
+            hasWerewolf,
+            inspectedPlayerIds,
+          };
+        }
+        break;
+
+      case 'spellcaster':
+      case 'night_spellcaster':
+        if (action.targetId) {
+          acc.spellcaster = { targetId: action.targetId };
+        }
+        break;
+
+      case 'troublemaker':
+      case 'night_troublemaker':
+        acc.troublemaker = { activate: Boolean(action.activate) };
         break;
     }
   }
