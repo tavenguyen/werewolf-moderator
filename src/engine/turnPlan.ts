@@ -283,21 +283,91 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
     });
   }
 
-  // 6. Tiên tri (Seer) - Mỗi đêm
-  if (hasRole('seer')) {
-    const aliveSeer = state.players.find(
-      (p) => p.isAlive && p.roleId === 'seer' && !state.villagePowerStripped
+  // 6. Tiên tri (Seer) & Tiên tri tập sự (Apprentice Seer) - Mỗi đêm (Priority 40)
+  if (hasRole('seer') || hasRole('apprentice_seer')) {
+    const hasAliveSeer = state.players.some((p) => p.isAlive && p.roleId === 'seer');
+    if (hasAliveSeer) {
+      const aliveSeer = state.players.find(
+        (p) => p.isAlive && p.roleId === 'seer' && !state.villagePowerStripped
+      );
+      plan.push({
+        roleId: 'seer',
+        turnKey: 'seer',
+        priority: 40,
+        titleVi: 'Tiên tri',
+        titleEn: 'Seer',
+        activePlayerIds: aliveSeer ? [aliveSeer.id] : [],
+        isFake: !aliveSeer,
+        canAct: Boolean(aliveSeer),
+        audioKey: 'night_seer',
+      });
+    } else {
+      const aliveApprentice = state.players.find(
+        (p) => p.isAlive && p.roleId === 'apprentice_seer' && !state.villagePowerStripped
+      );
+      plan.push({
+        roleId: 'seer',
+        turnKey: 'seer',
+        priority: 40,
+        titleVi: 'Tiên tri',
+        titleEn: 'Seer',
+        activePlayerIds: aliveApprentice ? [aliveApprentice.id] : [],
+        isFake: !aliveApprentice,
+        canAct: Boolean(aliveApprentice),
+        audioKey: 'night_seer',
+      });
+    }
+  }
+
+  // 6b. Tiên tri hào quang (Aura Seer) - Mỗi đêm (Priority 41)
+  if (hasRole('aura_seer')) {
+    const aliveAuraSeer = state.players.find(
+      (p) => p.isAlive && p.roleId === 'aura_seer' && !state.villagePowerStripped
     );
     plan.push({
-      roleId: 'seer',
-      turnKey: 'seer',
-      priority: 40,
-      titleVi: 'Tiên tri',
-      titleEn: 'Seer',
-      activePlayerIds: aliveSeer ? [aliveSeer.id] : [],
-      isFake: !aliveSeer,
-      canAct: Boolean(aliveSeer),
-      audioKey: 'night_seer',
+      roleId: 'aura_seer',
+      turnKey: 'aura_seer',
+      priority: 41,
+      titleVi: 'Tiên tri hào quang',
+      titleEn: 'Aura Seer',
+      activePlayerIds: aliveAuraSeer ? [aliveAuraSeer.id] : [],
+      isFake: !aliveAuraSeer,
+      canAct: Boolean(aliveAuraSeer),
+      audioKey: 'night_aura_seer',
+    });
+  }
+
+  // 6c. Thám tử (P.I.) - Dùng 1 lần (Priority 42)
+  if (hasRole('pi')) {
+    const alivePi = state.players.find((p) => p.isAlive && p.roleId === 'pi');
+    const canAct = Boolean(alivePi && !state.villagePowerStripped && !state.piUsed);
+    plan.push({
+      roleId: 'pi',
+      turnKey: 'pi',
+      priority: 42,
+      titleVi: 'Thám tử',
+      titleEn: 'P.I.',
+      activePlayerIds: canAct && alivePi ? [alivePi.id] : [],
+      isFake: !canAct,
+      canAct,
+      audioKey: 'night_pi',
+    });
+  }
+
+  // 6d. Con cáo (Fox) - Mỗi đêm cho đến khi mất phép (Priority 43)
+  if (hasRole('fox')) {
+    const aliveFox = state.players.find((p) => p.isAlive && p.roleId === 'fox');
+    const canAct = Boolean(aliveFox && !state.villagePowerStripped && !state.foxLostPower);
+    plan.push({
+      roleId: 'fox',
+      turnKey: 'fox',
+      priority: 43,
+      titleVi: 'Con cáo',
+      titleEn: 'Fox',
+      activePlayerIds: canAct && aliveFox ? [aliveFox.id] : [],
+      isFake: !canAct,
+      canAct,
+      audioKey: 'night_fox',
     });
   }
 
@@ -332,6 +402,45 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
       isFake: !aliveWitch,
       canAct: Boolean(aliveWitch),
       audioKey: 'night_witch',
+    });
+  }
+
+  // 8b. Người phù phép (Spellcaster) - Mỗi đêm (Priority 55)
+  if (hasRole('spellcaster')) {
+    const aliveSpellcaster = state.players.find(
+      (p) => p.isAlive && p.roleId === 'spellcaster' && !state.villagePowerStripped
+    );
+    plan.push({
+      roleId: 'spellcaster',
+      turnKey: 'spellcaster',
+      priority: 55,
+      titleVi: 'Người phù phép',
+      titleEn: 'Spellcaster',
+      activePlayerIds: aliveSpellcaster ? [aliveSpellcaster.id] : [],
+      isFake: !aliveSpellcaster,
+      canAct: Boolean(aliveSpellcaster),
+      audioKey: 'night_spellcaster',
+    });
+  }
+
+  // 8c. Kẻ phá rối (Troublemaker) - Dùng 1 lần (Priority 58)
+  if (hasRole('troublemaker')) {
+    const aliveTroublemaker = state.players.find(
+      (p) => p.isAlive && p.roleId === 'troublemaker'
+    );
+    const canAct = Boolean(
+      aliveTroublemaker && !state.villagePowerStripped && !state.troublemakerUsed
+    );
+    plan.push({
+      roleId: 'troublemaker',
+      turnKey: 'troublemaker',
+      priority: 58,
+      titleVi: 'Kẻ phá rối',
+      titleEn: 'Troublemaker',
+      activePlayerIds: canAct && aliveTroublemaker ? [aliveTroublemaker.id] : [],
+      isFake: !canAct,
+      canAct,
+      audioKey: 'night_troublemaker',
     });
   }
 

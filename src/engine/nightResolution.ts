@@ -1,6 +1,7 @@
 import { ROLES_BY_ID } from './roles';
 import type { DeathInput } from './deathCascade';
 import { processDeathCascade } from './deathCascade';
+import { getAliveNeighbors } from './seating';
 import { hasAnyBitingWolfDied, hasAnyOtherWolfDied } from './turnPlan';
 import type {
   DeathRecord,
@@ -16,6 +17,39 @@ export interface NightResolutionOutput {
   newDeaths: DeathRecord[];
   infoResults: NightInfoResults;
   events: NightResolutionEvent[];
+}
+
+/**
+ * Helper xác định kết quả soi của Tiên tri hào quang (Aura Seer):
+ * - 'NORMAL' nếu roleId === 'villager', roleId === 'werewolf', hoặc (roleId === 'drunk' && roundNumber < 3).
+ * - 'SPECIAL' cho tất cả các vai khác.
+ */
+export function getAuraSeerResult(
+  player: PlayerState,
+  roundNumber: number
+): 'NORMAL' | 'SPECIAL' {
+  if (
+    player.roleId === 'villager' ||
+    player.roleId === 'werewolf' ||
+    (player.roleId === 'drunk' && roundNumber < 3)
+  ) {
+    return 'NORMAL';
+  }
+  return 'SPECIAL';
+}
+
+/**
+ * Helper xác định một người chơi có tính là Ma sói khi Con cáo (Fox) và Thám tử (P.I.) điều tra hay không:
+ * - false nếu roleId === 'minion' || roleId === 'sorcerer'.
+ * - true nếu roleId === 'lycan'.
+ * - true nếu faction === 'WEREWOLF' || roleId === 'white_wolf'.
+ * - false cho các trường hợp còn lại.
+ */
+export function isWerewolfForInvestigation(player: PlayerState): boolean {
+  if (player.roleId === 'minion' || player.roleId === 'sorcerer') return false;
+  if (player.roleId === 'lycan') return true;
+  if (player.faction === 'WEREWOLF' || player.roleId === 'white_wolf') return true;
+  return false;
 }
 
 /**
@@ -560,31 +594,139 @@ export function resolveNight(
   }
 
   // =========================================================================
-  // 7. CÁC VAI THU THẬP THÔNG TIN (Seer, Sorcerer)
+  // 7. CÁC VAI THU THẬP THÔNG TIN & CAN THIỆP
   // =========================================================================
-  if (actions.seer?.targetId && !nextState.villagePowerStripped) {
-    // Quy tắc State Snapshot: Tiên tri soi dựa trên trạng thái danh tính đầu đêm của người chơi
-    const target = state.players.find((p) => p.id === actions.seer!.targetId);
-    if (target) {
-      const def = ROLES_BY_ID[target.roleId];
-      let result = def?.seerResult ?? 'VILLAGER';
-      // Lycan soi ra Sói, Minion soi ra Dân
-      if (target.roleId === 'lycan') result = 'WEREWOLF';
-      if (target.roleId === 'minion') result = 'VILLAGER';
+  // 7a. Tiên tri (Seer) & Tiên tri tập sự (Apprentice Seer)
+  const seerTargetId = actions.seer?.targetId ?? actions.apprenticeSeer?.targetId;
+  if (seerTargetId && !nextState.villagePowerStripped) {
+    const hasAliveSeer = nextState.players.some((p) => p.isAlive && p.roleId === 'seer');
+    const hasAliveApprentice = nextState.players.some(
+      (p) => p.isAlive && p.roleId === 'apprentice_seer'
+    );
+    if (hasAliveSeer || hasAliveApprentice) {
+      // Quy tắc State Snapshot: Soi dựa trên trạng thái danh tính đầu đêm của người chơi
+      const target = state.players.find((p) => p.id === seerTargetId);
+      if (target) {
+        const def = ROLES_BY_ID[target.roleId];
+        let result = def?.seerResult ?? 'VILLAGER';
+        // Lycan soi ra Sói, Minion soi ra Dân
+        if (target.roleId === 'lycan') result = 'WEREWOLF';
+        if (target.roleId === 'minion') result = 'VILLAGER';
 
-      infoResults.seerResult = {
-        targetId: target.id,
-        result,
-      };
+        infoResults.seerResult = {
+          targetId: target.id,
+          result,
+        };
+        if (!hasAliveSeer && hasAliveApprentice) {
+          infoResults.apprenticeSeerResult = {
+            targetId: target.id,
+            result,
+          };
+        }
+      }
     }
   }
 
+  // 7b. Pháp sư sói (Sorcerer)
   if (actions.sorcerer?.targetId) {
     const target = nextState.players.find((p) => p.id === actions.sorcerer!.targetId);
     infoResults.sorcererResult = {
       targetId: actions.sorcerer.targetId,
       isSeer: target?.roleId === 'seer',
     };
+  }
+
+  // 7c. Tiên tri hào quang (Aura Seer)
+  if (actions.auraSeer?.targetId && !nextState.villagePowerStripped) {
+    const aliveAuraSeer = nextState.players.some(
+      (p) => p.isAlive && p.roleId === 'aura_seer'
+    );
+    if (aliveAuraSeer) {
+      const target = state.players.find((p) => p.id === actions.auraSeer!.targetId);
+      if (target) {
+        const result = getAuraSeerResult(target, state.roundNumber);
+        infoResults.auraResult = {
+          targetId: target.id,
+          result,
+        };
+      }
+    }
+  }
+
+  // 7d. Thám tử (P.I.)
+  if (actions.pi?.targetId && !nextState.villagePowerStripped && !nextState.piUsed) {
+    const alivePi = nextState.players.some((p) => p.isAlive && p.roleId === 'pi');
+    if (alivePi) {
+      const target = nextState.players.find((p) => p.id === actions.pi!.targetId && p.isAlive);
+      if (target) {
+        nextState.piUsed = true;
+        const neighbors = getAliveNeighbors(nextState.players, target.id);
+        const group = neighbors ? neighbors.group : [target];
+        const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+        infoResults.piResult = {
+          targetId: target.id,
+          hasWerewolf,
+          inspectedPlayerIds: group.map((p) => p.id),
+        };
+      }
+    }
+  }
+
+  // 7e. Con cáo (Fox)
+  if (
+    actions.fox?.targetId &&
+    !actions.fox.isSkip &&
+    !nextState.villagePowerStripped &&
+    !nextState.foxLostPower
+  ) {
+    const aliveFox = nextState.players.some((p) => p.isAlive && p.roleId === 'fox');
+    if (aliveFox) {
+      const target = nextState.players.find((p) => p.id === actions.fox!.targetId && p.isAlive);
+      if (target) {
+        const neighbors = getAliveNeighbors(nextState.players, target.id);
+        const group = neighbors ? neighbors.group : [target];
+        const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+        if (!hasWerewolf) {
+          nextState.foxLostPower = true;
+        }
+        infoResults.foxResult = {
+          targetId: target.id,
+          hasWerewolf,
+          inspectedPlayerIds: group.map((p) => p.id),
+        };
+      }
+    }
+  }
+
+  // 7f. Kẻ phá rối (Troublemaker)
+  if (
+    actions.troublemaker?.activate &&
+    !nextState.villagePowerStripped &&
+    !nextState.troublemakerUsed
+  ) {
+    const aliveTroublemaker = nextState.players.some(
+      (p) => p.isAlive && p.roleId === 'troublemaker'
+    );
+    if (aliveTroublemaker) {
+      nextState.troublemakerUsed = true;
+      nextState.doubleVoteDay = true;
+      nextState.historyLogs.push('Kẻ phá rối đã hành động: Hôm nay làng sẽ treo cổ 2 người!');
+    }
+  }
+
+  // 7g. Người phù phép (Spellcaster)
+  let chosenMuteTargetId: PlayerId | null = null;
+  if (actions.spellcaster?.targetId && !nextState.villagePowerStripped) {
+    const aliveSpellcaster = nextState.players.some(
+      (p) => p.isAlive && p.roleId === 'spellcaster'
+    );
+    if (aliveSpellcaster) {
+      const target = nextState.players.find((p) => p.id === actions.spellcaster!.targetId);
+      if (target && target.isAlive && target.id !== nextState.lastMutedPlayerId) {
+        nextState.lastMutedPlayerId = target.id;
+        chosenMuteTargetId = target.id;
+      }
+    }
   }
 
   // =========================================================================
@@ -663,6 +805,25 @@ export function resolveNight(
 
   // Phân giải chuỗi chết liên hoàn
   const newDeaths = processDeathCascade(nextState, pendingDeaths);
+
+  // Xử lý câm lặng của Spellcaster sau death cascade (Edge Case 4.3):
+  // Nếu target còn sống thì nextState.mutedPlayerId = target.id; nếu target chết trong đêm thì null
+  if (chosenMuteTargetId) {
+    const targetPlayer = nextState.players.find((p) => p.id === chosenMuteTargetId);
+    if (targetPlayer && targetPlayer.isAlive) {
+      nextState.mutedPlayerId = chosenMuteTargetId;
+      targetPlayer.isMuted = true;
+    } else {
+      nextState.mutedPlayerId = null;
+    }
+  } else {
+    nextState.mutedPlayerId = null;
+  }
+  for (const p of nextState.players) {
+    if (p.id !== nextState.mutedPlayerId) {
+      p.isMuted = false;
+    }
+  }
 
   // Phát sinh event DEATH cho từng nạn nhân trong đêm vào resolvedEvents
   for (const death of newDeaths) {

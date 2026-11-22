@@ -418,7 +418,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Hệ thống chỉ báo có Sói hay không chứ không nói rõ ai là Sói. Sói trắng và Người lai sói cũng bị tính là Sói.',
       'Dùng xong một lần, nút bấm sẽ khóa. Những đêm sau hệ thống vẫn gọi tên bạn giả vờ để phe Sói không biết bạn hết phép.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'fox',
@@ -437,7 +438,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Khi soi trúng ba người toàn Dân, bạn mất phép từ đêm sau và thành dân thường. Hệ thống vẫn gọi tên bạn giả vờ để phe Sói không biết.',
       'Bạn có thể tự chọn chính mình làm người ở giữa để kiểm tra hai người ngồi cạnh mình.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'bear_tamer',
@@ -476,7 +478,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu soi vào Kẻ say rượu ở hai đêm đầu, bạn chỉ thấy Người thường; từ Đêm 3 khi họ nhận vai đặc biệt, soi mới ra Đặc biệt.',
       'Khi bạn đã chết, ban đêm hệ thống vẫn gọi tên bạn giả vờ để giữ kín thông tin.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'apprentice_seer',
@@ -495,7 +498,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Ngay từ đêm kế tiếp sau khi Tiên tri thật chết, bạn sẽ thức dậy ở đúng lượt của Tiên tri để soi tiếp.',
       'Khi Tiên tri thật soi bạn, họ thấy bạn là Dân; Tiên tri hào quang soi bạn thấy bạn là người Đặc biệt.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'mason',
@@ -692,7 +696,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Người bị cấm nói vẫn được bấm nút bỏ phiếu treo cổ bình thường.',
       'Dù bạn bị Sói cắn chết trong đêm, người bạn vừa chọn đêm đó vẫn bị cấm nói vào ngày hôm sau.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'troublemaker',
@@ -711,7 +716,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Nếu ở lượt vote đầu tiên làng treo cổ trúng Kẻ chán đời (Tanner), trò chơi dừng lại ngay và Tanner thắng, lượt vote thứ hai bị hủy.',
       'Nếu ở lượt đầu người bị vote là Hoàng tử hoặc Thằng ngốc và họ lật bài thoát chết, cả làng vẫn tiếp tục bước vào lượt vote thứ hai.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
   {
     id: 'wolf_accursed',

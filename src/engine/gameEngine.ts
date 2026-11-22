@@ -96,6 +96,8 @@ export function createInitialGameState(
     accursedWolfUsed: false,
     doubleVoteDay: false,
     villagePowerStripped: false,
+    lastMutedPlayerId: null,
+    mutedPlayerId: null,
     mayorId: null,
     pendingHunterShotPlayerId: null,
     pendingMayorSuccessionPlayerId: null,
@@ -139,6 +141,20 @@ export function startDayPhase(state: GameState): GameState {
   } else {
     nextState.phase = 'DAY_DISCUSS';
     nextState.historyLogs.push(`Bắt đầu Ngày ${nextState.roundNumber}: Mở phiên thảo luận làng.`);
+  }
+
+  // Thông báo câm từ Người phù phép (Spellcaster) nếu người bị làm câm còn sống
+  if (nextState.mutedPlayerId) {
+    const mutedPlayer = nextState.players.find(
+      (p) => p.id === nextState.mutedPlayerId && p.isAlive
+    );
+    if (mutedPlayer) {
+      nextState.historyLogs.push(
+        `[${mutedPlayer.name}] đã bị phù phép câm lặng và không được phát biểu trong hôm nay!`
+      );
+    } else {
+      nextState.mutedPlayerId = null;
+    }
   }
 
   if (nextState.bearGrowled) {
@@ -202,6 +218,19 @@ export function executeNightPhase(
     } else {
       nextState.phase = 'DAY_DISCUSS';
     }
+
+    if (nextState.mutedPlayerId) {
+      const mutedPlayer = nextState.players.find(
+        (p) => p.id === nextState.mutedPlayerId && p.isAlive
+      );
+      if (mutedPlayer) {
+        nextState.historyLogs.push(
+          `[${mutedPlayer.name}] đã bị phù phép câm lặng và không được phát biểu trong hôm nay!`
+        );
+      } else {
+        nextState.mutedPlayerId = null;
+      }
+    }
   }
 
   return { nextState, nightOutput, winOutcome };
@@ -209,11 +238,12 @@ export function executeNightPhase(
 
 /**
  * Điều phối Pha Biểu Quyết Ban Ngày (Day Vote Resolution) — Pure Function:
- * Xử lý Thằng ngốc lật bài thoát chết, Kẻ chán đời và Treo cổ đưa vào Death Cascade.
+ * Hỗ trợ 1 hoặc 2 mục tiêu (Troublemaker double vote),
+ * xử lý Thằng ngốc / Hoàng tử lật bài thoát chết, Thiên sứ / Kẻ chán đời và Treo cổ đưa vào Death Cascade.
  */
 export function executeDayVote(
   state: GameState,
-  targetPlayerId: PlayerId | null
+  targetPlayerId: PlayerId | PlayerId[] | null
 ): {
   nextState: GameState;
   survivedByReveal: boolean;
@@ -222,7 +252,14 @@ export function executeDayVote(
   const nextState: GameState = structuredClone(state);
   nextState.phase = 'DAY_VOTE';
 
-  if (!targetPlayerId) {
+  const targets: PlayerId[] = (
+    Array.isArray(targetPlayerId) ? targetPlayerId : [targetPlayerId]
+  ).filter((id): id is PlayerId => Boolean(id));
+
+  let survivedByReveal = false;
+
+  // Trường hợp không có ai bị vote (bỏ phiếu trắng hoặc hòa)
+  if (targets.length === 0) {
     if (state.roundNumber === 1) {
       for (const p of nextState.players) {
         if (p.isAlive && p.roleId === 'angel') {
@@ -231,40 +268,69 @@ export function executeDayVote(
       }
     }
     nextState.historyLogs.push('Hòa phiếu hoặc bỏ phiếu trắng: Không ai bị treo cổ hôm nay.');
+    nextState.doubleVoteDay = false;
     nextState.roundNumber += 1;
     nextState.phase = 'NIGHT';
     return { nextState, survivedByReveal: false, winOutcome: checkWinCondition(nextState) };
   }
 
-  const target = nextState.players.find((p) => p.id === targetPlayerId);
-  if (!target || !target.isAlive) {
-    return { nextState, survivedByReveal: false, winOutcome: checkWinCondition(nextState) };
+  // Xử lý từng mục tiêu theo thứ tự
+  for (const tId of targets) {
+    const target = nextState.players.find((p) => p.id === tId);
+    if (!target || !target.isAlive) continue;
+
+    // 1. Thằng ngốc (Village Idiot) lật bài thoát chết (mất quyền vote)
+    if (target.roleId === 'village_idiot' && target.voteWeight > 0) {
+      target.voteWeight = 0;
+      survivedByReveal = true;
+      nextState.historyLogs.push(
+        `Thằng ngốc (${target.name}) lật bài thoát chết nhưng bị tước vĩnh viễn quyền bỏ phiếu!`
+      );
+      continue;
+    }
+
+    // 1b. Hoàng tử (Prince) lật bài thoát chết (giữ nguyên quyền vote)
+    if (target.roleId === 'prince' && !nextState.princeRevealed) {
+      nextState.princeRevealed = true;
+      survivedByReveal = true;
+      nextState.historyLogs.push(
+        `Hoàng tử (${target.name}) lật bài thoát chết và giữ nguyên quyền bỏ phiếu!`
+      );
+      continue;
+    }
+
+    // 2. Treo cổ đưa vào Death Cascade
+    processDeathCascade(nextState, [{ playerId: target.id, cause: 'VILLAGE_VOTE' }]);
+
+    // Kiểm tra kết quả thắng ngay sau mỗi mục tiêu:
+    // - Ưu tiên 1: Angel thắng ngay ở Ngày 1
+    // - Ưu tiên 2: Tanner thắng ngay ở mọi ngày
+    const immediateWin = checkWinCondition(nextState);
+    if (immediateWin) {
+      nextState.phase = 'GAME_OVER';
+      nextState.doubleVoteDay = false;
+      return { nextState, survivedByReveal, winOutcome: immediateWin };
+    }
+
+    // Nếu có Thợ săn vừa bị treo cổ (hoặc chết chùm), mở lượt bắn
+    if (nextState.pendingHunterShotPlayerId) {
+      nextState.phase = 'HUNTER_SHOT';
+      nextState.previousPhaseBeforeHunter = 'NIGHT';
+      nextState.doubleVoteDay = false;
+      return { nextState, survivedByReveal, winOutcome: null };
+    }
+
+    // Nếu Trưởng làng bị treo cổ, mở truyền ngôi
+    if (nextState.pendingMayorSuccessionPlayerId) {
+      nextState.phase = 'MAYOR_SUCCESSION';
+      nextState.previousPhaseBeforeMayorSuccession = 'NIGHT';
+      nextState.doubleVoteDay = false;
+      return { nextState, survivedByReveal, winOutcome: null };
+    }
   }
 
-  // 1. Thằng ngốc (Village Idiot) lật bài thoát chết (mất quyền vote)
-  if (target.roleId === 'village_idiot' && target.voteWeight > 0) {
-    target.voteWeight = 0;
-    nextState.historyLogs.push(
-      `Thằng ngốc (${target.name}) lật bài thoát chết nhưng bị tước vĩnh viễn quyền bỏ phiếu!`
-    );
-    nextState.roundNumber += 1;
-    nextState.phase = 'NIGHT';
-    return { nextState, survivedByReveal: true, winOutcome: checkWinCondition(nextState) };
-  }
-
-  // 1b. Hoàng tử (Prince) lật bài thoát chết (giữ nguyên quyền vote)
-  if (target.roleId === 'prince' && !nextState.princeRevealed) {
-    nextState.princeRevealed = true;
-    nextState.historyLogs.push(
-      `Hoàng tử (${target.name}) lật bài thoát chết và giữ nguyên quyền bỏ phiếu!`
-    );
-    nextState.roundNumber += 1;
-    nextState.phase = 'NIGHT';
-    return { nextState, survivedByReveal: true, winOutcome: checkWinCondition(nextState) };
-  }
-
-  // 2. Treo cổ đưa vào Death Cascade
-  processDeathCascade(nextState, [{ playerId: target.id, cause: 'VILLAGE_VOTE' }]);
+  // Sau khi xử lý xong toàn bộ mục tiêu trong ngày
+  nextState.doubleVoteDay = false;
 
   // Nếu Thiên sứ (Angel) sống sót qua Ngày 1, chuyển phe thành Dân làng thường
   if (state.roundNumber === 1) {
@@ -278,22 +344,8 @@ export function executeDayVote(
     }
   }
 
-  // Nếu có Thợ săn chết (do bị treo cổ hoặc chết chùm), mở lượt bắn trước khi xét thắng
-  if (nextState.pendingHunterShotPlayerId) {
-    nextState.phase = 'HUNTER_SHOT';
-    nextState.previousPhaseBeforeHunter = 'NIGHT';
-    return { nextState, survivedByReveal: false, winOutcome: null };
-  }
-
-  // Nếu Trưởng làng bị treo cổ, mở truyền ngôi
-  if (nextState.pendingMayorSuccessionPlayerId) {
-    nextState.phase = 'MAYOR_SUCCESSION';
-    nextState.previousPhaseBeforeMayorSuccession = 'NIGHT';
-    return { nextState, survivedByReveal: false, winOutcome: null };
-  }
-
-  const winOutcome = checkWinCondition(nextState);
-  if (winOutcome) {
+  const finalWin = checkWinCondition(nextState);
+  if (finalWin) {
     nextState.phase = 'GAME_OVER';
   } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
     nextState.bearGrowled = evaluateBearGrowl(nextState);
@@ -302,7 +354,7 @@ export function executeDayVote(
     nextState.phase = 'NIGHT';
   }
 
-  return { nextState, survivedByReveal: false, winOutcome };
+  return { nextState, survivedByReveal, winOutcome: finalWin };
 }
 
 /**

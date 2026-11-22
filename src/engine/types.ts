@@ -93,6 +93,7 @@ export interface NightActions {
   accursedWolf?: { curseTargetId: PlayerId | null };
   bigBadWolf?: { targetId: PlayerId | null };
   auraSeer?: { targetId: PlayerId };
+  apprenticeSeer?: { targetId: PlayerId };
   pi?: { targetId: PlayerId };
   fox?: { targetId: PlayerId; isSkip?: boolean };
   spellcaster?: { targetId: PlayerId };
@@ -111,6 +112,7 @@ export interface NightInfoResults {
   auraResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
   piResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
   foxResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
+  apprenticeSeerResult?: { targetId: PlayerId; result: SeerResult };
 }
 
 export interface NightResolutionEvent {
@@ -167,6 +169,8 @@ export interface GameState {
   settings: RoomSettings;
   deaths: DeathRecord[];
   lastProtectedPlayerId?: PlayerId | null;
+  lastMutedPlayerId?: PlayerId | null;
+  mutedPlayerId?: PlayerId | null;
   witchHealUsed: boolean;
   witchPoisonUsed: boolean;
   wolfCubDoubleKillNextNight: boolean;
