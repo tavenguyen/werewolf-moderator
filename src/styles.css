@@ -73,6 +73,24 @@ body:has(.screen-home) {
   overflow: hidden;
 }
 
+/* Khóa và ẩn hoàn toàn scrollbar khi ở màn hình Lobby */
+html:has(.screen-lobby),
+html:has(.lobby-page-compact),
+body:has(.screen-lobby),
+body:has(.lobby-page-compact) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html:has(.screen-lobby)::-webkit-scrollbar,
+html:has(.lobby-page-compact)::-webkit-scrollbar,
+body:has(.screen-lobby)::-webkit-scrollbar,
+body:has(.lobby-page-compact)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 button, input, select {
   font: inherit;
 }
@@ -101,6 +119,17 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+}
+
+.screen-container.screen-lobby {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.screen-container.screen-lobby::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .screen-container:not(.screen-home) {
