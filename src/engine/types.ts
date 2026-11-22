@@ -98,7 +98,7 @@ export interface NightActions {
   fox?: { targetId: PlayerId; isSkip?: boolean };
   spellcaster?: { targetId: PlayerId };
   troublemaker?: { activate?: boolean };
-  piedPiper?: { targetIds: [PlayerId, PlayerId] };
+  piedPiper?: { targetIds: PlayerId[] };
   cultLeader?: { targetId: PlayerId };
   doppelganger?: { targetId: PlayerId };
   wildChild?: { targetId: PlayerId };

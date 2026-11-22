@@ -63,12 +63,25 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
   // Cập nhật trạng thái thức tỉnh của Sói chiêm bao ở đầu đêm nếu có Sói khác đã chết
   const dreamWolfAwakened = state.dreamWolfAwakened || hasAnyOtherWolfDied(state);
 
+  // Kẻ say rượu (Drunk) ở Đêm 3+ (roundNumber >= 3) chuyển đổi sang vai thật (drunkRealRoleId)
+  const effectivePlayers = state.players.map((p) => {
+    if (p.roleId === 'drunk' && round >= 3 && p.drunkRealRoleId) {
+      const def = ROLES_BY_ID[p.drunkRealRoleId];
+      return {
+        ...p,
+        roleId: p.drunkRealRoleId,
+        faction: def?.faction ?? p.faction,
+      };
+    }
+    return p;
+  });
+
   const hasRole = (roleId: string) =>
-    state.players.some((p) => p.initialRoleId === roleId || p.roleId === roleId);
+    effectivePlayers.some((p) => p.initialRoleId === roleId || p.roleId === roleId);
 
   // 1. Thần tình yêu (Cupid) - Chỉ Đêm 1
   if (round === 1 && hasRole('cupid')) {
-    const aliveCupid = state.players.find(
+    const aliveCupid = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'cupid' && !state.villagePowerStripped
     );
     plan.push({
@@ -84,9 +97,27 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
     });
   }
 
+  // 1a. Nhân bản (Doppelganger) - Chỉ Đêm 1 (Priority 11)
+  if (round === 1 && hasRole('doppelganger')) {
+    const aliveDoppelganger = effectivePlayers.find(
+      (p) => p.isAlive && p.roleId === 'doppelganger'
+    );
+    plan.push({
+      roleId: 'doppelganger',
+      turnKey: 'doppelganger',
+      priority: 11,
+      titleVi: 'Nhân bản',
+      titleEn: 'Doppelganger',
+      activePlayerIds: aliveDoppelganger ? [aliveDoppelganger.id] : [],
+      isFake: !aliveDoppelganger,
+      canAct: Boolean(aliveDoppelganger),
+      audioKey: 'night_doppelganger',
+    });
+  }
+
   // 1b. Đứa con hoang (Wild Child) - Chỉ Đêm 1 (chọn 1 thần tượng)
   if (round === 1 && hasRole('wild_child')) {
-    const aliveWildChild = state.players.find(
+    const aliveWildChild = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'wild_child' && !state.villagePowerStripped
     );
     plan.push({
@@ -104,7 +135,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 1c. Du côn (Hoodlum) - Chỉ Đêm 1 (chọn 2 mục tiêu)
   if (round === 1 && hasRole('hoodlum')) {
-    const aliveHoodlum = state.players.find((p) => p.isAlive && p.roleId === 'hoodlum');
+    const aliveHoodlum = effectivePlayers.find((p) => p.isAlive && p.roleId === 'hoodlum');
     plan.push({
       roleId: 'hoodlum',
       turnKey: 'hoodlum',
@@ -120,7 +151,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 1d. Hội Tam Điểm (Mason) - Chỉ Đêm 1 (tất cả Mason cùng thức nhận mặt nhau)
   if (round === 1 && hasRole('mason')) {
-    const aliveMasons = state.players.filter(
+    const aliveMasons = effectivePlayers.filter(
       (p) => p.isAlive && p.roleId === 'mason' && !state.villagePowerStripped
     );
     plan.push({
@@ -138,7 +169,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 2. Kẻ phản bội (Minion) - Chỉ Đêm 1
   if (round === 1 && hasRole('minion')) {
-    const aliveMinion = state.players.find((p) => p.isAlive && p.roleId === 'minion');
+    const aliveMinion = effectivePlayers.find((p) => p.isAlive && p.roleId === 'minion');
     plan.push({
       roleId: 'minion',
       turnKey: 'minion',
@@ -154,7 +185,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 2b. Sói tuyết (Dire Wolf) - Chỉ Đêm 1 (chọn 1 bạn đồng hành)
   if (round === 1 && hasRole('dire_wolf')) {
-    const aliveDireWolf = state.players.find((p) => p.isAlive && p.roleId === 'dire_wolf');
+    const aliveDireWolf = effectivePlayers.find((p) => p.isAlive && p.roleId === 'dire_wolf');
     plan.push({
       roleId: 'dire_wolf',
       turnKey: 'dire_wolf',
@@ -170,7 +201,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 3. Bảo vệ (Bodyguard) - Mỗi đêm
   if (hasRole('bodyguard')) {
-    const aliveBg = state.players.find(
+    const aliveBg = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'bodyguard' && !state.villagePowerStripped
     );
     plan.push({
@@ -197,7 +228,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
     'big_bad_wolf',
     'wolf_accursed',
   ]);
-  const hasWolfPackRole = state.players.some(
+  const hasWolfPackRole = effectivePlayers.some(
     (p) =>
       WOLF_PACK_ROLE_IDS.has(p.roleId) ||
       WOLF_PACK_ROLE_IDS.has(p.initialRoleId) ||
@@ -205,7 +236,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
   );
 
   if (hasWolfPackRole) {
-    const wakingWolves = state.players.filter((p) => {
+    const wakingWolves = effectivePlayers.filter((p) => {
       if (!p.isAlive) return false;
       if (p.faction !== 'WEREWOLF' && p.roleId !== 'white_wolf') return false;
       // Minion và Sorcerer không cắn cùng bầy
@@ -230,7 +261,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 4b. Sói nguyền (wolf_accursed) - Mỗi đêm (Priority 32)
   if (hasRole('wolf_accursed')) {
-    const aliveAccursedWolf = state.players.find(
+    const aliveAccursedWolf = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'wolf_accursed'
     );
     const canAct = Boolean(aliveAccursedWolf && !state.accursedWolfUsed);
@@ -249,7 +280,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 4c. Sói đại ca (big_bad_wolf) - Mỗi đêm (Priority 33)
   if (hasRole('big_bad_wolf')) {
-    const aliveBigBadWolf = state.players.find(
+    const aliveBigBadWolf = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'big_bad_wolf'
     );
     const bitingWolfDied = hasAnyBitingWolfDied(state);
@@ -269,7 +300,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 5. Sói trắng (White Wolf) - Cách 1 đêm (Đêm chẵn: 2, 4, 6, ...)
   if (hasRole('white_wolf') && round % 2 === 0) {
-    const aliveWhiteWolf = state.players.find((p) => p.isAlive && p.roleId === 'white_wolf');
+    const aliveWhiteWolf = effectivePlayers.find((p) => p.isAlive && p.roleId === 'white_wolf');
     plan.push({
       roleId: 'white_wolf',
       turnKey: 'white_wolf',
@@ -285,9 +316,9 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 6. Tiên tri (Seer) & Tiên tri tập sự (Apprentice Seer) - Mỗi đêm (Priority 40)
   if (hasRole('seer') || hasRole('apprentice_seer')) {
-    const hasAliveSeer = state.players.some((p) => p.isAlive && p.roleId === 'seer');
+    const hasAliveSeer = effectivePlayers.some((p) => p.isAlive && p.roleId === 'seer');
     if (hasAliveSeer) {
-      const aliveSeer = state.players.find(
+      const aliveSeer = effectivePlayers.find(
         (p) => p.isAlive && p.roleId === 'seer' && !state.villagePowerStripped
       );
       plan.push({
@@ -302,7 +333,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
         audioKey: 'night_seer',
       });
     } else {
-      const aliveApprentice = state.players.find(
+      const aliveApprentice = effectivePlayers.find(
         (p) => p.isAlive && p.roleId === 'apprentice_seer' && !state.villagePowerStripped
       );
       plan.push({
@@ -321,7 +352,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 6b. Tiên tri hào quang (Aura Seer) - Mỗi đêm (Priority 41)
   if (hasRole('aura_seer')) {
-    const aliveAuraSeer = state.players.find(
+    const aliveAuraSeer = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'aura_seer' && !state.villagePowerStripped
     );
     plan.push({
@@ -339,7 +370,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 6c. Thám tử (P.I.) - Dùng 1 lần (Priority 42)
   if (hasRole('pi')) {
-    const alivePi = state.players.find((p) => p.isAlive && p.roleId === 'pi');
+    const alivePi = effectivePlayers.find((p) => p.isAlive && p.roleId === 'pi');
     const canAct = Boolean(alivePi && !state.villagePowerStripped && !state.piUsed);
     plan.push({
       roleId: 'pi',
@@ -356,7 +387,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 6d. Con cáo (Fox) - Mỗi đêm cho đến khi mất phép (Priority 43)
   if (hasRole('fox')) {
-    const aliveFox = state.players.find((p) => p.isAlive && p.roleId === 'fox');
+    const aliveFox = effectivePlayers.find((p) => p.isAlive && p.roleId === 'fox');
     const canAct = Boolean(aliveFox && !state.villagePowerStripped && !state.foxLostPower);
     plan.push({
       roleId: 'fox',
@@ -373,7 +404,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 7. Pháp sư sói (Sorcerer) - Mỗi đêm
   if (hasRole('sorcerer')) {
-    const aliveSorcerer = state.players.find((p) => p.isAlive && p.roleId === 'sorcerer');
+    const aliveSorcerer = effectivePlayers.find((p) => p.isAlive && p.roleId === 'sorcerer');
     plan.push({
       roleId: 'sorcerer',
       turnKey: 'sorcerer',
@@ -389,7 +420,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 8. Phù thủy (Witch) - Mỗi đêm
   if (hasRole('witch')) {
-    const aliveWitch = state.players.find(
+    const aliveWitch = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'witch' && !state.villagePowerStripped
     );
     plan.push({
@@ -407,7 +438,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 8b. Người phù phép (Spellcaster) - Mỗi đêm (Priority 55)
   if (hasRole('spellcaster')) {
-    const aliveSpellcaster = state.players.find(
+    const aliveSpellcaster = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'spellcaster' && !state.villagePowerStripped
     );
     plan.push({
@@ -425,7 +456,7 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
 
   // 8c. Kẻ phá rối (Troublemaker) - Dùng 1 lần (Priority 58)
   if (hasRole('troublemaker')) {
-    const aliveTroublemaker = state.players.find(
+    const aliveTroublemaker = effectivePlayers.find(
       (p) => p.isAlive && p.roleId === 'troublemaker'
     );
     const canAct = Boolean(
@@ -441,6 +472,42 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
       isFake: !canAct,
       canAct,
       audioKey: 'night_troublemaker',
+    });
+  }
+
+  // 9. Người thổi sáo (Pied Piper) - Mỗi đêm (Priority 60)
+  if (hasRole('pied_piper')) {
+    const alivePiedPiper = effectivePlayers.find(
+      (p) => p.isAlive && p.roleId === 'pied_piper'
+    );
+    plan.push({
+      roleId: 'pied_piper',
+      turnKey: 'pied_piper',
+      priority: 60,
+      titleVi: 'Người thổi sáo',
+      titleEn: 'Pied Piper',
+      activePlayerIds: alivePiedPiper ? [alivePiedPiper.id] : [],
+      isFake: !alivePiedPiper,
+      canAct: Boolean(alivePiedPiper),
+      audioKey: 'night_pied_piper',
+    });
+  }
+
+  // 10. Trưởng giáo phái (Cult Leader) - Mỗi đêm (Priority 62)
+  if (hasRole('cult_leader')) {
+    const aliveCultLeader = effectivePlayers.find(
+      (p) => p.isAlive && p.roleId === 'cult_leader'
+    );
+    plan.push({
+      roleId: 'cult_leader',
+      turnKey: 'cult_leader',
+      priority: 62,
+      titleVi: 'Trưởng giáo phái',
+      titleEn: 'Cult Leader',
+      activePlayerIds: aliveCultLeader ? [aliveCultLeader.id] : [],
+      isFake: !aliveCultLeader,
+      canAct: Boolean(aliveCultLeader),
+      audioKey: 'night_cult_leader',
     });
   }
 

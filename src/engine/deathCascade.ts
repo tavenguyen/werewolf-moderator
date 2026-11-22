@@ -1,5 +1,6 @@
 import type { DeathCause, DeathRecord, GameState, PlayerId } from './types';
 import { findClockwiseAliveWolf } from './seating';
+import { ROLES_BY_ID } from './roles';
 
 export interface DeathInput {
   playerId: PlayerId;
@@ -86,8 +87,14 @@ export function processDeathCascade(
 
     // 6. Thợ săn chết (Hunter) -> Mở lượt nổ súng
     if (victim.roleId === 'hunter') {
-      state.pendingHunterShotPlayerId = victim.id;
-      state.historyLogs.push(`Thợ săn (${victim.name}) đã gục xuống và chuẩn bị nổ phát súng sau cùng!`);
+      if (victim.initialRoleId === 'doppelganger' && next.cause === 'HUNTER_SHOT') {
+        state.historyLogs.push(
+          `Nhân bản (${victim.name}) bị Thợ săn bắn chết và không được nổ phát súng thứ 2!`
+        );
+      } else {
+        state.pendingHunterShotPlayerId = victim.id;
+        state.historyLogs.push(`Thợ săn (${victim.name}) đã gục xuống và chuẩn bị nổ phát súng sau cùng!`);
+      }
     }
 
     // 7. Trưởng làng chết (Mayor) -> Mở 10s truyền danh hiệu kế nhiệm
@@ -136,6 +143,79 @@ export function processDeathCascade(
         state.historyLogs.push(
           'Kỵ sĩ gỉ sắt đã dùng thanh gươm gỉ gây vết thương nhiễm trùng cho một Ma sói!'
         );
+      }
+    }
+
+    // 10. Người thổi sáo chết: Quét toàn bộ người chơi và reset isEnchanted = false
+    if (victim.roleId === 'pied_piper' || victim.initialRoleId === 'pied_piper') {
+      for (const p of state.players) {
+        p.isEnchanted = false;
+      }
+      state.historyLogs.push('Người thổi sáo đã chết! Toàn bộ bùa mê trên dân làng tan biến!');
+    }
+
+    // 11. Trưởng giáo phái chết: Quét toàn bộ người chơi và reset isCultMember = false
+    if (victim.roleId === 'cult_leader' || victim.initialRoleId === 'cult_leader') {
+      for (const p of state.players) {
+        p.isCultMember = false;
+      }
+      state.historyLogs.push('Trưởng giáo phái đã qua đời! Toàn bộ giáo phái giải tán!');
+    }
+
+    // 12. Nhân bản kế thừa khi bản sao chết
+    for (const dg of state.players) {
+      if (
+        dg.isAlive &&
+        !processedPlayerIds.has(dg.id) &&
+        (dg.roleId === 'doppelganger' || dg.initialRoleId === 'doppelganger') &&
+        dg.roleId === 'doppelganger' &&
+        dg.doppelgangerTargetId === victim.id
+      ) {
+        if (victim.roleId === 'dire_wolf' || victim.initialRoleId === 'dire_wolf') {
+          // Sao chép dire_wolf: Trở thành Sói thường, TUYỆT ĐỐI không kế thừa companionId đã chết
+          dg.roleId = 'werewolf';
+          dg.faction = 'WEREWOLF';
+          dg.companionId = null;
+          state.historyLogs.push(
+            `Nhân bản (${dg.name}) kế thừa Sói tuyết và hóa thành Ma sói thường!`
+          );
+        } else if (victim.roleId === 'drunk' || victim.initialRoleId === 'drunk') {
+          // Sao chép drunk (chết trước Đêm 3): Thừa kế vai thật tiềm thức drunkRealRoleId
+          const realRoleId = victim.drunkRealRoleId || 'villager';
+          dg.roleId = realRoleId;
+          dg.faction = ROLES_BY_ID[realRoleId]?.faction ?? 'VILLAGER';
+          state.historyLogs.push(
+            `Nhân bản (${dg.name}) sao chép Kẻ say rượu và thức tỉnh vai thật [${realRoleId}]!`
+          );
+        } else if (
+          victim.roleId === 'pied_piper' ||
+          victim.initialRoleId === 'pied_piper' ||
+          victim.roleId === 'cult_leader' ||
+          victim.initialRoleId === 'cult_leader'
+        ) {
+          // Sao chép pied_piper hoặc cult_leader: Reset toàn bộ bùa cũ về false, Nhân bản bắt đầu lại từ 0
+          for (const p of state.players) {
+            p.isEnchanted = false;
+            p.isCultMember = false;
+          }
+          const inheritedRoleId = victim.initialRoleId || victim.roleId;
+          dg.roleId = inheritedRoleId;
+          dg.faction = 'THIRD_PARTY';
+          state.historyLogs.push(
+            `Nhân bản (${dg.name}) kế thừa [${inheritedRoleId}], toàn bộ bùa chú cũ tan biến và bắt đầu lại từ 0!`
+          );
+        } else {
+          // Trường hợp chung: Kế thừa roleId = dead.initialRoleId || dead.roleId, faction = ROLES_BY_ID[roleId].faction
+          const inheritedRoleId = victim.initialRoleId || victim.roleId;
+          dg.roleId = inheritedRoleId;
+          dg.faction = ROLES_BY_ID[inheritedRoleId]?.faction ?? victim.faction;
+          if (inheritedRoleId === 'elder') {
+            dg.elderHp = 2;
+          }
+          state.historyLogs.push(
+            `Nhân bản (${dg.name}) đã kế thừa vai trò [${inheritedRoleId}] từ [${victim.name}]!`
+          );
+        }
       }
     }
   }

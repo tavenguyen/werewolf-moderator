@@ -7,7 +7,6 @@ import type { GameState, PlayerState, WinOutcome } from './types';
  * và chỉ thắng khi là đúng 2 người sống sót cuối cùng trên bàn.
  */
 export function isCrossFactionCouple(p1: PlayerState, p2: PlayerState): boolean {
-  if (p1.isCrossFactionCouple !== undefined) return p1.isCrossFactionCouple;
   return p1.faction !== p2.faction;
 }
 
@@ -94,6 +93,32 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
       reason: 'Tất cả người chơi đã ngã xuống trong cùng một chuỗi sự kiện. Kết quả Hòa cả làng!',
       winningPlayerIds: [],
     };
+  }
+
+  // 4. Người thổi sáo (Pied Piper) thôi miên toàn bộ người chơi còn sống khác
+  const livingPiedPiper = alivePlayers.find((p) => p.roleId === 'pied_piper');
+  if (livingPiedPiper) {
+    const otherAlive = alivePlayers.filter((p) => p.id !== livingPiedPiper.id);
+    if (otherAlive.every((p) => p.isEnchanted === true)) {
+      return {
+        winner: 'PIED_PIPER',
+        reason: 'Người thổi sáo (Pied Piper) đã thôi miên toàn bộ người chơi còn sống và giành chiến thắng độc tôn!',
+        winningPlayerIds: [livingPiedPiper.id],
+      };
+    }
+  }
+
+  // 5. Trưởng giáo phái (Cult Leader) kết nạp toàn bộ người chơi còn sống khác
+  const livingCultLeader = alivePlayers.find((p) => p.roleId === 'cult_leader');
+  if (livingCultLeader) {
+    const otherAlive = alivePlayers.filter((p) => p.id !== livingCultLeader.id);
+    if (otherAlive.every((p) => p.isCultMember === true)) {
+      return {
+        winner: 'CULT_LEADER',
+        reason: 'Trưởng giáo phái (Cult Leader) đã kết nạp toàn bộ người chơi còn sống vào giáo phái và giành chiến thắng độc tôn!',
+        winningPlayerIds: [livingCultLeader.id],
+      };
+    }
   }
 
   // Deadlock Fallback: Chỉ còn đúng 2 người sống là Sói cô đơn và Sói trắng -> Sói trắng thắng độc tôn

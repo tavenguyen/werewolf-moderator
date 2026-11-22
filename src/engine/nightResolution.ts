@@ -279,6 +279,23 @@ export function resolveNight(
     }
   }
 
+  // 1c. KẺ SAY RƯỢU TỈNH RƯỢU (Drunk - roundNumber >= 3)
+  if (nextState.roundNumber >= 3) {
+    for (const p of nextState.players) {
+      if (p.isAlive && p.roleId === 'drunk' && p.drunkRealRoleId) {
+        const realRoleId = p.drunkRealRoleId;
+        p.roleId = realRoleId;
+        const roleDef = ROLES_BY_ID[realRoleId];
+        if (roleDef) {
+          p.faction = roleDef.faction;
+        }
+        nextState.historyLogs.push(
+          `Kẻ say rượu (${p.name}) đã tỉnh rượu ở Đêm 3 và nhận thức được vai trò thật của mình: [${realRoleId}]!`
+        );
+      }
+    }
+  }
+
   // =========================================================================
   // 2. GHÉP ĐÔI CUPID (Chỉ Đêm 1)
   // =========================================================================
@@ -334,6 +351,17 @@ export function resolveNight(
     if (hl && actions.hoodlum.target1 && actions.hoodlum.target2) {
       hl.hoodlumTargetIds = [actions.hoodlum.target1, actions.hoodlum.target2];
       nextState.historyLogs.push(`Du côn (${hl.name}) đã đưa 2 mục tiêu vào tầm ngắm.`);
+    }
+  }
+
+  // 2e. Nhân bản chọn bản sao (Doppelganger - Chỉ Đêm 1)
+  if (nextState.roundNumber === 1 && actions.doppelganger) {
+    const dg = nextState.players.find(
+      (p) => (p.roleId === 'doppelganger' || p.initialRoleId === 'doppelganger') && p.isAlive
+    );
+    if (dg && actions.doppelganger.targetId) {
+      dg.doppelgangerTargetId = actions.doppelganger.targetId;
+      nextState.historyLogs.push(`Nhân bản (${dg.name}) đã chọn bản sao bí mật.`);
     }
   }
 
@@ -725,6 +753,50 @@ export function resolveNight(
       if (target && target.isAlive && target.id !== nextState.lastMutedPlayerId) {
         nextState.lastMutedPlayerId = target.id;
         chosenMuteTargetId = target.id;
+      }
+    }
+  }
+
+  // 7h. Người thổi sáo (Pied Piper - Priority 60)
+  if (actions.piedPiper?.targetIds) {
+    const alivePiedPiper = nextState.players.find(
+      (p) => p.isAlive && p.roleId === 'pied_piper'
+    );
+    if (alivePiedPiper) {
+      for (const tId of actions.piedPiper.targetIds) {
+        const target = nextState.players.find((p) => p.id === tId && p.isAlive);
+        if (target && !target.isEnchanted) {
+          target.isEnchanted = true;
+          events.push({
+            type: 'AWAKENED',
+            sourceRole: 'pied_piper',
+            targetPlayerId: target.id,
+            isPublic: false,
+            details: 'Đã bị Người thổi sáo thôi miên',
+          });
+        }
+      }
+    }
+  }
+
+  // 7i. Trưởng giáo phái (Cult Leader - Priority 62)
+  if (actions.cultLeader?.targetId) {
+    const aliveCultLeader = nextState.players.find(
+      (p) => p.isAlive && p.roleId === 'cult_leader'
+    );
+    if (aliveCultLeader) {
+      const target = nextState.players.find(
+        (p) => p.id === actions.cultLeader!.targetId && p.isAlive
+      );
+      if (target && !target.isCultMember) {
+        target.isCultMember = true;
+        events.push({
+          type: 'AWAKENED',
+          sourceRole: 'cult_leader',
+          targetPlayerId: target.id,
+          isPublic: false,
+          details: 'Đã gia nhập giáo phái của Trưởng giáo phái',
+        });
       }
     }
   }

@@ -677,7 +677,9 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Điều kiện thắng kiểm tra sau mỗi cái chết: nếu bầy Sói cắn chết những người chưa bị thôi miên, sáng hôm sau bạn thắng ngay.',
       'Nếu bạn chết trước khi thôi miên hết cả làng, bạn thua cuộc và bùa thôi miên trên người khác không còn tác dụng.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
+    multiDeviceOnly: true,
   },
   {
     id: 'spellcaster',
@@ -797,7 +799,9 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Ngay khi người đó chết, bạn sẽ nhận vai của họ từ thời điểm tiếp theo. Nếu họ là Sói, bạn hóa Sói đi cắn đêm; nếu họ là Phù thủy, bạn nhận lại số bình thuốc họ chưa dùng.',
       'Nếu bạn chết trước người bạn sao chép, bạn chết như một người dân bình thường.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
+    multiDeviceOnly: true,
   },
   {
     id: 'cult_leader',
@@ -816,7 +820,9 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Hệ thống kiểm tra chiến thắng sau mỗi cái chết: nếu Sói cắn chết những người ngoài giáo phái khiến chỉ còn lại tín đồ, bạn thắng ngay sáng hôm đó.',
       'Nếu bạn chết, giáo phái giải tán và bạn thua; các thành viên quay lại thi đấu vì phe ban đầu của họ.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
+    multiDeviceOnly: true,
   },
   {
     id: 'hoodlum',
@@ -856,7 +862,8 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
       'Đầu Đêm 3, màn hình của bạn sẽ hiện vai trò thật. Nếu là Sói, bạn thức dậy đi cắn cùng đàn; nếu là Tiên tri, bạn bắt đầu được soi.',
       'Nếu bạn chết trước Đêm 3, bạn chết như một người dân thường và không bao giờ biết vai thật của mình.',
     ],
-    implementedInEngine: false,
+    implementedInEngine: true,
+    playableInUI: true,
   },
 ];
 
