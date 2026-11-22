@@ -40,7 +40,7 @@ describe('Engine - Phase 5 Third Party & Dynamic Roles (pied_piper, cult_leader,
       const drunk = ROLES_BY_ID['drunk'];
       expect(drunk.implementedInEngine).toBe(true);
       expect(drunk.playableInUI).toBe(true);
-      expect(drunk.multiDeviceOnly).toBe(false);
+      expect(drunk.multiDeviceOnly).toBe(true);
       expect(drunk.faction).toBe('VILLAGER');
       expect(drunk.wakeFrequency).toBe('CONDITIONAL');
     });

@@ -864,6 +864,7 @@ export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
     ],
     implementedInEngine: true,
     playableInUI: true,
+    multiDeviceOnly: true,
   },
 ];
 
