@@ -12,6 +12,8 @@ function werewolfSocketPlugin(): Plugin {
     configureServer(server) {
       if (!server.httpServer) return;
       const io = new SocketIOServer(server.httpServer, {
+        path: '/socket.io/',
+        destroyUpgrade: false,
         cors: {
           origin: '*',
           methods: ['GET', 'POST'],
