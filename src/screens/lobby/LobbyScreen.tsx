@@ -16,8 +16,8 @@ import {
 } from './lobbyValidation';
 import PresetSelectorModal from './components/PresetSelectorModal';
 import RoomSettingsModal, {
+  DEFAULT_CONFIGURABLE_SETTINGS,
   getModifiedRulesCount,
-  RULE_PRESETS,
 } from './components/RoomSettingsModal';
 import './lobby.css';
 
@@ -137,14 +137,9 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     await actions.updateSettings({ [key]: value });
   };
 
-  const handleApplySettingsPatch = async (patch: Partial<typeof currentSettings>) => {
-    if (!isHost) return;
-    await actions.updateSettings(patch);
-  };
-
   const handleResetSettingsToDefault = async () => {
     if (!isHost) return;
-    await actions.updateSettings(RULE_PRESETS[0].patch);
+    await actions.updateSettings(DEFAULT_CONFIGURABLE_SETTINGS);
   };
 
   const handleRoleCountChange = (roleId: string, delta: number) => {
@@ -945,7 +940,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
         isHost={isHost}
         currentSettings={currentSettings}
         onUpdateSetting={handleUpdateSetting}
-        onApplySettingsPatch={handleApplySettingsPatch}
         onResetDefaults={handleResetSettingsToDefault}
         selectedRoles={selectedRoles}
       />

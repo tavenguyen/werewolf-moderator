@@ -8,96 +8,34 @@ export interface RoomSettingsModalProps {
   isHost: boolean;
   currentSettings: RoomSettings;
   onUpdateSetting: <K extends keyof RoomSettings>(key: K, value: RoomSettings[K]) => void;
-  onApplySettingsPatch: (patch: Partial<RoomSettings>) => void;
   onResetDefaults: () => void;
   selectedRoles: Record<string, number>;
 }
 
-export type RulePresetKey = 'STANDARD' | 'HARDCORE_DEDUCTION' | 'CASUAL_FAST';
-
-export interface RulePresetDef {
-  key: RulePresetKey;
-  name: string;
-  desc: string;
-  badge: string;
-  patch: Partial<RoomSettings>;
-}
-
-export const RULE_PRESETS: RulePresetDef[] = [
-  {
-    key: 'STANDARD',
-    name: 'Luật Chuẩn',
-    desc: 'Cân bằng, thân thiện, luật thi đấu tiêu chuẩn',
-    badge: 'Chuẩn mực',
-    patch: {
-      firstNightNoKill: false,
-      allowWolfSkip: false,
-      allowWolfFriendlyFire: false,
-      allowBodyguardSelfProtect: true,
-      allowWitchSelfHeal: true,
-      allowWitchBothPotionsSameNight: true,
-      witchKnowsVictim: true,
-      witchHealMode: 'AOE',
-      witchWasteHealOnEmpty: false,
-      witchDoubleProtectKills: false,
-      seerRevealMode: 'FACTION',
-      allowCupidSelfMatch: true,
-      hunterShootsOnPoison: true,
-      allowHunterSkipShot: true,
-      hasMayor: false,
-      dayDiscussionSeconds: 180,
-      dayVoteLockSeconds: 60,
-      revealVoterIdentities: false,
-      lynchThreshold: 'PLURALITY',
-      tieVoteMode: 'ESCAPE',
-      revealOnDeath: false,
-      ghostMode: false,
-    },
-  },
-  {
-    key: 'HARDCORE_DEDUCTION',
-    name: 'Suy Luận Căng Não',
-    desc: 'Ẩn vai chết, Sói bỏ cắn & cắn nhau, cứu mù mất bình, lộ người vote sau chốt',
-    badge: 'Đấu trí',
-    patch: {
-      revealOnDeath: false,
-      allowWolfSkip: true,
-      allowWolfFriendlyFire: true,
-      allowBodyguardSelfProtect: false,
-      allowWitchBothPotionsSameNight: false,
-      witchKnowsVictim: false,
-      witchWasteHealOnEmpty: true,
-      witchHealMode: 'AOE',
-      witchDoubleProtectKills: true,
-      seerRevealMode: 'FACTION',
-      revealVoterIdentities: true,
-      lynchThreshold: 'MAJORITY',
-      hunterShootsOnPoison: false,
-      dayDiscussionSeconds: 240,
-      dayVoteLockSeconds: 60,
-      tieVoteMode: 'RUNOFF',
-    },
-  },
-  {
-    key: 'CASUAL_FAST',
-    name: 'Chơi Nhanh / Vui Vẻ',
-    desc: 'Đêm 1 không chết, lật vai chết, Tiên tri soi vai thật, nhịp 120s, mở vote sớm',
-    badge: 'Nhanh gọn',
-    patch: {
-      firstNightNoKill: true,
-      revealOnDeath: true,
-      seerRevealMode: 'EXACT_ROLE',
-      dayDiscussionSeconds: 120,
-      dayVoteLockSeconds: 30,
-      lynchThreshold: 'PLURALITY',
-      allowBodyguardSelfProtect: true,
-      allowWitchBothPotionsSameNight: true,
-      allowHunterSkipShot: true,
-      allowCupidSelfMatch: true,
-      tieVoteMode: 'ESCAPE',
-    },
-  },
-];
+export const DEFAULT_CONFIGURABLE_SETTINGS: Partial<RoomSettings> = {
+  firstNightNoKill: false,
+  allowWolfSkip: false,
+  allowWolfFriendlyFire: false,
+  allowBodyguardSelfProtect: true,
+  allowWitchSelfHeal: true,
+  allowWitchBothPotionsSameNight: true,
+  witchKnowsVictim: true,
+  witchHealMode: 'AOE',
+  witchWasteHealOnEmpty: false,
+  witchDoubleProtectKills: false,
+  seerRevealMode: 'FACTION',
+  allowCupidSelfMatch: true,
+  hunterShootsOnPoison: true,
+  allowHunterSkipShot: true,
+  hasMayor: false,
+  dayDiscussionSeconds: 180,
+  dayVoteLockSeconds: 60,
+  revealVoterIdentities: false,
+  lynchThreshold: 'PLURALITY',
+  tieVoteMode: 'ESCAPE',
+  revealOnDeath: false,
+  ghostMode: false,
+};
 
 export function getModifiedRulesCount(
   settings: RoomSettings,
@@ -257,26 +195,6 @@ export default function RoomSettingsModal({
           >
             ×
           </button>
-        </div>
-
-        {/* 3 Preset Luật Nhanh */}
-        <div className="settings-presets-banner">
-          <span className="presets-banner-title">Mẫu luật gợi ý:</span>
-          <div className="presets-banner-list">
-            {RULE_PRESETS.map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                disabled={!isHost}
-                className="preset-rule-pill-btn"
-                onClick={() => onApplySettingsPatch(preset.patch)}
-                title={preset.desc}
-              >
-                <span className="preset-rule-name">{preset.name}</span>
-                <span className="preset-rule-badge">{preset.badge}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Scrollable Body */}
