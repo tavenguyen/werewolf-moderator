@@ -199,9 +199,13 @@ export function getFactionLabel(faction: Faction): string {
 }
 
 export function formatDeckSummaryText(metrics: DeckMetrics): string {
-  const parts = [`${metrics.totalCards} lá`, `Sói ${metrics.wolvesCount}`, `Dân ${metrics.villagersCount}`];
+  const parts = [
+    `${metrics.totalCards} lá`,
+    `${metrics.wolvesCount} Sói`,
+    `${metrics.villagersCount} Dân`,
+  ];
   if (metrics.thirdPartyCount > 0) {
-    parts.push(`Thứ 3 ${metrics.thirdPartyCount}`);
+    parts.push(`${metrics.thirdPartyCount} Phe 3`);
   }
   let balText = '';
   if (metrics.balanceScore === 0) {

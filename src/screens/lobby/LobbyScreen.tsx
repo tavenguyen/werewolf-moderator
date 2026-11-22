@@ -35,7 +35,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
   const roomCode = state.roomCode || '7290';
   const players = state.publicView?.players ?? [];
   const isSingleDevice = deviceMode === 'SINGLE_DEVICE';
-  const isHost = state.isHost;
+  const isHost = state.isHost || !state.publicView;
   const isHostPlayer = !isSingleDevice && (state.hostMode === 'PLAYER_HOST' || Boolean(state.hostView?.isHostPlayer));
 
   // Tabs on Mobile
@@ -277,6 +277,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
         name: def?.nameVi || roleId,
         count,
         isAdvanced: def?.tier === 'advanced',
+        faction: def?.faction || 'VILLAGER',
       };
     });
 
@@ -461,7 +462,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                Khối A: Tóm tắt & Đang chọn (Selected Deck)
                ========================================================================= */}
             <div className="deck-summary-block">
-              {/* Dòng 1: Thông số 1 dòng + Nút Gợi ý nhanh & Đặt lại */}
+              {/* Dòng 1: Thông số 1 dòng + Đúng 2 nút chữ thuần: Gợi ý bài · Đặt lại */}
               <div className="deck-summary-top-row">
                 <span className="summary-text-lead">{formatDeckSummaryText(metrics)}</span>
                 <div className="deck-quick-actions">
@@ -469,32 +470,12 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                     type="button"
                     className="quick-action-text-btn"
                     disabled={!isHost}
-                    onClick={handleAutoFill}
-                    title="Gợi ý đội hình cân bằng chuẩn theo số người"
-                  >
-                    ⚡ Gợi ý nhanh
-                  </button>
-                  <span className="action-divider" aria-hidden="true">|</span>
-                  <button
-                    type="button"
-                    className="quick-action-text-btn"
-                    disabled={!isHost}
                     onClick={() => setPresetModalOpen(true)}
-                    title="Mở bảng chọn phong cách chơi (44 bộ bài chuẩn)"
+                    title="Mở bảng chọn mẫu bài và phong cách chơi (44 bộ bài chuẩn)"
                   >
-                    🎨 Chọn phong cách
+                    Gợi ý bài
                   </button>
-                  <span className="action-divider" aria-hidden="true">|</span>
-                  <button
-                    type="button"
-                    className={`quick-action-text-btn ${isShuffling ? 'shuffling' : ''}`}
-                    disabled={!isHost || isShuffling}
-                    onClick={handleShuffleRandom}
-                    title="Xáo bài và sinh ngẫu nhiên đội hình cân bằng"
-                  >
-                    {isShuffling ? '🎲 Đang xáo...' : '🎲 Đổi ngẫu nhiên'}
-                  </button>
-                  <span className="action-divider" aria-hidden="true">|</span>
+                  <span className="action-divider" aria-hidden="true">·</span>
                   <button
                     type="button"
                     className="quick-action-text-btn"
@@ -507,12 +488,12 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                 </div>
               </div>
 
-              {/* Dòng 2: Pill tags các lá đang chọn (có dấu × để gỡ nhanh) */}
+              {/* Dòng 2: Pill tags các lá đang chọn (viền mảnh theo phe, có dấu × để gỡ nhanh) */}
               <div className="deck-pills-row" aria-label="Các lá bài đang được chọn">
                 {selectedPills.map((pill) => (
                   <span
                     key={pill.roleId}
-                    className={`deck-pill-tag ${pill.isAdvanced ? 'advanced' : 'core'}`}
+                    className={`deck-pill-tag faction-${pill.faction.toLowerCase()}`}
                   >
                     <span className="pill-name">{pill.name}</span>
                     {pill.count > 1 && <span className="pill-multiplier">×{pill.count}</span>}
@@ -560,7 +541,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                         >
                           <span className="role-title">{role.nameVi}</span>
                           <span className="role-weight-gray">{weightFormatted}</span>
-                          <span className="inline-info-hint">{isExpanded ? '▲' : 'ℹ'}</span>
                         </button>
 
                         <div className="role-right">
@@ -707,7 +687,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
               disabled={!metrics.isReadyToStart}
               onClick={handleStartGame}
             >
-              BẮT ĐẦU VÁN
+              Bắt đầu ván
             </button>
           ) : (
             <span className="footer-waiting-pill">Đang đợi Quản trò...</span>
@@ -846,7 +826,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                               </span>
                             )}
                             <span className="role-weight-gray">{weightFormatted}</span>
-                            <span className="inline-info-hint">{isExpanded ? '▲' : 'ℹ'}</span>
                           </button>
 
                           <div className="role-right">

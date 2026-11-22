@@ -279,10 +279,25 @@ describe('lobbyValidation - Progressive Disclosure Role Tiers', () => {
 });
 
 describe('lobbyValidation - formatDeckSummaryText', () => {
-  it('định dạng tóm tắt 1 dòng chính xác', () => {
+  it('định dạng tóm tắt 1 dòng chính xác (số đứng trước danh từ)', () => {
     const players = createMockPlayers(6);
     const metrics = computeDeckMetrics(DEFAULT_INITIAL_ROLES, players, true);
     const summary = formatDeckSummaryText(metrics);
-    expect(summary).toBe('6 lá · Sói 2 · Dân 4 · Cân bằng (0)');
+    expect(summary).toBe('6 lá · 2 Sói · 4 Dân · Cân bằng (0)');
+  });
+
+  it('định dạng chuẩn khi có vai thuộc Phe thứ 3', () => {
+    const players = createMockPlayers(6);
+    const deckWithAngel: RoleSelectionMap = {
+      werewolf: 1,
+      wolf_cub: 1,
+      seer: 1,
+      witch: 1,
+      tough_guy: 1,
+      angel: 1,
+    };
+    const metrics = computeDeckMetrics(deckWithAngel, players, true);
+    const summary = formatDeckSummaryText(metrics);
+    expect(summary).toBe('6 lá · 2 Sói · 3 Dân · 1 Phe 3 · Cân bằng (-2)');
   });
 });
