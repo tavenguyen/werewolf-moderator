@@ -30,6 +30,6 @@
 
 ## Git
 
-- Chỉ tạo commit khi người dùng yêu cầu commit. Trước khi stage, xem `git status` và diff; stage tường minh file thuộc task, giữ nguyên thay đổi không liên quan, dùng skill `caveman-commit` để tạo message.
-- Không amend, force push, push hoặc thay đổi lịch sử. Workflow trong repo chỉ hướng dẫn commit, không tự thực hiện thao tác Git khi chưa được yêu cầu.
+- Tự động tạo commit cục bộ sau khi hoàn thành và verify mỗi chức năng/task (không cần đợi người dùng yêu cầu). Trước khi stage, xem `git status` và diff; stage tường minh file thuộc task, giữ nguyên thay đổi không liên quan, dùng skill `caveman-commit` để tạo message.
+- Không amend, force push, push hoặc thay đổi lịch sử. Không push trừ khi người dùng yêu cầu.
 - Nếu repo chưa được khởi tạo Git, dừng workflow commit và báo rõ; không tự `git init`.
