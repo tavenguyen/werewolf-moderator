@@ -1,0 +1,187 @@
+[
+  {
+    "id": "villager",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a humble geometric medieval villager from the chest up, simple angular linen hood and tunic with clean collar folds, flanked symmetrically at the lower chest by a pair of stylized hands holding a glowing lantern, bold clean planar silhouettes with zero messy fabric clutter. Subtle emerald teal (#10B981) pinpoint mystical glow inside the lantern core. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "bodyguard",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a stoic geometric armored sentinel from the chest up, angular knight helm with narrow visor slits and heavy layered shoulder pauldrons, centered at the lower chest behind the upper apex of an ornate triangular heater shield, bold clean planar silhouettes with zero messy engraving clutter. Subtle emerald teal (#10B981) pinpoint glowing runes along the shield boss. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "witch",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of an enigmatic geometric witch from the chest up, tall angular pointed witch hat with wide brim casting shadow over glowing eyes, flanked symmetrically at the lower chest by two stylized hands holding two distinct geometric potion flasks, bold clean planar silhouettes with zero messy hair clutter. Subtle emerald teal (#10B981) pinpoint glowing potion liquid inside the flasks. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "hunter",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a sharp-eyed geometric woodland tracker from the chest up, angular feathered hunting cap and high-collared cloak, flanked symmetrically at the lower chest by crossed stylized flintlock rifle barrel and fletched arrow, bold clean planar silhouettes with zero messy foliage clutter. Subtle emerald teal (#10B981) pinpoint glowing sight lens and arrowhead tip. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "cupid",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of an ethereal geometric celestial cherub from the chest up, serene sculpted face framed by symmetrical angular feathered wings behind the shoulders, centered at the lower chest holding a drawn geometric recurve bow with a heart-tipped arrow, bold clean planar silhouettes with zero messy feather clutter. Subtle emerald teal (#10B981) pinpoint glowing energy on the arrowhead and bowstring. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "tough_guy",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a rugged geometric veteran brawler from the chest up, scarred angular jawline, broad muscular shoulders in reinforced leather brigandine, and crossed forearms forming an unyielding X-guard at the lower chest, bold clean planar silhouettes with zero messy scratch clutter. Subtle emerald teal (#10B981) pinpoint glowing resilience emblem on the chestplate. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "prince",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a noble geometric young prince from the chest up, sharp multi-pointed royal crown atop angular hair and high-collared royal mantle, centered at the lower chest with a vertical ceremonial sword hilt and royal signet crest, bold clean planar silhouettes with zero messy ornament clutter. Subtle emerald teal (#10B981) pinpoint glowing gemstones set into the crown and sword pommel. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "wolf_cub",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a fierce young geometric wolf cub from the chest up, oversized angular pointed ears, compact lupine snout with small sharp fangs, flanked symmetrically at the lower chest by small raised beast paws, bold clean planar silhouettes with zero messy fur clutter. Subtle crimson red (#EF4444) pinpoint glowing eyes and sharp predatory rim accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "dream_wolf",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a slumbering geometric astral wolf from the chest up, angular lupine head tilted slightly downward with tightly closed crescent eyelids and ethereal geometric dream wisps rising symmetrically from the temples, bold clean planar silhouettes with zero messy fur clutter. Subtle crimson red (#EF4444) pinpoint glowing crescent marks beneath the closed eyes and predatory rim accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "lycan",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a conflicted geometric cursed villager from the chest up, angular human face split subtly by sharp lupine cheekbones and pointed ears emerging through a torn hood, flanked symmetrically at the lower chest by one human hand and one clawed hand, bold clean planar silhouettes with zero messy fur clutter. Subtle emerald teal (#10B981) pinpoint glowing eyes signifying a pure human soul. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "minion",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a sinister geometric cult acolyte from the chest up, low-pulled angular cowl concealing the upper face with a wicked crooked grin, flanked symmetrically at the lower chest by gloved hands holding a concealed curved dagger behind the back, bold clean planar silhouettes with zero messy fabric clutter. Subtle crimson red (#EF4444) pinpoint glowing eyes beneath the hood and dagger edge accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "sorcerer",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a dark geometric warlock from the chest up, angular horned ceremonial headdress and high-collared dark robes, flanked symmetrically at the lower chest by clawed hands summoning a levitating dark scrying prism, bold clean planar silhouettes with zero messy smoke clutter. Subtle crimson red (#EF4444) pinpoint glowing eyes and dark prism core accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "cursed",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a tormented geometric villager from the chest up, angular face etched with a glowing claw-mark scar across the chest and neck, flanked symmetrically at the lower chest by hands clutching the collar in resistance, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing ward energy resisting the scar. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "tanner",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a hollow-eyed geometric outcast from the chest up, ragged angular apron and slumped shoulders beneath a symbolic circular noose loop framing the neck, flanked symmetrically at the lower chest by limp open palms, bold clean planar silhouettes with zero messy clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint melancholy aura around the loop. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "pi",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a sharp geometric investigator from the chest up, angular wide-brimmed fedora hat and upturned trench coat collar casting dramatic shadow, centered at the lower chest holding an ornate circular magnifying glass up toward the viewer, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing lens reflection inside the magnifying glass. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "fox",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a cunning geometric red fox spirit from the chest up, sleek angular triangular ears, narrow pointed muzzle, and a stylized geometric bushy tail curving symmetrically around the lower chest, bold clean planar silhouettes with zero messy fur clutter. Subtle emerald teal (#10B981) pinpoint glowing slit eyes and tail-tip accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "bear_tamer",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a burly geometric beast-handler from the chest up, angular bearded face framed by a stylized geometric roaring bear head crest rising symmetrically behind the shoulders, bold clean planar silhouettes with zero messy fur clutter. Subtle emerald teal (#10B981) pinpoint glowing eyes on the spirit bear crest. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "aura_seer",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a transcendent geometric astral mystic from the chest up, serene angular face framed by a concentric geometric halo ring behind the head, flanked symmetrically at the lower chest by upturned hands emitting subtle aura waves, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing energy nodes along the halo ring. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "apprentice_seer",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a youthful geometric acolyte seer from the chest up, angular hooded cape with a half-awakened crescent mark on the forehead, centered at the lower chest holding an unlit geometric astrolabe ring, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint spark igniting inside the astrolabe center. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "mason",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a solemn geometric guild mason from the chest up, angular hooded tunic with a formal sash, centered at the lower chest displaying a bold geometric square-and-compass emblem clasped by two hands, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing keystone center inside the emblem. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "rusty_knight",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a battle-worn geometric paladin from the chest up, notched angular great-helm and fractured shoulder plates, centered at the lower chest holding the hilt of a notched broadsword point-down, bold clean planar silhouettes with zero messy rust texture clutter. Subtle emerald teal (#10B981) pinpoint toxic-blight glint along the notched blade edge. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "lone_wolf",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a scarred geometric solitary alpha wolf from the chest up, battle-notched angular ear, stern lupine snout, framed behind the head by a solitary crescent moon arc, bold clean planar silhouettes with zero messy fur clutter. Subtle crimson red (#EF4444) pinpoint glowing solitary eyes and sharp predatory rim accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "white_wolf",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a regal geometric albino dire-beast from the chest up, sharp angular pale-gold and silver-edged lupine skull with tall ears and bared fangs, flanked symmetrically at the lower chest by raised claws, bold clean planar silhouettes with zero messy fur clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint glowing eyes and predatory rim accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "elder",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a venerable geometric village elder from the chest up, angular sculpted long beard and wise furrowed brow, centered at the lower chest with hands resting atop a tall geometric wooden staff, bold clean planar silhouettes with zero messy hair clutter. Subtle emerald teal (#10B981) pinpoint glowing twin life-ward runes on the staff head. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "village_idiot",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a whimsical geometric court jester from the chest up, iconic two-pronged angular jester cap with tipped bells and wide collared tunic, flanked symmetrically at the lower chest by raised hands juggling two simple geometric spheres, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing bells at the tips of the jester hat. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "wild_child",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a feral geometric youth from the chest up, tousled angular hair and ragged shawl framing wide untamed eyes, centered at the lower chest clutching a carved wooden wolf-totem pendant, bold clean planar silhouettes with zero messy hair clutter. Subtle emerald teal (#10B981) pinpoint glowing eyes on the wooden totem pendant. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "angel",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a transcendent geometric seraph from the chest up, serene angular visage beneath a radiant floating geometric halo, framed symmetrically at the shoulders by sweeping layered geometric wings folded inward at the lower chest, bold clean planar silhouettes with zero messy feather clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint celestial glow within the halo. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "pied_piper",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a mesmerizing geometric minstrel from the chest up, sharp feathered cap casting shadow over a knowing smirk, centered at the lower chest holding an ornate transverse flute horizontally with symmetrical musical wave arcs, bold clean planar silhouettes with zero messy clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint hypnotic notes rising from the flute. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "spellcaster",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of an arcane geometric silencer-mage from the chest up, high-collared cloak and angular blindfold-like brow band, centered at the lower chest with a single vertical finger raised before the lips in a hush gesture, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing binding rune floating over the finger. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "troublemaker",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a mischievous geometric trickster from the chest up, crooked angular hood and sly grin, flanked symmetrically at the lower chest by hands pulling taut crossed puppet strings attached to two miniature scale pans, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing spark at the crossed strings intersection. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "wolf_accursed",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of an ancient geometric patriarch werewolf from the chest up, crowned with a jagged bone-and-gold diadem atop tall pointed wolf ears and heavy snarling jaws, flanked symmetrically at the lower chest by clawed hands dripping a single drop of dark venom, bold clean planar silhouettes with zero messy fur clutter. Subtle crimson red (#EF4444) pinpoint glowing eyes and venom drop accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "big_bad_wolf",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a colossal geometric apex werewolf from the chest up, broad hulking shoulders, massive angular wolf head with flared mane plates and wide-open roaring jaws, flanked symmetrically at the lower chest by heavy armored claws, bold clean planar silhouettes with zero messy fur clutter. Subtle crimson red (#EF4444) pinpoint glowing eyes and throat-core predatory accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "dire_wolf",
+    "faction": "WEREWOLF",
+    "prompt": "Centered symmetrical upper-body bust of a gaunt geometric frost-bound wolf from the chest up, sharp crystalline-faceted lupine skull with tall ears and icy collar ruff, flanked symmetrically at the lower chest by claws bound by a spectral chain link, bold clean planar silhouettes with zero messy fur clutter. Subtle crimson red (#EF4444) pinpoint glowing eyes and chain-link core accent. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "doppelganger",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a featureless geometric mirror-phantom from the chest up, smooth faceted porcelain-like mask split cleanly down the vertical axis, flanked symmetrically at the lower chest by mirrored hands holding a double-sided reflection shard, bold clean planar silhouettes with zero messy clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint glowing seam down the mask center. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "cult_leader",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a charismatic geometric high-priest from the chest up, tall mitered ceremonial headdress with an all-seeing geometric eye emblem, flanked symmetrically at the lower chest by open welcoming palms beneath a floating sacred sigil, bold clean planar silhouettes with zero messy fabric clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint glowing iris inside the headdress sigil. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "hoodlum",
+    "faction": "THIRD_PARTY",
+    "prompt": "Centered symmetrical upper-body bust of a ruthless geometric street-thug from the chest up, pulled-down angular flat cap and scarf masking the lower face, flanked symmetrically at the lower chest by clenched fists gripping heavy brass knuckles, bold clean planar silhouettes with zero messy clutter. Subtle ethereal purple (#A855F7) and moonlight silver (#E2E8F0) pinpoint menacing glint in the eyes and knuckle edges. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  },
+  {
+    "id": "drunk",
+    "faction": "VILLAGER",
+    "prompt": "Centered symmetrical upper-body bust of a tipsy geometric townsfolk reveler from the chest up, tilted angular cap and rosy-cheeked dazed expression, centered at the lower chest hugging a large stylized wooden tavern tankard with overflowing foam shapes, bold clean planar silhouettes with zero messy clutter. Subtle emerald teal (#10B981) pinpoint glowing bubbles rising from the tankard rim. Modern dark atmospheric tarot emblem illustration, minimalist solid obsidian black (#0B0E14) background, clean warm amber gold (#F59E0B) foil line-art and crisp rim lighting, bold iconic silhouette with clean vector-like edges readable at small avatar sizes, centered symmetrical upper-body portrait, generous empty black margin around all edges, isolated floating subject, flat 2D modern graphic design, no text, no numbers, no card border, no frame."
+  }
+]
