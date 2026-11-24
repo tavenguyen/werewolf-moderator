@@ -261,49 +261,56 @@ export default function RoleRevealScreen({}: Props) {
             </div>
 
             {/* Mặt trước: Lật mở hiển thị vai trò (Hiện khi nhấn giữ) */}
-            <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction}`}>
-              <span className="ritual-faction-label">
-                {roleDef.faction === 'WEREWOLF'
-                  ? 'PHE MA SÓI'
-                  : roleDef.faction === 'THIRD_PARTY'
-                  ? 'PHE THỨ BA'
-                  : 'PHE DÂN LÀNG'}
-              </span>
-
-              <div className="ritual-role-icon" aria-hidden="true">
-                {roleImage ? (
+            <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction} ${roleImage ? 'has-art' : ''}`}>
+              {roleImage && (
+                <div className="ritual-card-art-backdrop" aria-hidden="true">
                   <img
                     src={roleImage}
                     alt={roleDef.nameVi}
-                    className="ritual-role-img"
+                    className="ritual-card-full-art"
                   />
-                ) : (
-                  <span>{getRoleIcon(myRoleId, roleDef.faction)}</span>
-                )}
-              </div>
+                  <div className="ritual-card-art-vignette" />
+                </div>
+              )}
 
-              <div className="ritual-role-info">
-                <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
-                <p className="ritual-role-desc">{conciseDesc}</p>
+              <div className="ritual-card-inner">
+                <span className="ritual-faction-label">
+                  {roleDef.faction === 'WEREWOLF'
+                    ? 'PHE MA SÓI'
+                    : roleDef.faction === 'THIRD_PARTY'
+                    ? 'PHE THỨ BA'
+                    : 'PHE DÂN LÀNG'}
+                </span>
 
-                {isWerewolf && wolfPartners.length > 0 && (
-                  <div className="ritual-wolf-pack">
-                    Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
+                {!roleImage && (
+                  <div className="ritual-role-icon" aria-hidden="true">
+                    <span>{getRoleIcon(myRoleId, roleDef.faction)}</span>
                   </div>
                 )}
 
-                {isMason && masonPartners.length > 0 && (
-                  <div
-                    className="ritual-wolf-pack"
-                    style={{
-                      borderColor: 'rgba(201, 134, 56, 0.45)',
-                      background: 'rgba(201, 134, 56, 0.15)',
-                      color: '#ecc94b',
-                    }}
-                  >
-                    Anh em Tam Điểm: <b>{masonPartners.join(', ')}</b>
-                  </div>
-                )}
+                <div className="ritual-role-info">
+                  <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
+                  <p className="ritual-role-desc">{conciseDesc}</p>
+
+                  {isWerewolf && wolfPartners.length > 0 && (
+                    <div className="ritual-wolf-pack">
+                      Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
+                    </div>
+                  )}
+
+                  {isMason && masonPartners.length > 0 && (
+                    <div
+                      className="ritual-wolf-pack"
+                      style={{
+                        borderColor: 'rgba(201, 134, 56, 0.45)',
+                        background: 'rgba(201, 134, 56, 0.15)',
+                        color: '#ecc94b',
+                      }}
+                    >
+                      Anh em Tam Điểm: <b>{masonPartners.join(', ')}</b>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
