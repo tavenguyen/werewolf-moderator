@@ -1,4 +1,4 @@
-import { ROLES_BY_ID } from './roles';
+import { ROLES_BY_ID, type SeerResult } from './roles';
 import type { DeathInput } from './deathCascade';
 import { processDeathCascade } from './deathCascade';
 import { getAliveNeighbors } from './seating';
@@ -578,7 +578,7 @@ export function resolveNight(
           nextState.settings.witchHealMode === 'AOE' ||
           actions.witch.healTargetId === protectedPlayerId;
         if (isDoubleProtected) {
-          pendingDeaths.push({ playerId: protectedPlayerId, cause: 'WOLF_ATTACK' });
+          pendingDeaths.push({ playerId: protectedPlayerId, cause: 'WOLF_PACK' });
           nextState.historyLogs.push(
             `Mục tiêu [${protectedPlayerId}] vừa được Bảo vệ che chắn vừa được Phù thủy cứu -> Thuốc quá liều tử vong!`
           );
@@ -675,7 +675,7 @@ export function resolveNight(
       const target = state.players.find((p) => p.id === seerTargetId);
       if (target) {
         const def = ROLES_BY_ID[target.roleId];
-        let result = def?.seerResult ?? 'VILLAGER';
+        let result: SeerResult | string = def?.seerResult ?? 'VILLAGER';
         if (nextState.settings.seerRevealMode === 'EXACT_ROLE') {
           result = target.roleId;
         } else {

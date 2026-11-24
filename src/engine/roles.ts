@@ -75,7 +75,12 @@ export function isMvpRole(roleId: string): roleId is MvpRoleId {
   return (MVP_ROLE_IDS as readonly string[]).includes(roleId);
 }
 
-export const RAW_ROLES: Omit<RoleDefinition, 'tier'>[] = [
+export interface RawRoleDefinition extends Omit<RoleDefinition, 'tier' | 'playableInUI' | 'multiDeviceOnly'> {
+  playableInUI?: boolean;
+  multiDeviceOnly?: boolean;
+}
+
+export const RAW_ROLES: RawRoleDefinition[] = [
   // =========================================================================
   // 1. GÓI CƠ BẢN (BASIC - 9 ROLES)
   // =========================================================================

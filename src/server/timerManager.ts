@@ -1,5 +1,4 @@
 import type { RoomState, TimerSnapshotPayload } from './types';
-import { tickDayTimer } from '../engine/voting';
 
 export const GRACE_PERIOD_MS = 1000; // 1 giây bù trễ mạng ngầm
 export const DEFAULT_HUNTER_TIMEOUT_SEC = 15;

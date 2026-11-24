@@ -11,7 +11,7 @@ type DayScreenProps = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-export default function DayScreen({ onNavigate, onOpenRules }: DayScreenProps) {
+export default function DayScreen({ onOpenRules }: DayScreenProps) {
   const { state, actions, deviceMode } = useGameSession();
 
   const publicView = state.publicView;

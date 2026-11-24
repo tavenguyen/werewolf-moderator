@@ -715,6 +715,9 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     const actorId = this.activeLocalPlayerId;
     if (!actorId) return;
     if (!this.roomState.gameState.dayState) return;
+    if (!this.roomState.gameState.dayState.mayorBallots) {
+      this.roomState.gameState.dayState.mayorBallots = {};
+    }
     this.roomState.gameState.dayState.mayorBallots[actorId] = candidateId ?? '';
     this.emitState();
   }

@@ -1,4 +1,4 @@
-import { ROLES, ROLES_BY_ID, type Faction, type RolePack } from '../../engine/roles';
+import { ROLES_BY_ID, type Faction, type RolePack } from '../../engine/roles';
 import { getSmartPreset, ROLE_PRESETS, type PresetTheme } from '../../engine/presets';
 import type { PublicPlayerView } from '../../server/types';
 

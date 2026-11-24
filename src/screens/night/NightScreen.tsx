@@ -11,7 +11,7 @@ type NightScreenProps = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-export default function NightScreen({ onNavigate }: NightScreenProps) {
+export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenProps) {
   const { state, actions, deviceMode } = useGameSession();
 
   const [mode, setMode] = useState<'sleep' | 'action' | 'my_role'>('sleep');
@@ -515,7 +515,7 @@ export default function NightScreen({ onNavigate }: NightScreenProps) {
                       : '🛡️'}
                   </div>
                   <h2>{roleDef.nameVi}</h2>
-                  <p>{roleDef.descriptionVi}</p>
+                  <p>{roleDef.shortDesc}</p>
 
                   {myRoleId === 'mason' && (
                     <div className="revealed-role-details">

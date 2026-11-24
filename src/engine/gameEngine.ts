@@ -1,10 +1,9 @@
-import { isBitingWolf, isMvpRole, ROLES_BY_ID } from './roles';
+import { isBitingWolf, ROLES_BY_ID } from './roles';
 import { processDeathCascade } from './deathCascade';
 import { getAliveNeighbors } from './seating';
 import { resolveNight, type NightResolutionOutput } from './nightResolution';
 import { createInitialDayState, passMayorTitle } from './voting';
 import type {
-  GamePhase,
   GameState,
   NightActions,
   PlayerId,
@@ -359,8 +358,6 @@ export function executeDayVote(
   const finalWin = checkWinCondition(nextState);
   if (finalWin) {
     nextState.phase = 'GAME_OVER';
-  } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
-    nextState.bearGrowled = evaluateBearGrowl(nextState);
   } else {
     nextState.roundNumber += 1;
     nextState.phase = 'NIGHT';

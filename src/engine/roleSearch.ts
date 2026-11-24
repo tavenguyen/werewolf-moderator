@@ -1,4 +1,4 @@
-import { ROLES, type Faction, type RoleDefinition, type RoleTier } from './roles';
+import { ROLES, type Faction, type RoleDefinition } from './roles';
 
 // =========================================================================
 // 1. Data Types & Interfaces

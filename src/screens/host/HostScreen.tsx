@@ -16,6 +16,7 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
   const { state, actions } = useGameSession();
 
   const publicView = state.publicView;
+  const hostView = state.hostView;
   const roomCode = state.roomCode || '7290';
   const players = publicView?.players ?? [];
   const isPaused = publicView?.isPaused ?? false;

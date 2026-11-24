@@ -100,7 +100,7 @@ export interface RoomState {
   publicHistoryLogs: string[];
 
   // Kết quả điều tra tạm thời trong đêm (chỉ gửi riêng cho người có quyền)
-  seerInvestigationResult?: { targetId: PlayerId; result: SeerResult };
+  seerInvestigationResult?: { targetId: PlayerId; result: SeerResult | string };
   sorcererInvestigationResult?: { targetId: PlayerId; isSeer: boolean };
   auraInvestigationResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
   piInvestigationResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
@@ -207,7 +207,7 @@ export interface PlayerPrivateView {
   teammates: Array<{ id: PlayerId; name: string; roleId: string }>;
   investigationResult?: {
     targetId: PlayerId;
-    result: SeerResult | boolean | 'NORMAL' | 'SPECIAL';
+    result: SeerResult | boolean | 'NORMAL' | 'SPECIAL' | string;
     hasWerewolf?: boolean;
     inspectedPlayerIds?: PlayerId[];
   } | null;

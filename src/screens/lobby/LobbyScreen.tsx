@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameSession } from '../../adapters/useGameSession';
-import { ROLES, ROLES_BY_ID, type Faction, type RoleDefinition } from '../../engine/roles';
-import { generateDynamicBalancedDeck } from '../../engine/presets';
+import { ROLES, ROLES_BY_ID } from '../../engine/roles';
 import { searchRoles } from '../../engine/roleSearch';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
 import type { ScreenName } from '../../navigation';
@@ -10,8 +9,6 @@ import {
   convertSelectionToRoleIds,
   DEFAULT_INITIAL_ROLES,
   formatDeckSummaryText,
-  getPresetRoleSelection,
-  removeVietnameseTones,
   type RoleSelectionMap,
 } from './lobbyValidation';
 import PresetSelectorModal from './components/PresetSelectorModal';
@@ -51,9 +48,8 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [modalFactionFilter, setModalFactionFilter] = useState<FactionFilter>('ALL');
 
-  // Preset Selector Modal State & Shuffle State
+  // Preset Selector Modal State
   const [presetModalOpen, setPresetModalOpen] = useState(false);
-  const [isShuffling, setIsShuffling] = useState(false);
 
   // Inline Info expansion (shows 1-line description below role name)
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
@@ -186,17 +182,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     void actions.updateSettings({ customDeck: newRoles });
   };
 
-  // Nút Gợi ý nhanh (Auto-fill dựa trên số người hiện tại, sàn 6 người, có xét isSingleDevice)
-  const handleAutoFill = () => {
-    if (!isHost) return;
-    const targetCount = Math.max(6, metrics.realPlayersCount);
-    const suggested = getPresetRoleSelection(targetCount, 'CLASSIC', isSingleDevice);
-    setSelectedRoles(suggested);
-    void actions.updateSettings({ customDeck: suggested });
-    setNotice(`Đã áp dụng gợi ý chuẩn (${targetCount} người).`);
-    setTimeout(() => setNotice(''), 2500);
-  };
-
   // Chọn preset từ PresetSelectorModal
   const handleSelectPresetFromModal = (roles: string[]) => {
     if (!isHost) return;
@@ -208,34 +193,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     void actions.updateSettings({ customDeck: newRoles });
     setNotice(`Đã áp dụng bộ bài ${roles.length} lá.`);
     setTimeout(() => setNotice(''), 2500);
-  };
-
-  // Nút Đổi ngẫu nhiên (sinh ngẫu nhiên có cân bằng, sàn 6 người)
-  const handleShuffleRandom = () => {
-    if (!isHost) return;
-    const targetCount = Math.max(6, metrics.realPlayersCount);
-    setIsShuffling(true);
-    try {
-      const generated = generateDynamicBalancedDeck({
-        playerCount: targetCount,
-        isSingleDevice,
-      });
-      const newRoles: RoleSelectionMap = {};
-      for (const rId of generated.roles) {
-        newRoles[rId] = (newRoles[rId] ?? 0) + 1;
-      }
-      setSelectedRoles(newRoles);
-      void actions.updateSettings({ customDeck: newRoles });
-      setNotice(`Đã đổi ngẫu nhiên bộ bài ${targetCount} người cân bằng!`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Lỗi khi sinh bộ bài';
-      setNotice(msg);
-    } finally {
-      setTimeout(() => {
-        setIsShuffling(false);
-        setNotice('');
-      }, 2500);
-    }
   };
 
   // Nút Đặt lại (Reset về 6 lá mặc định)

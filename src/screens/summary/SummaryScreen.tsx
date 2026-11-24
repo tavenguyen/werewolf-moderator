@@ -40,7 +40,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
         const initDef = ROLES_BY_ID[p.initialRoleId];
         const finalDef = ROLES_BY_ID[p.finalRoleId];
         const side =
-          p.faction === 'WEREWOLF' ? 'wolf' : p.faction === 'NEUTRAL' ? 'third' : 'village';
+          p.faction === 'WEREWOLF' ? 'wolf' : p.faction === 'THIRD_PARTY' ? 'third' : 'village';
         const sideName = side === 'wolf' ? 'Phe Ma Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân Làng';
         const symbol =
           side === 'wolf' ? '🐺' : p.finalRoleId === 'seer' ? '🔮' : p.finalRoleId === 'witch' ? '🧪' : p.finalRoleId === 'hunter' ? '🎯' : '🛡️';
@@ -76,7 +76,6 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
   })();
 
   const winner = postGame?.winOutcome?.winner;
-  const isVillageWin = winner === 'VILLAGER';
   const isWolfWin = winner === 'WEREWOLF';
   const isCoupleWin = winner === 'COUPLE';
 

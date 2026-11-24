@@ -19,7 +19,7 @@ import {
   createPublicRoomView,
 } from './projections';
 import { RoomService } from './roomService';
-import { TimerManager } from './timerManager';
+import { TimerManager, DEFAULT_DAY_DISCUSS_SEC, DEFAULT_VOTE_LOCK_SEC } from './timerManager';
 import type {
   ClientCreateRoomPayload,
   ClientDayVotePayload,
@@ -33,7 +33,6 @@ import type {
   ClientResumePayload,
   ClientStartGamePayload,
   ClientUpdateSettingsPayload,
-  PlayerPrivateView,
   RoomPlayer,
   RoomState,
   ServerErrorCode,

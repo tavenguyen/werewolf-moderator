@@ -176,7 +176,7 @@ export function tallyMayorElection(state: GameState): {
  */
 export function passMayorTitle(
   state: GameState,
-  currentMayorId: PlayerId,
+  _currentMayorId: PlayerId,
   nextMayorId: PlayerId | null
 ): GameState {
   const nextState: GameState = structuredClone(state);

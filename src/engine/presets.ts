@@ -2,7 +2,6 @@ import {
   calculateBalanceScore,
   isMvpRole,
   ROLES_BY_ID,
-  type MvpRoleId,
 } from './roles';
 
 export type PresetTheme = 'CLASSIC' | 'DEDUCTION' | 'CHAOS' | 'WOLVES';

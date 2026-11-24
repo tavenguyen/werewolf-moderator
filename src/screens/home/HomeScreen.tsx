@@ -239,7 +239,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
       window.speechSynthesis.speak(utterance);
     } else {
       try {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const win = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+        const AudioCtx = win.AudioContext || win.webkitAudioContext;
+        if (!AudioCtx) {
+          setIsTestingSpeaker(false);
+          return;
+        }
         const ctx = new AudioCtx();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();

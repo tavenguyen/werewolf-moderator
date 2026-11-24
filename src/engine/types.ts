@@ -127,12 +127,12 @@ export interface NightActions {
 }
 
 export interface NightInfoResults {
-  seerResult?: { targetId: PlayerId; result: SeerResult };
+  seerResult?: { targetId: PlayerId; result: SeerResult | string };
   sorcererResult?: { targetId: PlayerId; isSeer: boolean };
   auraResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
   piResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
   foxResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
-  apprenticeSeerResult?: { targetId: PlayerId; result: SeerResult };
+  apprenticeSeerResult?: { targetId: PlayerId; result: SeerResult | string };
 }
 
 export interface NightResolutionEvent {

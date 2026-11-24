@@ -101,7 +101,6 @@ export default function RoomSettingsModal({
   isHost,
   currentSettings,
   onUpdateSetting,
-  onApplySettingsPatch,
   onResetDefaults,
   selectedRoles,
 }: RoomSettingsModalProps) {
