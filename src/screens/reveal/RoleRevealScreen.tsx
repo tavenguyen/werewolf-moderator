@@ -9,12 +9,7 @@ type Props = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-type CardStage =
-  | 'idle'
-  | 'flipping'
-  | 'revealed'
-  | 'sealing_pass'
-  | 'emerging';
+type HandoffStage = 'idle' | 'sealing' | 'emerging';
 
 export default function RoleRevealScreen({}: Props) {
   const { state, actions } = useGameSession();
@@ -26,7 +21,15 @@ export default function RoleRevealScreen({}: Props) {
 
   // Tiến trình chuyền máy một chiều (0 .. totalCount - 1)
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [stage, setStage] = useState<CardStage>('idle');
+
+  // Trạng thái nhấn giữ lá bài để xem vai (Press & Hold)
+  const [isHolding, setIsHolding] = useState(false);
+
+  // Đã xem vai ít nhất 1 lần trong lượt này -> mở khóa nút chuyền máy
+  const [hasViewed, setHasViewed] = useState(false);
+
+  // Trạng thái chuyển giao khi bấm nút "Đã nhớ · Chuyền cho..."
+  const [handoffStage, setHandoffStage] = useState<HandoffStage>('idle');
 
   const currentPlayer = players[currentIndex] ?? {
     id: 'player_1',
@@ -46,15 +49,13 @@ export default function RoleRevealScreen({}: Props) {
   }, [currentIndex, currentPlayer.id]);
 
   // Timers tham chiếu để dọn dẹp khi unmount
-  const timer1Ref = useRef<number | null>(null);
-  const timer2Ref = useRef<number | null>(null);
-  const timer3Ref = useRef<number | null>(null);
+  const timerSealingRef = useRef<number | null>(null);
+  const timerEmergingRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
-      if (timer1Ref.current) window.clearTimeout(timer1Ref.current);
-      if (timer2Ref.current) window.clearTimeout(timer2Ref.current);
-      if (timer3Ref.current) window.clearTimeout(timer3Ref.current);
+      if (timerSealingRef.current) window.clearTimeout(timerSealingRef.current);
+      if (timerEmergingRef.current) window.clearTimeout(timerEmergingRef.current);
     };
   }, []);
 
@@ -121,40 +122,40 @@ export default function RoleRevealScreen({}: Props) {
   };
 
   // =========================================================================
-  // NHỊP 1 & 2: Chạm để lật mở mượt mà (Flip & Settle đồng bộ 520ms)
+  // THAO TÁC NHẤN GIỮ (PRESS & HOLD TO REVEAL)
+  // Bấm giữ -> Lật lên xem vai; Thả tay -> Tự động úp bài lại
   // =========================================================================
-  const handleCardClick = () => {
-    if (stage === 'idle') {
-      // Rung xúc giác nhẹ khi chạm
-      try {
-        navigator.vibrate?.(25);
-      } catch {
-        // ignore
-      }
+  const handleHoldStart = (e: React.PointerEvent) => {
+    // Chỉ nhận chuột trái hoặc cảm ứng
+    if (e.button !== undefined && e.button !== 0) return;
+    if (handoffStage !== 'idle') return;
 
-      // Kích hoạt animation GPU mượt mà (520ms)
-      setStage('flipping');
+    setIsHolding(true);
+    setHasViewed(true);
 
-      // Sau 520ms (trùng khớp chính xác với animation): Đã lật và tiếp đất êm ái
-      timer1Ref.current = window.setTimeout(() => {
-        try {
-          navigator.vibrate?.(15);
-        } catch {
-          // ignore
-        }
-        setStage('revealed');
-      }, 520);
-    } else if (stage === 'revealed') {
-      // Khi đã xem xong vai: Người chơi chạm trực tiếp vào lá bài hoặc nút dưới đều chuyền máy
-      handlePassOrStartNight();
+    try {
+      navigator.vibrate?.(25);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleHoldEnd = () => {
+    if (!isHolding) return;
+    setIsHolding(false);
+
+    try {
+      navigator.vibrate?.(15);
+    } catch {
+      // ignore
     }
   };
 
   // =========================================================================
-  // NHỊP 3: Úp bài & Chuyền máy một chiều (Seal & Pass 380ms)
+  // NÚT DUY NHẤT ĐỂ CHUYỂN NGƯỜI ("Đã nhớ · Chuyền cho..." / "Bắt đầu Đêm 1")
   // =========================================================================
   const handlePassOrStartNight = () => {
-    if (stage !== 'revealed') return;
+    if (handoffStage !== 'idle') return;
 
     try {
       navigator.vibrate?.(35);
@@ -162,12 +163,13 @@ export default function RoleRevealScreen({}: Props) {
       // ignore
     }
 
-    // Nhịp 3: Lá bài lật úp lại và chìm mờ vào bóng tối (380ms)
-    setStage('sealing_pass');
+    // Úp bài và chìm mờ vào bóng tối (350ms)
+    setIsHolding(false);
+    setHandoffStage('sealing');
 
-    timer2Ref.current = window.setTimeout(async () => {
+    timerSealingRef.current = window.setTimeout(async () => {
       if (isLastPlayer) {
-        // Đã xem hết -> Bắt đầu Đêm 1
+        // Tất cả đã xem xong -> Bắt đầu Đêm 1
         if (actions.startFirstNight) {
           await actions.startFirstNight();
         }
@@ -179,20 +181,19 @@ export default function RoleRevealScreen({}: Props) {
           actions.setLocalActivePlayer(nextP.id);
         }
         setCurrentIndex(nextIdx);
+        setHasViewed(false); // Reset để người tiếp theo bắt buộc phải nhấn giữ xem vai trước khi chuyền
+        setHandoffStage('emerging');
 
-        // Lá bài mới trồi lên từ màn sương (320ms)
-        setStage('emerging');
-
-        timer3Ref.current = window.setTimeout(() => {
-          setStage('idle');
+        timerEmergingRef.current = window.setTimeout(() => {
+          setHandoffStage('idle');
         }, 320);
       }
-    }, 380);
+    }, 350);
   };
 
   return (
     <main
-      className={`ritual-screen stage-${stage}`}
+      className="ritual-screen"
       onContextMenu={(e) => e.preventDefault()}
       aria-label="Xem vai bí mật"
     >
@@ -211,21 +212,25 @@ export default function RoleRevealScreen({}: Props) {
         </div>
 
         <div
-          className="ritual-card-stage"
-          onClick={handleCardClick}
+          className={`ritual-card-stage ${isHolding ? 'is-holding' : ''} handoff-${handoffStage}`}
+          onPointerDown={handleHoldStart}
+          onPointerUp={handleHoldEnd}
+          onPointerLeave={handleHoldEnd}
+          onPointerCancel={handleHoldEnd}
+          onContextMenu={(e) => e.preventDefault()}
           role="button"
           tabIndex={0}
           aria-label={
-            stage === 'idle'
-              ? `Chạm để mở bài xem vai của ${currentPlayer.name}`
-              : `Lá bài vai trò của ${currentPlayer.name}. Chạm để úp bài chuyền cho người tiếp theo.`
+            isHolding
+              ? `Đang xem vai của ${currentPlayer.name}. Thả tay để úp bài lại.`
+              : `Nhấn và giữ lá bài để xem vai của ${currentPlayer.name}`
           }
         >
           <div className="ritual-card-body">
-            {/* Sương mỏng & bụi sáng bùng lên khi lật mở */}
+            {/* Sương mỏng & bụi sáng bùng lên khi đang giữ mở bài */}
             <div className={`ritual-mist-burst faction-${roleDef.faction}`} aria-hidden="true" />
 
-            {/* Mặt lưng: Nhung đen huyền bí, viền vàng đồng mảnh */}
+            {/* Mặt lưng: Nhung đen huyền bí, viền vàng đồng mảnh (Hiện khi buông tay) */}
             <div className="ritual-card-face ritual-card-back">
               <div className="ritual-back-pattern">
                 <span className="ritual-back-corner-top" aria-hidden="true">✦</span>
@@ -236,7 +241,7 @@ export default function RoleRevealScreen({}: Props) {
               </div>
             </div>
 
-            {/* Mặt trước: Lật mở hiển thị vai trò */}
+            {/* Mặt trước: Lật mở hiển thị vai trò (Hiện khi nhấn giữ) */}
             <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction}`}>
               <span className="ritual-faction-label">
                 {roleDef.faction === 'WEREWOLF'
@@ -265,15 +270,15 @@ export default function RoleRevealScreen({}: Props) {
         </div>
       </div>
 
-      {/* 3. Mép dưới: Dòng chữ mờ khi chưa mở HOẶC Nút duy nhất khi đã mở */}
+      {/* 3. Mép dưới: Gợi ý khi chưa xem HOẶC Nút duy nhất chuyền máy sau khi đã xem */}
       <div className="ritual-bottom-area">
-        {(stage === 'idle' || stage === 'emerging') && (
+        {!hasViewed && (
           <div className="ritual-bottom-hint">
-            Chạm vào lá bài để mở
+            {isHolding ? 'Buông tay để úp bài lại' : 'Nhấn và giữ lá bài để xem vai'}
           </div>
         )}
 
-        {stage === 'revealed' && (
+        {hasViewed && (
           <button
             type="button"
             className={`ritual-pass-btn ${isLastPlayer ? 'is-final' : ''}`}

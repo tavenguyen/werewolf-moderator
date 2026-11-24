@@ -1,5 +1,6 @@
 /* =========================================================================
-   RITUAL CARD REVEAL — SIÊU MƯỢT, 100% HIỂN THỊ CHÍNH XÁC (KHÔNG LỖI CULLING)
+   RITUAL CARD REVEAL — NHẤN GIỮ LẬT BÀI (PRESS & HOLD TO REVEAL)
+   THẢ TAY TỰ ĐỘNG ÚP LẠI · CHỈ CHUYỂN NGƯỜI KHI BẤM NÚT "ĐÃ NHỚ"
    ========================================================================= */
 
 .ritual-screen {
@@ -81,17 +82,23 @@
   height: min(108vw, 368px);
   cursor: pointer;
   position: relative;
+  touch-action: none; /* Khóa kéo trang khi ngón tay đang nhấn giữ lá bài */
+  -webkit-touch-callout: none;
 }
 
-/* Thẻ bài 3D xoay lật */
+/* Thẻ bài 3D xoay lật phản hồi mượt mà theo thao tác ngón tay */
 .ritual-card-body {
   width: 100%;
   height: 100%;
   position: relative;
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
   border-radius: 16px;
-  will-change: transform, opacity;
+  will-change: transform;
+  transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Hiệu ứng nhấc bổng thẻ lên phía trước khi nhấn giữ */
+.is-holding .ritual-card-body {
+  transform: translateY(-12px) scale(1.04);
 }
 
 /* Mặt trước và mặt sau dùng chung */
@@ -103,7 +110,7 @@
   border-radius: 16px;
   box-sizing: border-box;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 0, 0, 0.5);
-  transition: opacity 0.2s ease;
+  transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.25s ease;
 }
 
 /* =========================================================================
@@ -117,7 +124,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  opacity: 1;
+  transform: rotateY(0deg);
   z-index: 2;
+  pointer-events: none;
+}
+
+/* Khi đang nhấn giữ: Mặt lưng xoay lật 180° và biến mất */
+.is-holding .ritual-card-back {
+  opacity: 0;
+  transform: rotateY(180deg);
+  z-index: 1;
 }
 
 /* Họa tiết mặt lưng tối giản */
@@ -167,19 +184,30 @@
 }
 
 /* =========================================================================
-   MẶT TRƯỚC: Lá bài sau khi lật mở (Hiển thị 100% rõ ràng, sắc nét)
+   MẶT TRƯỚC: Lá bài vai trò (Lộ diện khi nhấn giữ, úp lại khi thả tay)
    ========================================================================= */
 .ritual-card-front {
   background: #0d0f15;
   border: 1px solid rgba(201, 134, 56, 0.5);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), inset 0 0 0 6px #0d0f15, inset 0 0 0 7.5px rgba(201, 134, 56, 0.2);
+  opacity: 0;
+  transform: rotateY(-180deg);
   z-index: 1;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
   padding: 22px 16px 20px;
   text-align: center;
+}
+
+/* Khi đang nhấn giữ: Mặt trước xoay về góc nhìn 0° chính diện, hiển thị 100% rõ ràng */
+.is-holding .ritual-card-front {
+  opacity: 1;
+  transform: rotateY(0deg);
+  z-index: 10;
+  pointer-events: auto;
 }
 
 /* Gradient nền theo phe */
@@ -265,119 +293,10 @@
   box-sizing: border-box;
 }
 
-/* =========================================================================
-   TRẠNG THÁI & CHUYỂN ĐỘNG (LẬT MỞ THẬT SỰ - KHÔNG BAO GIỜ BIẾN MẤT)
-   ========================================================================= */
-
-/* 1. Trạng thái IDLE (Lá bài úp chờ lật) */
-.stage-idle .ritual-card-body {
-  transform: none;
-}
-
-.stage-idle .ritual-card-stage:hover .ritual-card-body {
-  transform: translateY(-4px);
-}
-
-.stage-idle .ritual-card-back {
-  opacity: 1;
-  display: flex;
-  z-index: 2;
-  pointer-events: auto;
-}
-
-.stage-idle .ritual-card-front {
-  opacity: 0;
-  display: none;
-  z-index: 1;
-  pointer-events: none;
-}
-
-/* 2. Trạng thái FLIPPING (Lật mở 3D trong 520ms) */
-.stage-flipping .ritual-card-body {
-  animation: ritualCardFlip 0.52s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
-}
-
-@keyframes ritualCardFlip {
-  0% {
-    transform: translateY(0) scale(1) rotateY(0deg);
-  }
-  20% {
-    transform: translateY(4px) scale(0.97) rotateY(20deg);
-  }
-  50% {
-    transform: translateY(-22px) scale(1.06) rotateY(90deg);
-  }
-  80% {
-    transform: translateY(2px) scale(0.99) rotateY(175deg);
-  }
-  100% {
-    transform: translateY(0) scale(1) rotateY(180deg);
-  }
-}
-
-/* Ở góc 90° (50% animation), hoán đổi dứt khoát giữa mặt lưng và mặt trước */
-.stage-flipping .ritual-card-back {
-  animation: ritualFlipBackFace 0.52s ease forwards;
-}
-
-@keyframes ritualFlipBackFace {
-  0%, 48% {
-    opacity: 1;
-    display: flex;
-    z-index: 2;
-  }
-  50%, 100% {
-    opacity: 0;
-    display: none;
-    z-index: 1;
-    pointer-events: none;
-  }
-}
-
-.stage-flipping .ritual-card-front {
-  animation: ritualFlipFrontFace 0.52s ease forwards;
-}
-
-@keyframes ritualFlipFrontFace {
-  0%, 48% {
-    opacity: 0;
-    display: none;
-    z-index: 1;
-    pointer-events: none;
-  }
-  50%, 100% {
-    opacity: 1;
-    display: flex;
-    z-index: 10;
-    pointer-events: auto;
-    transform: rotateY(180deg);
-  }
-}
-
-/* 3. Trạng thái REVEALED (Đã lật mở hoàn tất - HIỂN THỊ NGUYÊN VẸN TRÊN MẶT BÀN) */
-.stage-revealed .ritual-card-body {
-  transform: none;
-}
-
-.stage-revealed .ritual-card-back {
-  opacity: 0 !important;
-  display: none !important;
-  z-index: 1 !important;
-  pointer-events: none !important;
-}
-
-.stage-revealed .ritual-card-front {
-  opacity: 1 !important;
-  display: flex !important;
-  z-index: 10 !important;
-  transform: none !important;
-  pointer-events: auto !important;
-}
-
-/* Hào quang bùng nhẹ khi lật */
+/* Hào quang bùng lên khi đang giữ xem bài */
 .ritual-mist-burst {
   position: absolute;
-  inset: -10px;
+  inset: -12px;
   border-radius: 24px;
   pointer-events: none;
   opacity: 0;
@@ -385,20 +304,8 @@
   transition: opacity 0.3s ease;
 }
 
-.stage-flipping .ritual-mist-burst {
-  animation: ritualMistQuick 0.52s ease-out forwards;
-}
-
-@keyframes ritualMistQuick {
-  0%, 30% {
-    opacity: 0;
-  }
-  60% {
-    opacity: 0.8;
-  }
-  100% {
-    opacity: 0;
-  }
+.is-holding .ritual-mist-burst {
+  opacity: 0.85;
 }
 
 .faction-VILLAGER .ritual-mist-burst {
@@ -416,70 +323,35 @@
   box-shadow: 0 0 25px rgba(183, 148, 244, 0.5);
 }
 
-/* 4. Trạng thái SEALING_PASS (Úp bài & Chìm mờ vào bóng tối - 380ms) */
-.stage-sealing-pass .ritual-card-body {
-  animation: ritualCardSeal 0.38s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+/* =========================================================================
+   HIỆU ỨNG CHUYỂN GIAO KHI BẤM NÚT (HANDOFF STAGE)
+   ========================================================= */
+
+/* Khi bấm "Đã nhớ · Chuyền cho...": Lá bài chìm mờ vào bóng tối (350ms) */
+.handoff-sealing .ritual-card-body {
+  animation: ritualHandoffSeal 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-@keyframes ritualCardSeal {
+@keyframes ritualHandoffSeal {
   0% {
-    transform: translateY(0) scale(1) rotateY(0deg);
+    transform: translateY(0) scale(1);
     opacity: 1;
-  }
-  45% {
-    transform: translateY(-8px) scale(1.02) rotateY(90deg);
-    opacity: 0.9;
   }
   100% {
-    transform: translateY(20px) scale(0.93) rotateY(180deg);
+    transform: translateY(28px) scale(0.9);
     opacity: 0;
   }
 }
 
-.stage-sealing-pass .ritual-card-front {
-  animation: ritualSealFrontFace 0.38s ease forwards;
+/* Lá bài mới trồi lên từ màn sương cho người tiếp theo (320ms) */
+.handoff-emerging .ritual-card-body {
+  animation: ritualHandoffEmerge 0.32s ease-out forwards;
 }
 
-@keyframes ritualSealFrontFace {
-  0%, 45% {
-    opacity: 1;
-    display: flex;
-    z-index: 10;
-  }
-  50%, 100% {
-    opacity: 0;
-    display: none;
-    z-index: 1;
-  }
-}
-
-.stage-sealing-pass .ritual-card-back {
-  animation: ritualSealBackFace 0.38s ease forwards;
-}
-
-@keyframes ritualSealBackFace {
-  0%, 45% {
-    opacity: 0;
-    display: none;
-    z-index: 1;
-  }
-  50%, 100% {
-    opacity: 1;
-    display: flex;
-    z-index: 2;
-    transform: rotateY(180deg);
-  }
-}
-
-/* 5. Trạng thái EMERGING (Lá bài mới trồi lên từ màn sương - 320ms) */
-.stage-emerging .ritual-card-body {
-  animation: ritualCardEmerge 0.32s ease-out forwards;
-}
-
-@keyframes ritualCardEmerge {
+@keyframes ritualHandoffEmerge {
   0% {
     opacity: 0;
-    transform: translateY(20px) scale(0.93);
+    transform: translateY(28px) scale(0.9);
   }
   100% {
     opacity: 1;
@@ -487,20 +359,8 @@
   }
 }
 
-.stage-emerging .ritual-card-back {
-  opacity: 1;
-  display: flex;
-  z-index: 2;
-}
-
-.stage-emerging .ritual-card-front {
-  opacity: 0;
-  display: none;
-  z-index: 1;
-}
-
 /* =========================================================================
-   MÉP DƯỚI: Chạm để mở HOẶC Nút duy nhất chuyền máy
+   MÉP DƯỚI: Gợi ý khi chưa xem HOẶC Nút duy nhất chuyền máy sau khi xem
    ========================================================================= */
 .ritual-bottom-area {
   z-index: 2;
@@ -511,11 +371,11 @@
   margin-bottom: 8px;
 }
 
-/* Dòng chữ nhỏ mờ khi chưa mở bài: "Chạm vào lá bài để mở" */
+/* Dòng chữ nhỏ mờ khi chưa xem bài: "Nhấn và giữ lá bài để xem vai" */
 .ritual-bottom-hint {
-  font-size: 12.5px;
+  font-size: 13px;
   letter-spacing: 0.08em;
-  color: #7d7364;
+  color: #8b8070;
   animation: ritualHintPulse 3s ease-in-out infinite;
   pointer-events: none;
 }
@@ -525,12 +385,12 @@
     opacity: 0.45;
   }
   50% {
-    opacity: 0.85;
-    color: #a49782;
+    opacity: 0.95;
+    color: #c2b49d;
   }
 }
 
-/* Nút duy nhất khi bài đã lật: "Đã nhớ · Chuyền cho Lan Anh" / "Bắt đầu Đêm 1" */
+/* NÚT DUY NHẤT ĐỂ CHUYỂN NGƯỜI (Chỉ xuất hiện sau khi đã xem vai ít nhất 1 lần) */
 .ritual-pass-btn {
   background: rgba(18, 22, 30, 0.92);
   border: 1px solid rgba(201, 134, 56, 0.6);
@@ -541,15 +401,15 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.2s ease;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 14px rgba(201, 134, 56, 0.2);
-  animation: ritualBtnFadeIn 0.25s ease-out forwards;
+  animation: ritualBtnFadeIn 0.3s ease-out forwards;
 }
 
 @keyframes ritualBtnFadeIn {
   0% {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   100% {
     opacity: 1;
