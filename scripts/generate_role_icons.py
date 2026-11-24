@@ -2,7 +2,8 @@
 """
 scripts/generate_role_icons.py
 
-Batch generation of Werewolf role icons in WebP format using Google GenAI SDK.
+Batch generation of Werewolf role icons in WebP format using Cloudflare Workers AI
+(Supports @cf/black-forest-labs/flux-1-schnell, Stable Diffusion XL, and SDXL-Lightning).
 """
 
 import os
@@ -10,52 +11,26 @@ import sys
 import json
 import time
 import io
+import base64
 import argparse
 from pathlib import Path
 from PIL import Image
 import numpy as np
+import requests
 
-try:
-    from google import genai
-    from google.genai import types
-    from google.genai.errors import APIError
-except ImportError:
-    print("Error: 'google-genai' is not installed. Please run: pip install google-genai", file=sys.stderr)
-    sys.exit(1)
+# Default models
+DEFAULT_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
-# Default style reference images
-DEFAULT_REF_MAP = {
-    "WEREWOLF": Path("scripts/refs/ref_werewolf.png"),
-    "VILLAGER": Path("scripts/refs/ref_villager.png"),
-    "THIRD_PARTY": Path("scripts/refs/ref_third.png"),
-}
-
-SYSTEM_INSTRUCTION = (
-    "You are a Lead UI Icon Illustrator designing a cohesive 39-card character icon set for a modern dark-themed mobile web game.\n\n"
-    "STRICT VISUAL RULES:\n"
-    "1. Art Direction: Modern dark atmospheric emblem illustration. Bold, clean geometric silhouettes that remain instantly readable even when scaled down to a 40x40px mobile avatar. Avoid overly intricate, cluttered, or messy filigree details.\n"
-    "2. Background: Pure, flat, uniform obsidian black (#0B0E14) background. Zero scenery, zero clouds, zero floor, zero textures extending to the edges.\n"
-    "3. Color Hierarchy:\n"
-    "   - 75% Pure Obsidian Black (#0B0E14) background and deep shadows.\n"
-    "   - 20% Warm Amber Gold (#F59E0B) primary metallic foil line-art and rim lighting.\n"
-    "   - 5% Faction Accent Color (used strictly for small focal points like glowing eyes, magic orbs, potion liquids, or gem details — never flood the whole character).\n"
-    "4. Framing: Centered symmetrical upper-body bust or iconic emblem with at least 18% empty black margin on all four sides so circular avatar crops never clip the subject.\n"
-    "5. Forbidden: NO text, NO letters, NO numbers, NO playing card borders, NO frames, NO watermarks.\n"
-    "6. Output Format: First write 1 short sentence confirming the silhouette and focal accent placement, then generate the image."
-)
-
-STYLE_LOCK_PROMPT = (
-    "Style Reference Requirement: Closely lock and match the exact art style, stroke line width, "
-    "angular geometric planar facets, and crisp gold foil rim lighting of the reference image. "
-    "Background must be solid flat obsidian black (#0B0E14). Maintain warm amber gold (#F59E0B) line-art "
-    "with the specified pinpoint faction accent color. Square 1:1 framing, centered symmetrical "
-    "upper-body bust portrait, flat 2D graphic design tarot emblem with zero clutter, no text, "
-    "no numbers, and no card borders or frames."
+# SDXL negative prompt to ensure clean vector/emblem output
+NEGATIVE_PROMPT = (
+    "text, letters, words, numbers, signature, watermark, username, playing card border, "
+    "ornate border, decorative frame, card frame, realistic photo, photorealistic, 3d render, "
+    "blurry, low quality, white background, cluttered, messy fabric, textured background"
 )
 
 
 def load_env_file():
-    """Load GEMINI_API_KEY from .env or .env.local if present."""
+    """Load CF_ACCOUNT_ID and CF_API_TOKEN from .env or .env.local if present."""
     for env_name in [".env", ".env.local"]:
         p = Path(env_name)
         if p.is_file():
@@ -81,7 +56,7 @@ def post_process_and_save(img: Image.Image, output_path: Path):
     3. Save as WEBP with quality=82, method=6 (< 40KB).
     """
     arr = np.array(img.convert("RGB"))
-    # Black background normalization
+    # Black background normalization to #0B0E14
     mask = (arr[:, :, 0] < 22) & (arr[:, :, 1] < 26) & (arr[:, :, 2] < 35)
     arr[mask] = [11, 14, 20]
 
@@ -92,122 +67,142 @@ def post_process_and_save(img: Image.Image, output_path: Path):
     resized_img.save(output_path, "WEBP", quality=82, method=6)
 
 
-def extract_image_from_response(response) -> tuple[Image.Image, str | None]:
-    """Extract PIL Image and optional confirmation text from google-genai response object."""
-    if not hasattr(response, "candidates") or not response.candidates:
-        raise ValueError("No candidates returned in response")
-
-    img = None
-    note = None
-
-    for candidate in response.candidates:
-        if not hasattr(candidate, "content") or not candidate.content:
-            continue
-        for part in candidate.content.parts:
-            # Capture optional confirmation sentence from text part
-            if getattr(part, "text", None) and part.text.strip():
-                note = part.text.strip()
-            # Check inline_data bytes
-            if getattr(part, "inline_data", None) and part.inline_data.data:
-                data = part.inline_data.data
-                if isinstance(data, str):
-                    import base64
-                    data = base64.b64decode(data)
-                img = Image.open(io.BytesIO(data))
-            # Check direct image attribute
-            elif hasattr(part, "image") and part.image:
-                img = part.image
-
-    if img is not None:
-        return img, note
-
-    raise ValueError("No image data found in response parts")
-
-
-def generate_single_icon(
-    client: genai.Client,
-    model_name: str,
-    item: dict,
-    output_path: Path,
+def call_cloudflare_workers_ai(
+    account_id: str,
+    api_token: str,
+    model: str,
+    prompt: str,
     max_retries: int = 5,
-    base_backoff: float = 5.0,
-):
-    """Generate and save an icon with exponential backoff on 429."""
-    faction = item.get("faction", "VILLAGER")
-    role_id = item["id"]
-    prompt_text = item["prompt"]
+    base_backoff: float = 4.0,
+) -> Image.Image:
+    """Call Cloudflare Workers AI REST API and return a PIL Image."""
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
 
-    ref_path = DEFAULT_REF_MAP.get(faction, DEFAULT_REF_MAP["VILLAGER"])
-    if not ref_path.is_file():
-        raise FileNotFoundError(f"Reference image not found at {ref_path}")
-
-    ref_image = Image.open(ref_path).convert("RGB")
-    combined_prompt = f"{STYLE_LOCK_PROMPT}\n\nTarget Role details:\n{prompt_text}"
-
-    modalities = [m.strip() for m in os.environ.get("RESPONSE_MODALITIES", "IMAGE").split(",") if m.strip()]
-    config = types.GenerateContentConfig(
-        system_instruction=SYSTEM_INSTRUCTION,
-        response_modalities=modalities,
-        image_config=types.ImageConfig(aspect_ratio="1:1"),
-    )
-
-    contents = [ref_image, combined_prompt]
+    # Prepare payload based on model architecture
+    if "flux" in model.lower():
+        payload = {
+            "prompt": prompt,
+            "num_steps": 4,  # Optimal for FLUX.1-schnell (1-8 steps)
+        }
+    else:
+        # SDXL / Lightning models
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": NEGATIVE_PROMPT,
+            "num_steps": 20 if "lightning" not in model.lower() else 8,
+            "guidance": 7.5,
+            "width": 1024,
+            "height": 1024,
+        }
 
     for attempt in range(max_retries):
         try:
-            print(f"[{role_id}] Requesting generation ({faction}, model: {model_name})...")
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=config,
-            )
-            img, note = extract_image_from_response(response)
-            if note:
-                print(f"[{role_id}] Note: {note}")
-            post_process_and_save(img, output_path)
-            size_kb = output_path.stat().st_size / 1024
-            print(f"[{role_id}] ✓ Successfully generated and saved to {output_path} ({size_kb:.1f} KB)")
-            return True
-        except Exception as e:
-            err_msg = str(e).lower()
-            is_rate_limit = (
-                "429" in err_msg
-                or "resource_exhausted" in err_msg
-                or "quota" in err_msg
-                or (isinstance(e, APIError) and getattr(e, "code", None) == 429)
-            )
-            if is_rate_limit and attempt < max_retries - 1:
+            resp = requests.post(url, headers=headers, json=payload, timeout=60)
+
+            # Check rate limit or server error
+            if resp.status_code == 429 or resp.status_code >= 500:
                 wait_time = base_backoff * (2**attempt)
-                print(f"[{role_id}] ⚠ Rate limit encountered. Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})...")
+                print(f"  ⚠ Cloudflare HTTP {resp.status_code}. Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait_time)
+                continue
+
+            if resp.status_code != 200:
+                raise RuntimeError(f"Cloudflare API Error ({resp.status_code}): {resp.text}")
+
+            content_type = resp.headers.get("content-type", "").lower()
+
+            # Handle direct binary image response (standard for Workers AI image models)
+            if "image" in content_type:
+                return Image.open(io.BytesIO(resp.content))
+
+            # Handle JSON response with base64 image
+            if "json" in content_type:
+                data = resp.json()
+                if not data.get("success", False) and "errors" in data:
+                    raise RuntimeError(f"Cloudflare returned errors: {data['errors']}")
+                if "result" in data and "image" in data["result"]:
+                    b64_data = data["result"]["image"]
+                    return Image.open(io.BytesIO(base64.b64decode(b64_data)))
+
+            # Fallback: attempt direct bytes decode
+            try:
+                return Image.open(io.BytesIO(resp.content))
+            except Exception:
+                raise RuntimeError(f"Could not parse image from response: {resp.text[:300]}")
+
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries - 1:
+                wait_time = base_backoff * (2**attempt)
+                print(f"  ⚠ Network error: {e}. Retrying in {wait_time:.1f}s...")
                 time.sleep(wait_time)
             else:
-                print(f"[{role_id}] ✗ Error generating icon: {e}", file=sys.stderr)
                 raise e
 
-    return False
+    raise RuntimeError("Max retries exceeded when calling Cloudflare Workers AI")
+
+
+def generate_single_icon(
+    account_id: str,
+    api_token: str,
+    model_name: str,
+    item: dict,
+    output_path: Path,
+):
+    """Generate and save a single role icon."""
+    role_id = item["id"]
+    faction = item.get("faction", "VILLAGER")
+    prompt_text = item["prompt"]
+
+    print(f"[{role_id}] Requesting generation ({faction}, model: {model_name})...")
+    img = call_cloudflare_workers_ai(account_id, api_token, model_name, prompt_text)
+    post_process_and_save(img, output_path)
+    size_kb = output_path.stat().st_size / 1024
+    print(f"[{role_id}] ✓ Successfully generated and saved to {output_path} ({size_kb:.1f} KB)")
+    return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch generate Werewolf role icons in WebP format.")
+    parser = argparse.ArgumentParser(
+        description="Batch generate Werewolf role icons in WebP format using Cloudflare Workers AI."
+    )
     parser.add_argument("--test", action="store_true", help="Only run 3 representative roles (1 Werewolf, 1 Villager, 1 Third Party)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing icons")
     parser.add_argument("--id", type=str, default=None, help="Generate for a specific role ID only")
+    parser.add_argument("--model", type=str, default=None, help=f"Cloudflare AI model (default: {DEFAULT_MODEL})")
+    parser.add_argument("--cf-token", type=str, default=None, help="Cloudflare API Token (overrides CF_API_TOKEN env)")
+    parser.add_argument("--cf-account-id", type=str, default=None, help="Cloudflare Account ID (overrides CF_ACCOUNT_ID env)")
     parser.add_argument("--prompts", type=str, default="scripts/roles_prompts.json", help="Path to prompts JSON file")
     parser.add_argument("--output-dir", type=str, default="public/images/roles", help="Output directory")
-    parser.add_argument("--api-key", type=str, default=None, help="Gemini API key (overrides GEMINI_API_KEY env)")
     args = parser.parse_args()
 
     load_env_file()
 
-    # Determine API key
-    api_key = args.api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        print("Error: GEMINI_API_KEY or GOOGLE_API_KEY environment variable is not set.", file=sys.stderr)
-        print("Please export GEMINI_API_KEY='your_key' or put it in .env file.", file=sys.stderr)
+    api_token = (
+        args.cf_token
+        or os.environ.get("CF_API_TOKEN")
+        or os.environ.get("CLOUDFLARE_API_TOKEN")
+    )
+    account_id = (
+        args.cf_account_id
+        or os.environ.get("CF_ACCOUNT_ID")
+        or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+    )
+
+    if not api_token or not account_id:
+        print("Error: Cloudflare credentials missing!", file=sys.stderr)
+        print("Please provide CF_ACCOUNT_ID and CF_API_TOKEN in your .env file or via flags:", file=sys.stderr)
+        print("  --cf-account-id <ACCOUNT_ID>", file=sys.stderr)
+        print("  --cf-token <API_TOKEN>", file=sys.stderr)
+        print("\nGet your free credentials at https://dash.cloudflare.com/:", file=sys.stderr)
+        print("1. Account ID: Visible in the Cloudflare dashboard under 'Workers & Pages' on the right sidebar.")
+        print("2. API Token: Go to My Profile -> API Tokens -> Create Token -> Use template 'Workers AI' (or custom with Workers AI Read/Edit).", file=sys.stderr)
         sys.exit(1)
 
-    model_name = os.environ.get("IMAGE_MODEL", "gemini-2.5-flash-image")
-    client = genai.Client(api_key=api_key)
+    model_name = args.model or os.environ.get("CF_MODEL") or DEFAULT_MODEL
 
     prompts_path = Path(args.prompts)
     if not prompts_path.is_file():
@@ -227,16 +222,21 @@ def main():
             print(f"Error: Role with ID '{args.id}' not found in {prompts_path}", file=sys.stderr)
             sys.exit(1)
     elif args.test:
-        # Pick 1 Werewolf, 1 Villager, 1 Third Party
-        wolf_pick = next((r for r in all_roles if r["faction"] == "WEREWOLF"), None)
-        villager_pick = next((r for r in all_roles if r["faction"] == "VILLAGER" and r["id"] != "villager"), None)
-        third_pick = next((r for r in all_roles if r["faction"] == "THIRD_PARTY"), None)
+        wolf_pick = next((r for r in all_roles if r["faction"] == "WEREWOLF" and (args.force or not (output_dir / f"{r['id']}.webp").exists())), None)
+        villager_pick = next((r for r in all_roles if r["faction"] == "VILLAGER" and (args.force or not (output_dir / f"{r['id']}.webp").exists())), None)
+        third_pick = next((r for r in all_roles if r["faction"] == "THIRD_PARTY" and (args.force or not (output_dir / f"{r['id']}.webp").exists())), None)
+        if not wolf_pick:
+            wolf_pick = next((r for r in all_roles if r["faction"] == "WEREWOLF"), None)
+        if not villager_pick:
+            villager_pick = next((r for r in all_roles if r["faction"] == "VILLAGER"), None)
+        if not third_pick:
+            third_pick = next((r for r in all_roles if r["faction"] == "THIRD_PARTY"), None)
         targets = [r for r in [wolf_pick, villager_pick, third_pick] if r is not None]
         print(f"Test mode: Running 3 representative roles -> {[r['id'] for r in targets]}")
     else:
         targets = all_roles
 
-    print(f"Starting icon generation for {len(targets)} roles using model '{model_name}'...")
+    print(f"Starting icon generation for {len(targets)} roles via Cloudflare Workers AI ({model_name})...")
 
     total = len(targets)
     success_count = 0
@@ -253,15 +253,15 @@ def main():
 
         try:
             print(f"[{idx}/{total}] Processing '{role_id}' ({item.get('faction')})...")
-            success = generate_single_icon(client, model_name, item, out_file)
+            success = generate_single_icon(account_id, api_token, model_name, item, out_file)
             if success:
                 success_count += 1
         except Exception as e:
             print(f"Failed to generate for '{role_id}': {e}", file=sys.stderr)
 
-        # Courtesy sleep between requests
+        # Gentle pause between requests
         if idx < total:
-            time.sleep(3)
+            time.sleep(2)
 
     print("\n--- Summary ---")
     print(f"Total processed: {total}")
