@@ -11,9 +11,8 @@ type Props = {
 
 type CardStage =
   | 'idle'
-  | 'lifting_flipping'
-  | 'settling'
-  | 'settled'
+  | 'flipping'
+  | 'revealed'
   | 'sealing_pass'
   | 'emerging';
 
@@ -50,14 +49,12 @@ export default function RoleRevealScreen({}: Props) {
   const timer1Ref = useRef<number | null>(null);
   const timer2Ref = useRef<number | null>(null);
   const timer3Ref = useRef<number | null>(null);
-  const timer4Ref = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (timer1Ref.current) window.clearTimeout(timer1Ref.current);
       if (timer2Ref.current) window.clearTimeout(timer2Ref.current);
       if (timer3Ref.current) window.clearTimeout(timer3Ref.current);
-      if (timer4Ref.current) window.clearTimeout(timer4Ref.current);
     };
   }, []);
 
@@ -122,7 +119,7 @@ export default function RoleRevealScreen({}: Props) {
   };
 
   // =========================================================================
-  // NHỊP 1 & 2: Chạm để lật mở -> Tự thả xuống bàn
+  // NHỊP 1 & 2: Chạm để lật mở mượt mà (Flip & Settle đồng bộ 520ms)
   // =========================================================================
   const handleCardClick = () => {
     if (stage !== 'idle') return;
@@ -134,30 +131,25 @@ export default function RoleRevealScreen({}: Props) {
       // ignore
     }
 
-    // Nhịp 1: Nhấc lên & Lật mở (Lift & Flip)
-    setStage('lifting_flipping');
+    // Kích hoạt animation GPU mượt mà (520ms)
+    setStage('flipping');
 
-    // Sau 850ms: Lật xong, lơ lửng 0.3s -> chuyển sang Nhịp 2: Settle
+    // Sau 520ms (trùng khớp chính xác với animation): Đã lật và tiếp đất êm ái
     timer1Ref.current = window.setTimeout(() => {
-      setStage('settling');
-
-      // Sau 400ms: Hạ êm xuống bàn với độ nảy nhẹ, rung nhẹ như chạm mặt gỗ
-      timer2Ref.current = window.setTimeout(() => {
-        try {
-          navigator.vibrate?.(15);
-        } catch {
-          // ignore
-        }
-        setStage('settled');
-      }, 400);
-    }, 850);
+      try {
+        navigator.vibrate?.(15);
+      } catch {
+        // ignore
+      }
+      setStage('revealed');
+    }, 520);
   };
 
   // =========================================================================
-  // NHỊP 3: Úp bài & Chuyền máy một chiều
+  // NHỊP 3: Úp bài & Chuyền máy một chiều (Seal & Pass 380ms)
   // =========================================================================
   const handlePassOrStartNight = () => {
-    if (stage !== 'settled') return;
+    if (stage !== 'revealed') return;
 
     try {
       navigator.vibrate?.(35);
@@ -165,10 +157,10 @@ export default function RoleRevealScreen({}: Props) {
       // ignore
     }
 
-    // Nhịp 3: Lá bài lật úp lại và chìm mờ vào bóng tối
+    // Nhịp 3: Lá bài lật úp lại và chìm mờ vào bóng tối (380ms)
     setStage('sealing_pass');
 
-    timer3Ref.current = window.setTimeout(async () => {
+    timer2Ref.current = window.setTimeout(async () => {
       if (isLastPlayer) {
         // Đã xem hết -> Bắt đầu Đêm 1
         if (actions.startFirstNight) {
@@ -183,14 +175,14 @@ export default function RoleRevealScreen({}: Props) {
         }
         setCurrentIndex(nextIdx);
 
-        // Lá bài mới trồi lên từ màn sương
+        // Lá bài mới trồi lên từ màn sương (320ms)
         setStage('emerging');
 
-        timer4Ref.current = window.setTimeout(() => {
+        timer3Ref.current = window.setTimeout(() => {
           setStage('idle');
-        }, 500);
+        }, 320);
       }
-    }, 520);
+    }, 380);
   };
 
   return (
@@ -276,7 +268,7 @@ export default function RoleRevealScreen({}: Props) {
           </div>
         )}
 
-        {stage === 'settled' && (
+        {stage === 'revealed' && (
           <button
             type="button"
             className={`ritual-pass-btn ${isLastPlayer ? 'is-final' : ''}`}

@@ -1,5 +1,5 @@
 /* =========================================================================
-   RITUAL CARD REVEAL — XEM VAI BÍ MẬT TỐI GIẢN HUYỀN BÍ (1 MÁY DÙNG CHUNG)
+   RITUAL CARD REVEAL — SIÊU MƯỢT (GPU COMPOSITED 60FPS / 120FPS)
    ========================================================================= */
 
 .ritual-screen {
@@ -25,7 +25,7 @@
   position: absolute;
   top: 45%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
   width: min(85vw, 420px);
   height: min(85vw, 420px);
   border-radius: 50%;
@@ -37,19 +37,6 @@
   );
   pointer-events: none;
   z-index: 1;
-  filter: blur(35px);
-  animation: ritualBreath 6s ease-in-out infinite alternate;
-}
-
-@keyframes ritualBreath {
-  0% {
-    opacity: 0.65;
-    transform: translate(-50%, -50%) scale(0.95);
-  }
-  100% {
-    opacity: 0.95;
-    transform: translate(-50%, -50%) scale(1.05);
-  }
 }
 
 /* 1. Tiến độ nhỏ ở mép trên: 1 / 6 (mờ, không gây xao nhãng) */
@@ -59,7 +46,7 @@
   font-weight: 500;
   letter-spacing: 0.22em;
   color: #615a4e;
-  opacity: 0.5;
+  opacity: 0.55;
   text-transform: uppercase;
   margin-top: 4px;
 }
@@ -84,27 +71,29 @@
   text-align: center;
   margin-bottom: 24px;
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
-  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 /* Vùng chứa lá bài 3D (Tỷ lệ 2:3) */
 .ritual-card-stage {
-  perspective: 1400px;
+  perspective: 1200px;
+  -webkit-perspective: 1200px;
   width: min(72vw, 245px);
   height: min(108vw, 368px);
   cursor: pointer;
   position: relative;
 }
 
-/* Thẻ bài 3D xoay lật */
+/* Thẻ bài 3D xoay lật (Tối ưu phần cứng GPU) */
 .ritual-card-body {
   width: 100%;
   height: 100%;
   position: relative;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   border-radius: 16px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8), 0 0 18px rgba(0, 0, 0, 0.6);
-  transition: box-shadow 0.3s ease;
+  will-change: transform, opacity;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 0, 0, 0.5);
+  transform: translate3d(0, 0, 0);
 }
 
 /* Mặt trước và mặt sau dùng chung */
@@ -118,6 +107,7 @@
   -webkit-backface-visibility: hidden;
   box-sizing: border-box;
   overflow: hidden;
+  transform: translate3d(0, 0, 0);
 }
 
 /* =========================================================================
@@ -131,7 +121,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  transform: rotateY(0deg);
+  transform: rotateY(0deg) translateZ(1px);
 }
 
 /* Họa tiết mặt lưng tối giản */
@@ -181,13 +171,13 @@
 }
 
 /* =========================================================================
-   MẶT TRƯỚC: Lá bài sau khi lật mở
+   MẶT TRƯỚC: Lá bài sau khi lật mở (Hiển thị ngay khi lật qua 90 độ)
    ========================================================================= */
 .ritual-card-front {
   background: #0d0f15;
   border: 1px solid rgba(201, 134, 56, 0.5);
   box-shadow: inset 0 0 0 6px #0d0f15, inset 0 0 0 7.5px rgba(201, 134, 56, 0.2);
-  transform: rotateY(180deg);
+  transform: rotateY(180deg) translateZ(1px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -232,7 +222,7 @@
   color: #c084fc;
 }
 
-/* Icon vai trò to, nghệ thuật */
+/* Icon vai trò to, sắc nét */
 .ritual-role-icon {
   font-size: 56px;
   line-height: 1;
@@ -240,7 +230,7 @@
   filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.8));
 }
 
-/* Khối nội dung vai trò: Tên vai & 1 dòng kỹ năng (Fade-in ở Nhịp 2) */
+/* Khối nội dung vai trò: Tên vai & 1 dòng kỹ năng */
 .ritual-role-info {
   display: flex;
   flex-direction: column;
@@ -280,167 +270,126 @@
 }
 
 /* =========================================================================
-   ANIMATION: RITUAL CARD REVEAL (3 NHỊP CHUẨN XÁC)
+   ANIMATION: MƯỢT MÀ 60FPS CHỈ DÙNG GPU TRANSFORM
    ========================================================================= */
 
-/* Trạng thái Idle: Nhẹ nhàng lơ lửng */
+/* Trạng thái Idle */
 .stage-idle .ritual-card-body {
-  transform: scale(1) translateY(0) rotateY(0deg);
+  transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
 }
 
 .stage-idle .ritual-card-stage:hover .ritual-card-body {
-  transform: scale(1.02) translateY(-4px) rotateY(0deg);
-  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.85), 0 0 20px rgba(201, 134, 56, 0.2);
+  transform: translate3d(0, -4px, 0) scale(1.02) rotateY(0deg);
 }
 
-/* Nhịp 1 — Nhấc lên & Lật mở (Lift & Flip) */
-.stage-lifting-flipping .ritual-card-body {
-  animation: ritualLiftAndFlip 0.85s cubic-bezier(0.25, 1, 0.35, 1) forwards;
+/* Nhịp 1 & 2: Lật mở mượt mà 520ms kèm tiếp đất tự nhiên */
+.stage-flipping .ritual-card-body {
+  animation: ritualFlipAndSettle 0.52s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
 }
 
-@keyframes ritualLiftAndFlip {
+@keyframes ritualFlipAndSettle {
   0% {
-    transform: scale(1) translateY(0) rotateY(0deg);
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8);
+    transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
   }
-  16% {
-    transform: scale(0.96) translateY(5px) rotateY(15deg);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.85);
+  18% {
+    transform: translate3d(0, 4px, 0) scale(0.97) rotateY(28deg);
   }
-  75% {
-    transform: scale(1.08) translateY(-26px) rotateY(180deg);
-    box-shadow: 0 38px 75px rgba(0, 0, 0, 0.9), 0 0 35px rgba(201, 134, 56, 0.25);
+  65% {
+    transform: translate3d(0, -20px, 0) scale(1.06) rotateY(180deg);
+  }
+  85% {
+    transform: translate3d(0, 2px, 0) scale(0.99) rotateY(180deg);
   }
   100% {
-    transform: scale(1.08) translateY(-24px) rotateY(180deg);
-    box-shadow: 0 32px 68px rgba(0, 0, 0, 0.9), 0 0 30px rgba(201, 134, 56, 0.2);
+    transform: translate3d(0, 0, 0) scale(1) rotateY(180deg);
   }
 }
 
-/* Làn sương mỏng kèm vài hạt bụi sáng bùng lên khi mặt bài lộ ra */
+/* Trạng thái đã mở hoàn tất */
+.stage-revealed .ritual-card-body {
+  transform: translate3d(0, 0, 0) scale(1) rotateY(180deg);
+}
+
+/* Hào quang bùng nhẹ không giật lag */
 .ritual-mist-burst {
   position: absolute;
-  inset: -15px;
+  inset: -10px;
   border-radius: 24px;
   pointer-events: none;
   opacity: 0;
   z-index: 5;
+  transition: opacity 0.3s ease;
 }
 
-.stage-lifting-flipping .ritual-mist-burst {
-  animation: ritualMistBurst 0.85s ease-out forwards;
+.stage-flipping .ritual-mist-burst {
+  animation: ritualMistQuick 0.52s ease-out forwards;
 }
 
-@keyframes ritualMistBurst {
-  0%, 45% {
+@keyframes ritualMistQuick {
+  0%, 30% {
     opacity: 0;
-    transform: scale(0.9);
   }
-  65% {
-    opacity: 0.95;
-    transform: scale(1.08);
+  60% {
+    opacity: 0.8;
   }
   100% {
     opacity: 0;
-    transform: scale(1.22);
   }
 }
 
 .faction-VILLAGER .ritual-mist-burst {
-  box-shadow: 0 0 45px 12px rgba(236, 201, 75, 0.45);
+  border: 2px solid rgba(236, 201, 75, 0.5);
+  box-shadow: 0 0 25px rgba(236, 201, 75, 0.4);
 }
 
 .faction-WEREWOLF .ritual-mist-burst {
-  box-shadow: 0 0 45px 12px rgba(229, 62, 62, 0.55);
+  border: 2px solid rgba(229, 62, 62, 0.6);
+  box-shadow: 0 0 25px rgba(229, 62, 62, 0.5);
 }
 
 .faction-THIRD_PARTY .ritual-mist-burst {
-  box-shadow: 0 0 45px 12px rgba(183, 148, 244, 0.55);
+  border: 2px solid rgba(183, 148, 244, 0.6);
+  box-shadow: 0 0 25px rgba(183, 148, 244, 0.5);
 }
 
-/* Nhịp 2 — Tự thả xuống mặt bàn (Drop & Settle) */
-.stage-settling .ritual-card-body {
-  animation: ritualDropAndSettle 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.15) forwards;
-}
-
-@keyframes ritualDropAndSettle {
-  0% {
-    transform: scale(1.08) translateY(-24px) rotateY(180deg);
-    box-shadow: 0 32px 68px rgba(0, 0, 0, 0.9);
-  }
-  75% {
-    transform: scale(0.99) translateY(2px) rotateY(180deg);
-    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.7);
-  }
-  100% {
-    transform: scale(1) translateY(0) rotateY(180deg);
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(201, 134, 56, 0.1);
-  }
-}
-
-.stage-settled .ritual-card-body {
-  transform: scale(1) translateY(0) rotateY(180deg);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(201, 134, 56, 0.1);
-}
-
-/* Fade-in thông tin vai trò ở Nhịp 2 */
-.stage-settling .ritual-role-info,
-.stage-settled .ritual-role-info {
-  animation: ritualFadeIn 0.45s ease-out forwards;
-}
-
-@keyframes ritualFadeIn {
-  0% {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Nhịp 3 — Úp bài & Chuyền máy (Seal & Pass) */
+/* Nhịp 3 — Úp bài & Chuyền máy: Nhanh gọn 380ms */
 .stage-sealing-pass .ritual-card-body {
-  animation: ritualSealAndPass 0.52s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: ritualSealAndPass 0.38s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes ritualSealAndPass {
   0% {
-    transform: scale(1) translateY(0) rotateY(180deg);
+    transform: translate3d(0, 0, 0) scale(1) rotateY(180deg);
     opacity: 1;
   }
   45% {
-    transform: scale(1.02) translateY(-8px) rotateY(90deg);
-    opacity: 0.85;
+    transform: translate3d(0, -6px, 0) scale(1.02) rotateY(90deg);
+    opacity: 0.9;
   }
   100% {
-    transform: scale(0.9) translateY(22px) rotateY(0deg);
+    transform: translate3d(0, 16px, 0) scale(0.93) rotateY(0deg);
     opacity: 0;
-    filter: blur(5px);
   }
 }
 
-/* Trồi lên từ màn sương cho người tiếp theo */
+/* Trồi lên từ màn sương cho người tiếp theo: 320ms */
 .stage-emerging .ritual-card-body {
-  animation: ritualEmerge 0.5s ease-out forwards;
+  animation: ritualEmerge 0.32s ease-out forwards;
 }
 
 @keyframes ritualEmerge {
   0% {
     opacity: 0;
-    transform: scale(0.9) translateY(22px) rotateY(0deg);
-    filter: blur(5px);
+    transform: translate3d(0, 16px, 0) scale(0.93) rotateY(0deg);
   }
   100% {
     opacity: 1;
-    transform: scale(1) translateY(0) rotateY(0deg);
-    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
   }
 }
 
 /* =========================================================================
-   MÉP DƯỚI: Chạm để mở (khi chưa lật) HOẶC Nút duy nhất chuyền máy (khi đã lật)
+   MÉP DƯỚI: Chạm để mở HOẶC Nút duy nhất chuyền máy
    ========================================================================= */
 .ritual-bottom-area {
   z-index: 2;
@@ -456,7 +405,7 @@
   font-size: 12.5px;
   letter-spacing: 0.08em;
   color: #7d7364;
-  animation: ritualHintPulse 3.5s ease-in-out infinite;
+  animation: ritualHintPulse 3s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -472,7 +421,7 @@
 
 /* Nút duy nhất khi bài đã lật: "Đã nhớ · Chuyền cho Lan Anh" / "Bắt đầu Đêm 1" */
 .ritual-pass-btn {
-  background: rgba(18, 22, 30, 0.9);
+  background: rgba(18, 22, 30, 0.92);
   border: 1px solid rgba(201, 134, 56, 0.6);
   color: #ede7dc;
   border-radius: 999px;
@@ -481,26 +430,25 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: transform 0.15s ease, background 0.2s ease;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 14px rgba(201, 134, 56, 0.2);
-  animation: ritualBtnFadeIn 0.4s ease-out forwards;
+  animation: ritualBtnFadeIn 0.25s ease-out forwards;
 }
 
 @keyframes ritualBtnFadeIn {
   0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translate3d(0, 6px, 0);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .ritual-pass-btn:hover {
   background: rgba(28, 34, 46, 0.95);
   border-color: #e59d4c;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 20px rgba(201, 134, 56, 0.35);
   transform: translateY(-1px);
 }
 
@@ -510,6 +458,5 @@
 
 .ritual-pass-btn.is-final {
   border-color: #e59d4c;
-  background: linear-gradient(135deg, rgba(201, 134, 56, 0.25), rgba(142, 30, 36, 0.25));
-  box-shadow: 0 0 24px rgba(201, 134, 56, 0.3);
+  background: linear-gradient(135deg, rgba(201, 134, 56, 0.3), rgba(142, 30, 36, 0.3));
 }
