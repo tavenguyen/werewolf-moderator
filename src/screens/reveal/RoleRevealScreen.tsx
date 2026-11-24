@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
+import { getRoleImage } from '../../assets/roles';
 import './reveal.css';
 
 type Props = {
@@ -60,15 +61,19 @@ export default function RoleRevealScreen({}: Props) {
   }, []);
 
   // Thông tin vai trò của người chơi đang cầm máy
+  // Khi ở màn hình xem vai độc lập (demo/HUD test), mặc định ưu tiên role 'werewolf' để tester/user kiểm tra ngay
   const myRoleId = (privateView?.roleId && privateView.roleId.trim() !== '')
     ? privateView.roleId
-    : 'villager';
+    : 'werewolf';
+  const roleImage = getRoleImage(myRoleId);
   const roleDef = ROLES_BY_ID[myRoleId] ?? {
     id: myRoleId,
-    nameVi: 'Dân làng',
-    nameEn: 'Villager',
-    faction: 'VILLAGER' as const,
-    shortDesc: 'Bạn không có kỹ năng ban đêm. Hãy dùng suy luận để tìm ra Ma Sói.',
+    nameVi: myRoleId === 'werewolf' ? 'Ma sói' : 'Dân làng',
+    nameEn: myRoleId === 'werewolf' ? 'Werewolf' : 'Villager',
+    faction: myRoleId === 'werewolf' ? ('WEREWOLF' as const) : ('VILLAGER' as const),
+    shortDesc: myRoleId === 'werewolf'
+      ? 'Ban ngày ẩn mình giữa dân làng, ban đêm thức dậy cùng đồng đội để chọn một người cắn chết.'
+      : 'Bạn không có kỹ năng ban đêm. Hãy dùng suy luận để tìm ra Ma Sói.',
   };
 
   // Lấy câu mô tả kỹ năng ngắn gọn (1 dòng)
@@ -266,7 +271,15 @@ export default function RoleRevealScreen({}: Props) {
               </span>
 
               <div className="ritual-role-icon" aria-hidden="true">
-                {getRoleIcon(myRoleId, roleDef.faction)}
+                {roleImage ? (
+                  <img
+                    src={roleImage}
+                    alt={roleDef.nameVi}
+                    className="ritual-role-img"
+                  />
+                ) : (
+                  <span>{getRoleIcon(myRoleId, roleDef.faction)}</span>
+                )}
               </div>
 
               <div className="ritual-role-info">

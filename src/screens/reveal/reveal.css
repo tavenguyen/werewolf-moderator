@@ -250,8 +250,21 @@
 .ritual-role-icon {
   font-size: 58px;
   line-height: 1;
-  margin: 10px 0 6px;
+  margin: 6px 0;
   filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.8));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ritual-role-img {
+  width: 98px;
+  height: 98px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1.5px solid rgba(245, 158, 11, 0.55);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.35), 0 8px 24px rgba(0, 0, 0, 0.9);
+  display: block;
 }
 
 /* Khối nội dung vai trò: Tên vai & 1 dòng kỹ năng */

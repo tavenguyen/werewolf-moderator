@@ -3,6 +3,7 @@ import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES, ROLES_BY_ID } from '../../engine/roles';
 import { searchRoles } from '../../engine/roleSearch';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
+import { getRoleImage } from '../../assets/roles';
 import type { ScreenName } from '../../navigation';
 import {
   computeDeckMetrics,
@@ -525,6 +526,9 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                           onClick={() => setExpandedRoleId(isExpanded ? null : role.id)}
                           title="Bấm để xem nhanh kỹ năng"
                         >
+                          {getRoleImage(role.id) && (
+                            <img src={getRoleImage(role.id)} alt="" className="role-mini-avatar" />
+                          )}
                           <span className="role-title">{role.nameVi}</span>
                           <span className="role-weight-gray">{weightFormatted}</span>
                         </button>
@@ -750,6 +754,9 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                             onClick={() => setExpandedRoleId(isExpanded ? null : role.id)}
                             title="Bấm để xem nhanh kỹ năng"
                           >
+                            {getRoleImage(role.id) && (
+                              <img src={getRoleImage(role.id)} alt="" className="role-mini-avatar" />
+                            )}
                             <span className="role-title">{role.nameVi}</span>
                             {role.multiDeviceOnly && (
                               <span

@@ -208,7 +208,15 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                   <header className="masa-detail-hero">
                     <div className="masa-hero-identity">
                       <div className={`masa-role-avatar-seal side-${selectedRole.side}`} aria-hidden="true">
-                        <span>{selectedRole.symbol}</span>
+                        {selectedRole.image ? (
+                          <img
+                            src={selectedRole.image}
+                            alt={selectedRole.name}
+                            className="masa-avatar-seal-img"
+                          />
+                        ) : (
+                          <span>{selectedRole.symbol}</span>
+                        )}
                       </div>
                       <div className="masa-hero-titles">
                         <span className="masa-role-index">
@@ -218,6 +226,20 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                       </div>
                     </div>
                   </header>
+
+                  {/* Card Art Showcase for Illustrated Roles */}
+                  {selectedRole.image && (
+                    <div className="masa-emblem-showcase" aria-hidden="true">
+                      <div className={`masa-emblem-card-frame side-${selectedRole.side}`}>
+                        <img
+                          src={selectedRole.image}
+                          alt={selectedRole.name}
+                          className="masa-emblem-card-art"
+                        />
+                        <div className="masa-emblem-card-glow" />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Spec Strip - High Value Tactical Specs (No duplicate faction) */}
                   <div className="masa-spec-strip" role="list">
@@ -396,7 +418,11 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                             <div className="masa-item-left">
                               <span className="masa-item-num">{roleNum}</span>
                               <span className={`masa-item-seal side-${role.side}`} aria-hidden="true">
-                                {role.symbol}
+                                {role.image ? (
+                                  <img src={role.image} alt="" className="masa-item-seal-img" />
+                                ) : (
+                                  role.symbol
+                                )}
                               </span>
                               <div className="masa-item-name-block">
                                 <h3 className="masa-item-name">{role.name}</h3>

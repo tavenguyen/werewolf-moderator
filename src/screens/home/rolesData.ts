@@ -1,4 +1,5 @@
 import { ROLES, type RoleDefinition } from './roles';
+import { getRoleImage } from '../../assets/roles';
 
 export type RoleSide = 'village' | 'wolf' | 'third';
 
@@ -19,6 +20,7 @@ export type GameRole = {
   name: string;
   nameEn: string;
   symbol: string;
+  image?: string;
   side: RoleSide;
   sideLabel: string;
   pack: 'BASIC' | 'DEDUCTION' | 'CHAOS';
@@ -581,6 +583,7 @@ export const gameRoles: GameRole[] = ROLES.map((role) => {
     name: role.nameVi,
     nameEn: role.nameEn,
     symbol: visual.symbol,
+    image: getRoleImage(role.id),
     side: getSide(role.faction),
     sideLabel: getSideLabel(role.faction, role.id),
     pack: role.pack,
