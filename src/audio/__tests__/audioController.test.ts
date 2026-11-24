@@ -15,141 +15,141 @@ describe('AudioController & Fallbacks', () => {
 
     expect(NARRATION_PROMPTS.night_wild_child).toBeDefined();
     expect(NARRATION_PROMPTS.night_wild_child.subtitle).toBe(
-      'Đứa con hoang hãy thức dậy và chọn một người làm thần tượng.'
+      'Đứa con hoang thức dậy, chọn người làm thần tượng.'
     );
     expect(NARRATION_PROMPTS.night_hoodlum).toBeDefined();
     expect(NARRATION_PROMPTS.night_hoodlum.subtitle).toBe(
-      'Du côn hãy thức dậy và chọn hai kẻ thù cần trừ khử.'
+      'Du côn thức dậy, chọn hai kẻ thù cần loại bỏ.'
     );
     expect(NARRATION_PROMPTS.night_mason).toBeDefined();
     expect(NARRATION_PROMPTS.night_mason.subtitle).toBe(
-      'Hội Tam Điểm hãy cùng mở mắt nhận diện anh em.'
+      'Hội Tam Điểm mở mắt nhận diện nhau.'
     );
     expect(NARRATION_PROMPTS.night_dire_wolf).toBeDefined();
     expect(NARRATION_PROMPTS.night_dire_wolf.subtitle).toBe(
-      'Sói tuyết hãy thức dậy và chọn một người làm bạn đồng hành.'
+      'Sói tuyết thức dậy, chọn một người làm bạn đồng hành.'
     );
 
     expect(NARRATION_PROMPTS.night_wolf_accursed).toBeDefined();
     expect(NARRATION_PROMPTS.night_wolf_accursed.subtitle).toBe(
-      'Sói nguyền hãy thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?'
+      'Sói nguyền thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?'
     );
     expect(NARRATION_PROMPTS.night_wolf_accursed.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.wolf_accursed).toBeDefined();
     expect(NARRATION_PROMPTS.wolf_accursed.subtitle).toBe(
-      'Sói nguyền hãy thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?'
+      'Sói nguyền thức dậy. Bạn có muốn truyền nọc độc biến nạn nhân thành Ma Sói không?'
     );
     expect(NARRATION_PROMPTS.wolf_accursed.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_big_bad_wolf).toBeDefined();
     expect(NARRATION_PROMPTS.night_big_bad_wolf.subtitle).toBe(
-      'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.'
+      'Sói đại ca thức dậy, chọn thêm một người để cắn.'
     );
     expect(NARRATION_PROMPTS.night_big_bad_wolf.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.big_bad_wolf).toBeDefined();
     expect(NARRATION_PROMPTS.big_bad_wolf.subtitle).toBe(
-      'Sói đại ca hãy thức dậy và chọn thêm một nạn nhân để cắn xé.'
+      'Sói đại ca thức dậy, chọn thêm một người để cắn.'
     );
     expect(NARRATION_PROMPTS.big_bad_wolf.durationMs).toBe(6000);
 
     // Phase 4: 6 vai Dân Làng Điều tra & Can thiệp
     expect(NARRATION_PROMPTS.night_aura_seer).toBeDefined();
     expect(NARRATION_PROMPTS.night_aura_seer.subtitle).toBe(
-      'Tiên tri hào quang hãy thức dậy và quan sát vầng hào quang.'
+      'Tiên tri hào quang thức dậy, chọn một người để soi hào quang.'
     );
     expect(NARRATION_PROMPTS.night_aura_seer.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.aura_seer).toBeDefined();
     expect(NARRATION_PROMPTS.aura_seer.subtitle).toBe(
-      'Tiên tri hào quang hãy thức dậy và quan sát vầng hào quang.'
+      'Tiên tri hào quang thức dậy, chọn một người để soi hào quang.'
     );
     expect(NARRATION_PROMPTS.aura_seer.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_pi).toBeDefined();
     expect(NARRATION_PROMPTS.night_pi.subtitle).toBe(
-      'Thám tử hãy thức dậy và điều tra nghi phạm.'
+      'Thám tử thức dậy, chọn một người để điều tra.'
     );
     expect(NARRATION_PROMPTS.night_pi.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.pi).toBeDefined();
     expect(NARRATION_PROMPTS.pi.subtitle).toBe(
-      'Thám tử hãy thức dậy và điều tra nghi phạm.'
+      'Thám tử thức dậy, chọn một người để điều tra.'
     );
     expect(NARRATION_PROMPTS.pi.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_fox).toBeDefined();
     expect(NARRATION_PROMPTS.night_fox.subtitle).toBe(
-      'Con cáo hãy thức dậy và đánh hơi tìm bầy Sói.'
+      'Con Cáo thức dậy, chọn một người để đánh hơi tìm Sói.'
     );
     expect(NARRATION_PROMPTS.night_fox.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.fox).toBeDefined();
     expect(NARRATION_PROMPTS.fox.subtitle).toBe(
-      'Con cáo hãy thức dậy và đánh hơi tìm bầy Sói.'
+      'Con Cáo thức dậy, chọn một người để đánh hơi tìm Sói.'
     );
     expect(NARRATION_PROMPTS.fox.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_spellcaster).toBeDefined();
     expect(NARRATION_PROMPTS.night_spellcaster.subtitle).toBe(
-      'Người phù phép hãy thức dậy và chọn một người câm lặng hôm nay.'
+      'Người phù phép thức dậy, chọn một người bị cấm nói hôm nay.'
     );
     expect(NARRATION_PROMPTS.night_spellcaster.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.spellcaster).toBeDefined();
     expect(NARRATION_PROMPTS.spellcaster.subtitle).toBe(
-      'Người phù phép hãy thức dậy và chọn một người câm lặng hôm nay.'
+      'Người phù phép thức dậy, chọn một người bị cấm nói hôm nay.'
     );
     expect(NARRATION_PROMPTS.spellcaster.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_troublemaker).toBeDefined();
     expect(NARRATION_PROMPTS.night_troublemaker.subtitle).toBe(
-      'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?'
+      'Kẻ phá rối thức dậy. Bạn có muốn gây hỗn loạn cho cả làng không?'
     );
     expect(NARRATION_PROMPTS.night_troublemaker.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.troublemaker).toBeDefined();
     expect(NARRATION_PROMPTS.troublemaker.subtitle).toBe(
-      'Kẻ phá rối hãy thức dậy. Bạn có muốn kích hoạt gây hỗn loạn không?'
+      'Kẻ phá rối thức dậy. Bạn có muốn gây hỗn loạn cho cả làng không?'
     );
     expect(NARRATION_PROMPTS.troublemaker.durationMs).toBe(6000);
 
     // Phase 5: 4 vai Phe Thứ Ba & Biến đổi Động
     expect(NARRATION_PROMPTS.night_doppelganger).toBeDefined();
     expect(NARRATION_PROMPTS.night_doppelganger.subtitle).toBe(
-      'Nhân bản hãy thức dậy và chọn một người làm bản sao.'
+      'Nhân bản thức dậy, chọn một người để sao chép vai trò.'
     );
     expect(NARRATION_PROMPTS.night_doppelganger.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.doppelganger).toBeDefined();
     expect(NARRATION_PROMPTS.doppelganger.subtitle).toBe(
-      'Nhân bản hãy thức dậy và chọn một người làm bản sao.'
+      'Nhân bản thức dậy, chọn một người để sao chép vai trò.'
     );
     expect(NARRATION_PROMPTS.doppelganger.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_pied_piper).toBeDefined();
     expect(NARRATION_PROMPTS.night_pied_piper.subtitle).toBe(
-      'Người thổi sáo hãy thức dậy và cất lên khúc nhạc mê hoặc.'
+      'Người thổi sáo thức dậy, chọn hai người để thôi miên.'
     );
     expect(NARRATION_PROMPTS.night_pied_piper.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.pied_piper).toBeDefined();
     expect(NARRATION_PROMPTS.pied_piper.subtitle).toBe(
-      'Người thổi sáo hãy thức dậy và cất lên khúc nhạc mê hoặc.'
+      'Người thổi sáo thức dậy, chọn hai người để thôi miên.'
     );
     expect(NARRATION_PROMPTS.pied_piper.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_cult_leader).toBeDefined();
     expect(NARRATION_PROMPTS.night_cult_leader.subtitle).toBe(
-      'Trưởng giáo phái hãy thức dậy và tìm kiếm tín đồ mới.'
+      'Trưởng giáo phái thức dậy, chọn người kết nạp vào giáo phái.'
     );
     expect(NARRATION_PROMPTS.night_cult_leader.durationMs).toBe(6000);
     expect(NARRATION_PROMPTS.cult_leader).toBeDefined();
     expect(NARRATION_PROMPTS.cult_leader.subtitle).toBe(
-      'Trưởng giáo phái hãy thức dậy và tìm kiếm tín đồ mới.'
+      'Trưởng giáo phái thức dậy, chọn người kết nạp vào giáo phái.'
     );
     expect(NARRATION_PROMPTS.cult_leader.durationMs).toBe(6000);
 
     expect(NARRATION_PROMPTS.night_drunk).toBeDefined();
     expect(NARRATION_PROMPTS.night_drunk.subtitle).toBe(
-      'Kẻ say rượu, cơn say vẫn còn nồng, hãy tiếp tục ngủ say.'
+      'Kẻ say rượu vẫn chưa tỉnh, tiếp tục ngủ say.'
     );
     expect(NARRATION_PROMPTS.night_drunk.durationMs).toBe(5000);
     expect(NARRATION_PROMPTS.drunk).toBeDefined();
     expect(NARRATION_PROMPTS.drunk.subtitle).toBe(
-      'Kẻ say rượu, cơn say vẫn còn nồng, hãy tiếp tục ngủ say.'
+      'Kẻ say rượu vẫn chưa tỉnh, tiếp tục ngủ say.'
     );
     expect(NARRATION_PROMPTS.drunk.durationMs).toBe(5000);
 
@@ -157,7 +157,7 @@ describe('AudioController & Fallbacks', () => {
     expect(NARRATION_PROMPTS.apprentice_seer).toBeDefined();
     expect(NARRATION_PROMPTS.apprentice_seer.audioKey).toBe('seer');
     expect(NARRATION_PROMPTS.apprentice_seer.subtitle).toBe(
-      'Tiên tri, hãy thức dậy và chọn một người để soi phe.'
+      'Tiên tri thức dậy, chọn một người để soi phe.'
     );
 
     expect(NARRATION_PROMPTS.wolf_pack.subtitle).toContain('Ma Sói');

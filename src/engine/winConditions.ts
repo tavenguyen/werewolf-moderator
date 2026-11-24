@@ -69,7 +69,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   if (angelHangedDay1) {
     return {
       winner: 'ANGEL',
-      reason: 'Thiên sứ (Angel) đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng tối thượng!',
+      reason: 'Thiên sứ đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng!',
       winningPlayerIds: [angelHangedDay1.playerId],
     };
   }
@@ -81,7 +81,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   if (tannerHanged) {
     return {
       winner: 'TANNER',
-      reason: 'Kẻ chán đời (Tanner) đã bị cả làng bỏ phiếu treo cổ và giành chiến thắng độc tôn!',
+      reason: 'Kẻ chán đời đã bị cả làng đưa lên giàn treo cổ và giành chiến thắng độc tôn!',
       winningPlayerIds: [tannerHanged.playerId],
     };
   }
@@ -90,7 +90,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   if (alivePlayers.length === 0) {
     return {
       winner: 'DRAW',
-      reason: 'Tất cả người chơi đã ngã xuống trong cùng một chuỗi sự kiện. Kết quả Hòa cả làng!',
+      reason: 'Không còn ai sống sót sau đêm đẫm máu. Kết quả Hòa cho tất cả!',
       winningPlayerIds: [],
     };
   }
@@ -102,7 +102,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     if (otherAlive.every((p) => p.isEnchanted === true)) {
       return {
         winner: 'PIED_PIPER',
-        reason: 'Người thổi sáo (Pied Piper) đã thôi miên toàn bộ người chơi còn sống và giành chiến thắng độc tôn!',
+        reason: 'Toàn bộ dân làng còn sống đã say đắm trong khúc nhạc mê hoặc. Người thổi sáo giành chiến thắng độc tôn!',
         winningPlayerIds: [livingPiedPiper.id],
       };
     }
@@ -115,7 +115,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     if (otherAlive.every((p) => p.isCultMember === true)) {
       return {
         winner: 'CULT_LEADER',
-        reason: 'Trưởng giáo phái (Cult Leader) đã kết nạp toàn bộ người chơi còn sống vào giáo phái và giành chiến thắng độc tôn!',
+        reason: 'Ánh sáng giáo phái đã quy phục toàn bộ người còn sống. Trưởng giáo phái giành chiến thắng độc tôn!',
         winningPlayerIds: [livingCultLeader.id],
       };
     }
@@ -129,7 +129,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
       const whiteWolf = alivePlayers.find((p) => p.roleId === 'white_wolf')!;
       return {
         winner: 'WHITE_WOLF',
-        reason: 'Sói trắng và Sói cô đơn là 2 kẻ sống sót cuối cùng. Sói trắng nắm độc quyền ám sát sói và giành chiến thắng độc tôn!',
+        reason: 'Sói trắng và Sói cô đơn là 2 kẻ sống sót cuối cùng. Với nanh vuốt vượt trội, Sói trắng hạ gục đối thủ và giành chiến thắng độc tôn!',
         winningPlayerIds: [whiteWolf.id],
       };
     }
@@ -163,7 +163,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
       return attachHoodlumWin(
         {
           winner: 'COUPLE',
-          reason: 'Tình yêu vượt qua ranh giới phe phái! Cặp đôi định mệnh là những người sống sót cuối cùng!',
+          reason: 'Tình yêu vượt qua mọi ranh giới thù hận! Cặp đôi định mệnh là những người sống sót cuối cùng trên bàn đấu!',
           winningPlayerIds: [p1.id, p2.id],
         },
         state
@@ -175,7 +175,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   if (alivePlayers.length === 1 && alivePlayers[0].roleId === 'lone_wolf') {
     return {
       winner: 'LONE_WOLF',
-      reason: 'Sói cô đơn đã tiêu diệt toàn bộ dân làng lẫn đồng loại và là kẻ sống sót duy nhất!',
+      reason: 'Sói cô đơn đã tiêu diệt toàn bộ dân làng lẫn đồng loại để trở thành kẻ sống sót duy nhất!',
       winningPlayerIds: [alivePlayers[0].id],
     };
   }
@@ -184,7 +184,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
   if (alivePlayers.length === 1 && alivePlayers[0].roleId === 'white_wolf') {
     return {
       winner: 'WHITE_WOLF',
-      reason: 'Sói trắng đã tiêu diệt cả dân làng lẫn đồng loại và là kẻ sống sót duy nhất!',
+      reason: 'Sói trắng đã hạ gục cả dân làng lẫn đồng loại trong đêm tối và là kẻ sống sót duy nhất!',
       winningPlayerIds: [alivePlayers[0].id],
     };
   }
@@ -211,7 +211,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     return attachHoodlumWin(
       {
         winner: 'VILLAGER',
-        reason: 'Toàn bộ Ma sói đã bị tiêu diệt! Phe Dân làng đã bảo vệ được ngôi làng bình yên!',
+        reason: 'Bóng đêm đã bị đẩy lùi! Toàn bộ Ma Sói bị tiêu diệt, phe Dân làng bảo vệ thành công sự bình yên của ngôi làng!',
         winningPlayerIds: winners,
       },
       state
@@ -238,7 +238,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     return attachHoodlumWin(
       {
         winner: 'WEREWOLF',
-        reason: 'Ma sói đã áp đảo hoàn toàn dân làng. Ngôi làng chìm trong bóng đêm vĩnh hằng!',
+        reason: 'Nanh vuốt Ma Sói đã áp đảo hoàn toàn dân làng! Ngôi làng chính thức chìm trong bóng đêm vĩnh hằng!',
         winningPlayerIds: winners,
       },
       state
