@@ -1,9 +1,11 @@
 import werewolf from './werewolf.jpg';
 import villager from './villager.jpg';
+import bodyguard from './bodyguard.jpg';
 
 export const ROLE_IMAGES: Record<string, string> = {
   werewolf,
   villager,
+  bodyguard,
 };
 
 export function getRoleImage(roleId: string): string | undefined {
