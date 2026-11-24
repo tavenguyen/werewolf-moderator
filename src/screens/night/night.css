@@ -151,34 +151,6 @@ body.night-sleep-active {
   font-style: italic;
 }
 
-.standby {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 36px;
-  padding: 6px 16px;
-  color: var(--night-muted);
-  border: 1px solid rgba(201, 134, 56, 0.25);
-  border-radius: 9999px;
-  font: 700 10.5px var(--headline);
-  letter-spacing: 0.1em;
-  background: #0d0f14;
-}
-
-.stealth-ember-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--lantern);
-  opacity: 0.8;
-  animation: stealthBreath 2s infinite;
-}
-
-.sleep-content .demo-note {
-  margin-top: 20px;
-  font-size: 11px;
-  color: var(--night-subtle);
-}
 
 /* Active Role Calling */
 .role-content {
@@ -704,23 +676,6 @@ body.night-sleep-active {
   transform: scale(0.96);
 }
 
-.offline-player-switcher {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  font-size: 13px;
-  color: #d1c7b7;
-}
-
-.offline-select {
-  background: #141720;
-  border: 1px solid rgba(201, 134, 56, 0.4);
-  color: #ede7dc;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-}
 
 .press-hold-card-wrapper {
   margin: 20px auto;

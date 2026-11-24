@@ -1,467 +1,515 @@
 /* =========================================================================
-   ROLE REVEAL SCREEN — CHUYỀN MÁY XEM VAI TRÒ (1 MÁY DÙNG CHUNG)
+   RITUAL CARD REVEAL — XEM VAI BÍ MẬT TỐI GIẢN HUYỀN BÍ (1 MÁY DÙNG CHUNG)
    ========================================================================= */
 
-.reveal-screen {
+.ritual-screen {
+  position: relative;
+  width: 100vw;
   min-height: 100vh;
   min-height: 100dvh;
+  background-color: #050608;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 20%, #181d26 0%, #0b0d12 70%, #060709 100%);
-  color: var(--parchment, #ede7dc);
-  padding: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px 20px 48px;
   box-sizing: border-box;
+  overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
-  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Header & Progress */
-.reveal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(201, 134, 56, 0.2);
-}
-
-.reveal-title-group h1 {
-  font-family: var(--headline, "Playfair Display", Georgia, serif);
-  font-size: 1.15rem;
-  letter-spacing: 0.08em;
-  margin: 0;
-  color: var(--lantern, #c98638);
-  text-transform: uppercase;
-}
-
-.reveal-title-group p {
-  font-size: 0.78rem;
-  color: var(--parchment-muted, #a39b8e);
-  margin: 2px 0 0;
-}
-
-.reveal-rules-btn {
-  background: rgba(201, 134, 56, 0.12);
-  border: 1px solid rgba(201, 134, 56, 0.35);
-  color: #f3efe6;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.reveal-rules-btn:hover {
-  background: rgba(201, 134, 56, 0.25);
-  border-color: #c98638;
-}
-
-/* Seat Progress Stepper */
-.reveal-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.stepper-dot {
-  width: 28px;
-  height: 28px;
+/* Quầng sáng mờ ảo ở tâm màn hình như ánh trăng/nến yếu */
+.ritual-ambient-glow {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(85vw, 420px);
+  height: min(85vw, 420px);
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(20, 24, 32, 0.8);
-  color: var(--parchment-subtle, #746e63);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
+  background: radial-gradient(
+    circle,
+    rgba(201, 134, 56, 0.08) 0%,
+    rgba(15, 18, 26, 0.45) 45%,
+    rgba(5, 6, 8, 0) 72%
+  );
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(35px);
+  animation: ritualBreath 6s ease-in-out infinite alternate;
 }
 
-.stepper-dot.is-current {
-  background: var(--lantern, #c98638);
-  border-color: #f6c075;
-  color: #0d0f13;
-  box-shadow: 0 0 12px rgba(201, 134, 56, 0.6);
-  transform: scale(1.15);
+@keyframes ritualBreath {
+  0% {
+    opacity: 0.65;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  100% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
 }
 
-.stepper-dot.is-viewed {
-  border-color: rgba(62, 123, 87, 0.6);
-  background: rgba(43, 88, 62, 0.3);
-  color: #9ae6b4;
-}
-
-/* Handover Screen (Intermediate Privacy Shield) */
-.handover-shield {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 24px;
-  background: rgba(18, 22, 30, 0.85);
-  border: 1px solid rgba(201, 134, 56, 0.25);
-  border-radius: 16px;
-  backdrop-filter: blur(8px);
-  margin: auto;
-  max-width: 360px;
-  width: 100%;
-}
-
-.handover-icon-glow {
-  font-size: 3.5rem;
-  margin-bottom: 16px;
-  animation: handoverFloat 2.5s ease-in-out infinite;
-}
-
-@keyframes handoverFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-.handover-lead {
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--lantern, #c98638);
-  margin-bottom: 4px;
-}
-
-.handover-player-name {
-  font-family: var(--headline, "Playfair Display", serif);
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 6px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
-}
-
-.handover-seat-tag {
-  display: inline-block;
-  padding: 4px 12px;
-  background: rgba(201, 134, 56, 0.15);
-  border: 1px solid rgba(201, 134, 56, 0.35);
-  border-radius: 20px;
-  font-size: 0.82rem;
-  color: #f3efe6;
-  margin-bottom: 20px;
-}
-
-.handover-warning {
-  font-size: 0.82rem;
-  color: var(--parchment-muted, #a39b8e);
-  line-height: 1.5;
-  margin-bottom: 28px;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 10px 14px;
-  border-radius: 8px;
-  border-left: 3px solid var(--lantern, #c98638);
-}
-
-.handover-ready-btn {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #c98638 0%, #9e5f1b 100%);
-  border: none;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 6px 20px rgba(201, 134, 56, 0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.handover-ready-btn:active {
-  transform: scale(0.98);
-}
-
-/* 3D Card Container & Flip Styles */
-.card-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 100%;
-}
-
-.card-target-banner {
-  margin-bottom: 12px;
-  text-align: center;
-}
-
-.card-target-banner h2 {
-  font-size: 1.3rem;
-  margin: 0;
-  color: #fff;
-}
-
-.card-target-banner span {
-  font-size: 0.8rem;
-  color: var(--lantern, #c98638);
+/* 1. Tiến độ nhỏ ở mép trên: 1 / 6 (mờ, không gây xao nhãng) */
+.ritual-progress {
+  z-index: 2;
+  font-size: 13px;
   font-weight: 500;
+  letter-spacing: 0.22em;
+  color: #615a4e;
+  opacity: 0.5;
+  text-transform: uppercase;
+  margin-top: 4px;
 }
 
-.reveal-card-container {
-  perspective: 1200px;
-  width: 100%;
-  max-width: 310px;
-  height: 420px;
+/* Khu vực trung tâm: Tên người nhận + Lá bài 2:3 */
+.ritual-center-container {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: auto 0;
+}
+
+/* Tên người nhận máy (ví dụ: Minh Khang) */
+.ritual-recipient-name {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #d8cebe;
+  text-align: center;
+  margin-bottom: 24px;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* Vùng chứa lá bài 3D (Tỷ lệ 2:3) */
+.ritual-card-stage {
+  perspective: 1400px;
+  width: min(72vw, 245px);
+  height: min(108vw, 368px);
   cursor: pointer;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
+  position: relative;
 }
 
-.reveal-card-inner {
-  position: relative;
+/* Thẻ bài 3D xoay lật */
+.ritual-card-body {
   width: 100%;
   height: 100%;
-  transition: transform 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
   transform-style: preserve-3d;
-  border-radius: 18px;
+  border-radius: 16px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8), 0 0 18px rgba(0, 0, 0, 0.6);
+  transition: box-shadow 0.3s ease;
 }
 
-.reveal-card-inner.is-flipped {
-  transform: rotateY(180deg) scale(1.02);
-}
-
-.reveal-card-face {
+/* Mặt trước và mặt sau dùng chung */
+.ritual-card-face {
   position: absolute;
   inset: 0;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  border-radius: 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 20px;
-}
-
-/* Card Back (Lá bài úp) */
-.reveal-card-back {
-  background: radial-gradient(circle at 50% 35%, #191f2b 0%, #0e121a 80%, #07090d 100%);
-  border: 2px solid rgba(201, 134, 56, 0.5);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 0 24px rgba(201, 134, 56, 0.12);
-  text-align: center;
-}
-
-.card-back-frame {
   width: 100%;
   height: 100%;
-  border: 1px dashed rgba(201, 134, 56, 0.35);
-  border-radius: 12px;
+  border-radius: 16px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* =========================================================================
+   MẶT LƯNG: Tối giản huyền bí, viền vàng đồng mảnh, nhung đen sâu thẳm
+   ========================================================================= */
+.ritual-card-back {
+  background: #0b0d13;
+  border: 1px solid rgba(201, 134, 56, 0.45);
+  box-shadow: inset 0 0 0 6px #0b0d13, inset 0 0 0 7.5px rgba(201, 134, 56, 0.22);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  box-sizing: border-box;
+  transform: rotateY(0deg);
+}
+
+/* Họa tiết mặt lưng tối giản */
+.ritual-back-pattern {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 75%;
+  height: 82%;
+  border: 1px solid rgba(201, 134, 56, 0.2);
+  border-radius: 8px;
   position: relative;
 }
 
-.card-back-crest {
-  font-size: 3.5rem;
-  margin-bottom: 16px;
-  filter: drop-shadow(0 0 16px rgba(201, 134, 56, 0.4));
-  animation: crestPulse 3s ease-in-out infinite;
-}
-
-@keyframes crestPulse {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50% { transform: scale(1.06); opacity: 1; }
-}
-
-.card-hold-prompt {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--lantern, #c98638);
-  margin: 0 0 6px;
-  text-transform: uppercase;
-}
-
-.card-hold-sub {
-  font-size: 0.78rem;
-  color: var(--parchment-muted, #a39b8e);
-  margin: 0 0 18px;
-}
-
-.card-press-indicator {
+.ritual-back-crest {
+  width: 64px;
+  height: 64px;
+  border: 1px solid rgba(201, 134, 56, 0.3);
+  transform: rotate(45deg);
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(201, 134, 56, 0.12);
-  border: 1px solid rgba(201, 134, 56, 0.3);
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  color: #ede7dc;
-  animation: pulseTouch 1.8s infinite;
+  justify-content: center;
 }
 
-@keyframes pulseTouch {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+.ritual-back-emblem {
+  transform: rotate(-45deg);
+  font-size: 22px;
+  color: rgba(201, 134, 56, 0.7);
+  filter: drop-shadow(0 0 8px rgba(201, 134, 56, 0.35));
 }
 
-/* Card Front (Lá bài ngửa) */
-.reveal-card-front {
+.ritual-back-corner-top,
+.ritual-back-corner-bottom {
+  position: absolute;
+  color: rgba(201, 134, 56, 0.35);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+
+.ritual-back-corner-top {
+  top: 14px;
+}
+
+.ritual-back-corner-bottom {
+  bottom: 14px;
+}
+
+/* =========================================================================
+   MẶT TRƯỚC: Lá bài sau khi lật mở
+   ========================================================================= */
+.ritual-card-front {
+  background: #0d0f15;
+  border: 1px solid rgba(201, 134, 56, 0.5);
+  box-shadow: inset 0 0 0 6px #0d0f15, inset 0 0 0 7.5px rgba(201, 134, 56, 0.2);
   transform: rotateY(180deg);
-  background: radial-gradient(circle at 50% 25%, #1d2330 0%, #11151e 75%, #090c10 100%);
-  border: 2px solid rgba(201, 134, 56, 0.7);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85), 0 0 28px rgba(201, 134, 56, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 16px 20px;
   text-align: center;
 }
 
-/* Faction Glow Variations */
-.reveal-card-front.faction-WEREWOLF {
-  border-color: rgba(185, 55, 61, 0.8);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 32px rgba(185, 55, 61, 0.4);
+/* Gradient nền theo phe */
+.ritual-card-front.faction-VILLAGER {
+  background: radial-gradient(circle at 50% 35%, rgba(201, 134, 56, 0.22) 0%, #0d0f15 72%);
+  border-color: rgba(201, 134, 56, 0.6);
 }
 
-.reveal-card-front.faction-VILLAGER {
-  border-color: rgba(62, 123, 87, 0.8);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 32px rgba(62, 123, 87, 0.35);
+.ritual-card-front.faction-WEREWOLF {
+  background: radial-gradient(circle at 50% 35%, rgba(180, 32, 40, 0.28) 0%, #0d0f15 72%);
+  border-color: rgba(196, 43, 28, 0.6);
 }
 
-.reveal-card-front.faction-THIRD_PARTY {
-  border-color: rgba(108, 100, 153, 0.85);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 32px rgba(108, 100, 153, 0.4);
+.ritual-card-front.faction-THIRD_PARTY {
+  background: radial-gradient(circle at 50% 35%, rgba(138, 58, 178, 0.28) 0%, #0d0f15 72%);
+  border-color: rgba(155, 89, 182, 0.6);
 }
 
-.card-front-faction-badge {
-  font-size: 0.72rem;
+/* Nhãn phe nhỏ tinh tế */
+.ritual-faction-label {
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  padding: 4px 12px;
-  border-radius: 20px;
-  margin-bottom: 10px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.faction-WEREWOLF .card-front-faction-badge {
-  background: rgba(185, 55, 61, 0.2);
-  border: 1px solid rgba(185, 55, 61, 0.5);
-  color: #fc8181;
+.faction-VILLAGER .ritual-faction-label {
+  color: #cca45e;
 }
 
-.faction-VILLAGER .card-front-faction-badge {
-  background: rgba(62, 123, 87, 0.2);
-  border: 1px solid rgba(62, 123, 87, 0.5);
-  color: #9ae6b4;
+.faction-WEREWOLF .ritual-faction-label {
+  color: #e55353;
 }
 
-.faction-THIRD_PARTY .card-front-faction-badge {
-  background: rgba(108, 100, 153, 0.25);
-  border: 1px solid rgba(108, 100, 153, 0.6);
-  color: #d6bcfa;
+.faction-THIRD_PARTY .ritual-faction-label {
+  color: #c084fc;
 }
 
-.card-front-icon {
-  font-size: 4rem;
-  margin: 6px 0 8px;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.6));
+/* Icon vai trò to, nghệ thuật */
+.ritual-role-icon {
+  font-size: 56px;
+  line-height: 1;
+  margin: 10px 0 6px;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.8));
 }
 
-.card-front-title {
-  font-family: var(--headline, "Playfair Display", serif);
-  font-size: 1.6rem;
-  color: #fff;
-  margin: 0 0 2px;
-}
-
-.card-front-subtitle {
-  font-size: 0.75rem;
-  color: var(--parchment-muted, #a39b8e);
-  margin: 0 0 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.card-front-desc {
-  font-size: 0.78rem;
-  color: #d1c7b7;
-  line-height: 1.45;
-  margin: 0 0 12px;
-  padding: 0 8px;
-}
-
-.card-front-extra {
-  font-size: 0.72rem;
-  background: rgba(0, 0, 0, 0.35);
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px dashed rgba(201, 134, 56, 0.3);
-  margin-bottom: 12px;
-  color: #f6ad55;
+/* Khối nội dung vai trò: Tên vai & 1 dòng kỹ năng (Fade-in ở Nhịp 2) */
+.ritual-role-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   width: 100%;
+}
+
+.ritual-role-name {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #f3ece0;
+  margin: 0;
+}
+
+.ritual-role-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #a89f91;
+  margin: 0;
+  max-width: 90%;
+}
+
+/* Danh sách đồng đội sói nhỏ gọn (nếu có) */
+.ritual-wolf-pack {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #f87171;
+  background: rgba(180, 32, 40, 0.18);
+  border: 1px solid rgba(180, 32, 40, 0.35);
+  border-radius: 6px;
+  padding: 4px 10px;
+  width: 85%;
   box-sizing: border-box;
 }
 
-.card-front-footer-note {
-  font-size: 0.7rem;
-  color: var(--parchment-muted, #a39b8e);
-  font-style: italic;
-  margin-top: auto;
+/* =========================================================================
+   ANIMATION: RITUAL CARD REVEAL (3 NHỊP CHUẨN XÁC)
+   ========================================================================= */
+
+/* Trạng thái Idle: Nhẹ nhàng lơ lửng */
+.stage-idle .ritual-card-body {
+  transform: scale(1) translateY(0) rotateY(0deg);
 }
 
-/* Bottom Navigation Controls */
-.reveal-bottom-actions {
-  margin-top: 18px;
-  width: 100%;
-  max-width: 320px;
-  margin-left: auto;
-  margin-right: auto;
+.stage-idle .ritual-card-stage:hover .ritual-card-body {
+  transform: scale(1.02) translateY(-4px) rotateY(0deg);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.85), 0 0 20px rgba(201, 134, 56, 0.2);
+}
+
+/* Nhịp 1 — Nhấc lên & Lật mở (Lift & Flip) */
+.stage-lifting-flipping .ritual-card-body {
+  animation: ritualLiftAndFlip 0.85s cubic-bezier(0.25, 1, 0.35, 1) forwards;
+}
+
+@keyframes ritualLiftAndFlip {
+  0% {
+    transform: scale(1) translateY(0) rotateY(0deg);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8);
+  }
+  16% {
+    transform: scale(0.96) translateY(5px) rotateY(15deg);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.85);
+  }
+  75% {
+    transform: scale(1.08) translateY(-26px) rotateY(180deg);
+    box-shadow: 0 38px 75px rgba(0, 0, 0, 0.9), 0 0 35px rgba(201, 134, 56, 0.25);
+  }
+  100% {
+    transform: scale(1.08) translateY(-24px) rotateY(180deg);
+    box-shadow: 0 32px 68px rgba(0, 0, 0, 0.9), 0 0 30px rgba(201, 134, 56, 0.2);
+  }
+}
+
+/* Làn sương mỏng kèm vài hạt bụi sáng bùng lên khi mặt bài lộ ra */
+.ritual-mist-burst {
+  position: absolute;
+  inset: -15px;
+  border-radius: 24px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 5;
+}
+
+.stage-lifting-flipping .ritual-mist-burst {
+  animation: ritualMistBurst 0.85s ease-out forwards;
+}
+
+@keyframes ritualMistBurst {
+  0%, 45% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  65% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+
+.faction-VILLAGER .ritual-mist-burst {
+  box-shadow: 0 0 45px 12px rgba(236, 201, 75, 0.45);
+}
+
+.faction-WEREWOLF .ritual-mist-burst {
+  box-shadow: 0 0 45px 12px rgba(229, 62, 62, 0.55);
+}
+
+.faction-THIRD_PARTY .ritual-mist-burst {
+  box-shadow: 0 0 45px 12px rgba(183, 148, 244, 0.55);
+}
+
+/* Nhịp 2 — Tự thả xuống mặt bàn (Drop & Settle) */
+.stage-settling .ritual-card-body {
+  animation: ritualDropAndSettle 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.15) forwards;
+}
+
+@keyframes ritualDropAndSettle {
+  0% {
+    transform: scale(1.08) translateY(-24px) rotateY(180deg);
+    box-shadow: 0 32px 68px rgba(0, 0, 0, 0.9);
+  }
+  75% {
+    transform: scale(0.99) translateY(2px) rotateY(180deg);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.7);
+  }
+  100% {
+    transform: scale(1) translateY(0) rotateY(180deg);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(201, 134, 56, 0.1);
+  }
+}
+
+.stage-settled .ritual-card-body {
+  transform: scale(1) translateY(0) rotateY(180deg);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 16px rgba(201, 134, 56, 0.1);
+}
+
+/* Fade-in thông tin vai trò ở Nhịp 2 */
+.stage-settling .ritual-role-info,
+.stage-settled .ritual-role-info {
+  animation: ritualFadeIn 0.45s ease-out forwards;
+}
+
+@keyframes ritualFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Nhịp 3 — Úp bài & Chuyền máy (Seal & Pass) */
+.stage-sealing-pass .ritual-card-body {
+  animation: ritualSealAndPass 0.52s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes ritualSealAndPass {
+  0% {
+    transform: scale(1) translateY(0) rotateY(180deg);
+    opacity: 1;
+  }
+  45% {
+    transform: scale(1.02) translateY(-8px) rotateY(90deg);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(0.9) translateY(22px) rotateY(0deg);
+    opacity: 0;
+    filter: blur(5px);
+  }
+}
+
+/* Trồi lên từ màn sương cho người tiếp theo */
+.stage-emerging .ritual-card-body {
+  animation: ritualEmerge 0.5s ease-out forwards;
+}
+
+@keyframes ritualEmerge {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(22px) rotateY(0deg);
+    filter: blur(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0) rotateY(0deg);
+    filter: blur(0);
+  }
+}
+
+/* =========================================================================
+   MÉP DƯỚI: Chạm để mở (khi chưa lật) HOẶC Nút duy nhất chuyền máy (khi đã lật)
+   ========================================================================= */
+.ritual-bottom-area {
+  z-index: 2;
+  min-height: 48px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
 }
 
-.reveal-next-btn {
-  width: 100%;
-  padding: 14px 18px;
-  background: linear-gradient(135deg, #2b583e 0%, #1e3f2c 100%);
-  border: 1px solid rgba(62, 123, 87, 0.5);
-  border-radius: 12px;
-  color: #fff;
-  font-size: 0.95rem;
+/* Dòng chữ nhỏ mờ khi chưa mở bài: "Chạm vào lá bài để mở" */
+.ritual-bottom-hint {
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  color: #7d7364;
+  animation: ritualHintPulse 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes ritualHintPulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+    color: #a49782;
+  }
+}
+
+/* Nút duy nhất khi bài đã lật: "Đã nhớ · Chuyền cho Lan Anh" / "Bắt đầu Đêm 1" */
+.ritual-pass-btn {
+  background: rgba(18, 22, 30, 0.9);
+  border: 1px solid rgba(201, 134, 56, 0.6);
+  color: #ede7dc;
+  border-radius: 999px;
+  padding: 12px 28px;
+  font-size: 13.5px;
   font-weight: 600;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(43, 88, 62, 0.4);
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 14px rgba(201, 134, 56, 0.2);
+  animation: ritualBtnFadeIn 0.4s ease-out forwards;
 }
 
-.reveal-next-btn:active {
-  transform: scale(0.98);
+@keyframes ritualBtnFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.reveal-next-btn.start-night-btn {
-  background: linear-gradient(135deg, #c98638 0%, #8e1e24 100%);
-  border-color: rgba(201, 134, 56, 0.6);
-  box-shadow: 0 6px 24px rgba(201, 134, 56, 0.45);
-  font-size: 1.05rem;
-  animation: startNightGlow 2s ease-in-out infinite;
+.ritual-pass-btn:hover {
+  background: rgba(28, 34, 46, 0.95);
+  border-color: #e59d4c;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 20px rgba(201, 134, 56, 0.35);
+  transform: translateY(-1px);
 }
 
-@keyframes startNightGlow {
-  0%, 100% { box-shadow: 0 4px 20px rgba(201, 134, 56, 0.4); }
-  50% { box-shadow: 0 6px 30px rgba(201, 134, 56, 0.7); }
+.ritual-pass-btn:active {
+  transform: scale(0.97);
 }
 
-.reveal-hint-text {
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--parchment-subtle, #746e63);
-  margin: 0;
+.ritual-pass-btn.is-final {
+  border-color: #e59d4c;
+  background: linear-gradient(135deg, rgba(201, 134, 56, 0.25), rgba(142, 30, 36, 0.25));
+  box-shadow: 0 0 24px rgba(201, 134, 56, 0.3);
 }

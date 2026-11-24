@@ -402,32 +402,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             <div className="sleep-icon">☾</div>
           </div>
           <h1>THỔI TẮT NGỌN NẾN</h1>
-          <p>Nhắm mắt lại và lắng nghe khẩu lệnh của quản trò từ loa trung tâm.</p>
-          <div className="standby">
-            <span className="stealth-ember-dot" aria-hidden="true" />
-            <span>TĨNH LẶNG · BẢO MẬT BAN ĐÊM (KHÔNG RUNG)</span>
-          </div>
-          <p className="demo-note">
-            Độ sáng tối thiểu (OLED True Black). Thẻ bài bên dưới luôn được che kín.
-          </p>
-
-          {/* Single-device: Bộ chọn người đang cầm máy */}
-          {isSingleDevice && (
-            <div className="offline-player-switcher">
-              <span>Đang chuyền máy cho:</span>
-              <select
-                value={state.playerId}
-                onChange={(e) => actions.setLocalActivePlayer(e.target.value)}
-                className="offline-select"
-              >
-                {publicView?.players.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    #{p.seatIndex} {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <p>Nhắm mắt lại và lắng nghe lời dẫn từ quản trò.</p>
 
           {/* Banner chúc mừng tỉnh rượu nếu là Drunk ở Đêm 3+ */}
           {privateView?.skills?.drunkRealRoleId && (
@@ -707,11 +682,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               >
                 {currentTurnInfo?.nextTurnTitleVi ? (
                   <span>
-                    Xong lượt này ➔ Lượt tiếp: <b>{currentTurnInfo.nextTurnTitleVi}</b> (
-                    {(currentTurnInfo.turnIndex ?? 1) + 1}/{currentTurnInfo.totalTurns})
+                    Chuyển lượt gọi: <b>{currentTurnInfo.nextTurnTitleVi}</b>
                   </span>
                 ) : (
-                  <span>🌙 Hoàn tất các lượt đêm ➔ Bắt đầu Ban Ngày ☀️</span>
+                  <span>Kết thúc các lượt đêm ➔ Sang Ban Ngày ☀️</span>
                 )}
               </button>
             </div>

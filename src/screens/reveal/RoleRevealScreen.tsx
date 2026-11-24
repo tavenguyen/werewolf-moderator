@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
@@ -9,79 +9,78 @@ type Props = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
-export default function RoleRevealScreen({ onOpenRules }: Props) {
+type CardStage =
+  | 'idle'
+  | 'lifting_flipping'
+  | 'settling'
+  | 'settled'
+  | 'sealing_pass'
+  | 'emerging';
+
+export default function RoleRevealScreen({}: Props) {
   const { state, actions } = useGameSession();
 
   const publicView = state.publicView;
   const privateView = state.privateView;
   const players = [...(publicView?.players ?? [])].sort((a, b) => a.seatIndex - b.seatIndex);
-  const totalCount = players.length;
+  const totalCount = Math.max(1, players.length);
 
-  // Xác định người chơi hiện tại đang xem
-  const activePlayerId = state.playerId || privateView?.playerId || players[0]?.id;
-  const currentIndex = Math.max(
-    0,
-    players.findIndex((p) => p.id === activePlayerId)
-  );
+  // Tiến trình chuyền máy một chiều (0 .. totalCount - 1)
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [stage, setStage] = useState<CardStage>('idle');
+
   const currentPlayer = players[currentIndex] ?? {
-    id: 'p1',
+    id: 'player_1',
     name: 'Người chơi 1',
     seatIndex: 1,
     isAlive: true,
   };
 
-  // Trạng thái giữ bài để lật & bảo vệ quyền riêng tư khi chuyền máy
-  const [isHolding, setIsHolding] = useState(false);
-  const [isReadyForPlayer, setIsReadyForPlayer] = useState(false);
-  const [viewedSeatIndices, setViewedSeatIndices] = useState<Set<number>>(new Set());
+  const isLastPlayer = currentIndex >= totalCount - 1;
+  const nextPlayer = !isLastPlayer ? players[currentIndex + 1] : null;
 
-  // Thông tin vai trò
+  // Đồng bộ người chơi active với engine khi đổi lượt
+  useEffect(() => {
+    if (currentPlayer && actions.setLocalActivePlayer) {
+      actions.setLocalActivePlayer(currentPlayer.id);
+    }
+  }, [currentIndex, currentPlayer.id]);
+
+  // Timers tham chiếu để dọn dẹp khi unmount
+  const timer1Ref = useRef<number | null>(null);
+  const timer2Ref = useRef<number | null>(null);
+  const timer3Ref = useRef<number | null>(null);
+  const timer4Ref = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer1Ref.current) window.clearTimeout(timer1Ref.current);
+      if (timer2Ref.current) window.clearTimeout(timer2Ref.current);
+      if (timer3Ref.current) window.clearTimeout(timer3Ref.current);
+      if (timer4Ref.current) window.clearTimeout(timer4Ref.current);
+    };
+  }, []);
+
+  // Thông tin vai trò của người chơi đang cầm máy
   const myRoleId = privateView?.roleId ?? 'villager';
   const roleDef = ROLES_BY_ID[myRoleId] ?? {
     id: myRoleId,
     nameVi: 'Dân làng',
     nameEn: 'Villager',
     faction: 'VILLAGER' as const,
-    shortDesc: 'Bạn là dân làng lương thiện. Hãy dùng suy luận để tìm ra Ma Sói.',
+    shortDesc: 'Bạn không có kỹ năng ban đêm. Hãy dùng suy luận để tìm ra Ma Sói.',
   };
 
-  const isLastPlayer = currentIndex >= totalCount - 1;
-  const nextPlayer = !isLastPlayer ? players[currentIndex + 1] : null;
+  // Lấy câu mô tả kỹ năng ngắn gọn (1 dòng)
+  const conciseDesc = roleDef.shortDesc.split('.')[0] + '.';
 
-  // Xử lý giữ để lật bài
-  const handlePointerDown = () => {
-    setIsHolding(true);
-    setViewedSeatIndices((prev) => new Set(prev).add(currentPlayer.seatIndex));
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate(20);
-      } catch {
-        // ignore
-      }
-    }
-  };
+  // Danh sách đồng đội nếu là Ma Sói hoặc Hội Tam Điểm
+  const isWerewolf = roleDef.faction === 'WEREWOLF';
+  const wolfPartners = isWerewolf
+    ? (privateView?.teammates ?? []).map((t) => t.name)
+    : [];
 
-  const handlePointerUp = () => {
-    setIsHolding(false);
-  };
-
-  // Chuyển sang người tiếp theo
-  const handleNextPlayer = () => {
-    if (nextPlayer) {
-      setIsHolding(false);
-      setIsReadyForPlayer(false);
-      actions.setLocalActivePlayer(nextPlayer.id);
-    }
-  };
-
-  // Bắt đầu Đêm 1
-  const handleStartNight = async () => {
-    if (actions.startFirstNight) {
-      await actions.startFirstNight();
-    }
-  };
-
-  // Icon đại diện theo vai
+  // Icon nghệ thuật theo vai
   const getRoleIcon = (roleId: string, faction: string) => {
     if (faction === 'WEREWOLF') return '🐺';
     switch (roleId) {
@@ -122,192 +121,173 @@ export default function RoleRevealScreen({ onOpenRules }: Props) {
     }
   };
 
+  // =========================================================================
+  // NHỊP 1 & 2: Chạm để lật mở -> Tự thả xuống bàn
+  // =========================================================================
+  const handleCardClick = () => {
+    if (stage !== 'idle') return;
+
+    // Rung xúc giác nhẹ khi chạm
+    try {
+      navigator.vibrate?.(25);
+    } catch {
+      // ignore
+    }
+
+    // Nhịp 1: Nhấc lên & Lật mở (Lift & Flip)
+    setStage('lifting_flipping');
+
+    // Sau 850ms: Lật xong, lơ lửng 0.3s -> chuyển sang Nhịp 2: Settle
+    timer1Ref.current = window.setTimeout(() => {
+      setStage('settling');
+
+      // Sau 400ms: Hạ êm xuống bàn với độ nảy nhẹ, rung nhẹ như chạm mặt gỗ
+      timer2Ref.current = window.setTimeout(() => {
+        try {
+          navigator.vibrate?.(15);
+        } catch {
+          // ignore
+        }
+        setStage('settled');
+      }, 400);
+    }, 850);
+  };
+
+  // =========================================================================
+  // NHỊP 3: Úp bài & Chuyền máy một chiều
+  // =========================================================================
+  const handlePassOrStartNight = () => {
+    if (stage !== 'settled') return;
+
+    try {
+      navigator.vibrate?.(35);
+    } catch {
+      // ignore
+    }
+
+    // Nhịp 3: Lá bài lật úp lại và chìm mờ vào bóng tối
+    setStage('sealing_pass');
+
+    timer3Ref.current = window.setTimeout(async () => {
+      if (isLastPlayer) {
+        // Đã xem hết -> Bắt đầu Đêm 1
+        if (actions.startFirstNight) {
+          await actions.startFirstNight();
+        }
+      } else {
+        // Chuyển sang người tiếp theo một chiều
+        const nextIdx = currentIndex + 1;
+        const nextP = players[nextIdx];
+        if (nextP && actions.setLocalActivePlayer) {
+          actions.setLocalActivePlayer(nextP.id);
+        }
+        setCurrentIndex(nextIdx);
+
+        // Lá bài mới trồi lên từ màn sương
+        setStage('emerging');
+
+        timer4Ref.current = window.setTimeout(() => {
+          setStage('idle');
+        }, 500);
+      }
+    }, 520);
+  };
+
   return (
-    <main className="reveal-screen" onContextMenu={(e) => e.preventDefault()}>
-      {/* Header */}
-      <header className="reveal-header">
-        <div className="reveal-title-group">
-          <h1>Chuyền Máy Xem Vai</h1>
-          <p>Lần lượt từng người xem bí mật trước khi vào Đêm 1</p>
+    <main
+      className={`ritual-screen stage-${stage}`}
+      onContextMenu={(e) => e.preventDefault()}
+      aria-label="Xem vai bí mật"
+    >
+      {/* Quầng sáng mờ ảo ở tâm như ánh trăng/nến */}
+      <div className="ritual-ambient-glow" aria-hidden="true" />
+
+      {/* 1. Tiến độ nhỏ ở mép trên: 1 / 6 (mờ, không gây xao nhãng) */}
+      <div className="ritual-progress" aria-hidden="true">
+        {currentIndex + 1} / {totalCount}
+      </div>
+
+      {/* 2. Trung tâm: Tên người nhận + Lá bài 2:3 */}
+      <div className="ritual-center-container">
+        <div className="ritual-recipient-name">
+          {currentPlayer.name}
         </div>
-        <button
-          type="button"
-          className="reveal-rules-btn"
-          onClick={() => onOpenRules?.('roles')}
-          title="Xem mô tả chi tiết tất cả vai trò"
+
+        <div
+          className="ritual-card-stage"
+          onClick={handleCardClick}
+          role="button"
+          tabIndex={0}
+          aria-label={
+            stage === 'idle'
+              ? `Chạm để mở bài xem vai của ${currentPlayer.name}`
+              : `Lá bài vai trò của ${currentPlayer.name}`
+          }
         >
-          📖 Luật & Vai
-        </button>
-      </header>
+          <div className="ritual-card-body">
+            {/* Sương mỏng & bụi sáng bùng lên khi lật mở */}
+            <div className={`ritual-mist-burst faction-${roleDef.faction}`} aria-hidden="true" />
 
-      {/* Thanh tiến trình ghế ngồi 1..N */}
-      <nav className="reveal-stepper" aria-label="Danh sách ghế người chơi">
-        {players.map((p) => {
-          const isCurrent = p.seatIndex === currentPlayer.seatIndex;
-          const isViewed = viewedSeatIndices.has(p.seatIndex);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              className={`stepper-dot ${isCurrent ? 'is-current' : ''} ${
-                isViewed ? 'is-viewed' : ''
-              }`}
-              onClick={() => {
-                actions.setLocalActivePlayer(p.id);
-                setIsReadyForPlayer(false);
-                setIsHolding(false);
-              }}
-              title={`Ghế #${p.seatIndex} - ${p.name}`}
-            >
-              {p.seatIndex}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* 1. Màn hình Chuyền Máy (Bảo vệ tính riêng tư) */}
-      {!isReadyForPlayer ? (
-        <section className="handover-shield">
-          <div className="handover-icon-glow" aria-hidden="true">
-            📱🔄
-          </div>
-          <span className="handover-lead">Hãy chuyền điện thoại cho:</span>
-          <h2 className="handover-player-name">{currentPlayer.name}</h2>
-          <span className="handover-seat-tag">Ghế #{currentPlayer.seatIndex}</span>
-
-          <p className="handover-warning">
-            ⚠️ <strong>Bảo mật thân phận:</strong> Những người khác vui lòng không nhìn vào màn hình
-            hoặc nhắm mắt lại.
-          </p>
-
-          <button
-            type="button"
-            className="handover-ready-btn"
-            onClick={() => setIsReadyForPlayer(true)}
-          >
-            Tôi là {currentPlayer.name} ➔ Sẵn sàng xem vai
-          </button>
-        </section>
-      ) : (
-        /* 2. Màn hình Lá Bài 3D (Bấm giữ để lật lên, thả ra tự úp) */
-        <section className="card-section">
-          <div className="card-target-banner">
-            <span>Đang xem vai:</span>
-            <h2>
-              #{currentPlayer.seatIndex} {currentPlayer.name}
-            </h2>
-          </div>
-
-          <div
-            className="reveal-card-container"
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            role="button"
-            tabIndex={0}
-            aria-label="Nhấn giữ để lật bài xem vai"
-          >
-            <div className={`reveal-card-inner ${isHolding ? 'is-flipped' : ''}`}>
-              {/* Mặt sau: Lá bài úp */}
-              <div className="reveal-card-face reveal-card-back">
-                <div className="card-back-frame">
-                  <div className="card-back-crest" aria-hidden="true">
-                    🌕🐺
-                  </div>
-                  <h3 className="card-hold-prompt">Bấm & Giữ Để Lật Bài</h3>
-                  <p className="card-hold-sub">(Thả tay ra bài sẽ tự động úp lại)</p>
-
-                  <div className="card-press-indicator">
-                    <span aria-hidden="true">👆</span>
-                    <span>Chạm và giữ ngón tay vào đây</span>
-                  </div>
+            {/* Mặt lưng: Nhung đen huyền bí, viền vàng đồng mảnh */}
+            <div className="ritual-card-face ritual-card-back">
+              <div className="ritual-back-pattern">
+                <span className="ritual-back-corner-top" aria-hidden="true">✦</span>
+                <div className="ritual-back-crest">
+                  <span className="ritual-back-emblem" aria-hidden="true">☾</span>
                 </div>
+                <span className="ritual-back-corner-bottom" aria-hidden="true">✦</span>
+              </div>
+            </div>
+
+            {/* Mặt trước: Lật mở hiển thị vai trò */}
+            <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction}`}>
+              <span className="ritual-faction-label">
+                {roleDef.faction === 'WEREWOLF'
+                  ? 'PHE MA SÓI'
+                  : roleDef.faction === 'THIRD_PARTY'
+                  ? 'PHE THỨ BA'
+                  : 'PHE DÂN LÀNG'}
+              </span>
+
+              <div className="ritual-role-icon" aria-hidden="true">
+                {getRoleIcon(myRoleId, roleDef.faction)}
               </div>
 
-              {/* Mặt trước: Lá bài ngửa hiển thị vai */}
-              <div className={`reveal-card-face reveal-card-front faction-${roleDef.faction}`}>
-                <span className="card-front-faction-badge">
-                  {roleDef.faction === 'WEREWOLF'
-                    ? 'PHE MA SÓI'
-                    : roleDef.faction === 'THIRD_PARTY'
-                    ? 'PHE THỨ BA'
-                    : 'PHE DÂN LÀNG'}
-                </span>
+              <div className="ritual-role-info">
+                <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
+                <p className="ritual-role-desc">{conciseDesc}</p>
 
-                <div className="card-front-icon" aria-hidden="true">
-                  {getRoleIcon(myRoleId, roleDef.faction)}
-                </div>
-
-                <h3 className="card-front-title">{roleDef.nameVi}</h3>
-                <span className="card-front-subtitle">{roleDef.nameEn}</span>
-
-                <p className="card-front-desc">{roleDef.shortDesc}</p>
-
-                {/* Thông tin đặc thù bổ sung */}
-                {myRoleId === 'mason' && (
-                  <div className="card-front-extra">
-                    <strong>HỘI TAM ĐIỂM: </strong>
-                    <span>
-                      {privateView?.skills?.masonPartnerIds &&
-                      privateView.skills.masonPartnerIds.length > 0
-                        ? privateView.skills.masonPartnerIds
-                            .map((id) => {
-                              const p = players.find((pl) => pl.id === id);
-                              return p ? `#${p.seatIndex} ${p.name}` : id;
-                            })
-                            .join(', ')
-                        : 'Bạn là thành viên Hội Tam Điểm duy nhất.'}
-                    </span>
+                {isWerewolf && wolfPartners.length > 0 && (
+                  <div className="ritual-wolf-pack">
+                    Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
                   </div>
                 )}
-
-                {myRoleId === 'wild_child' && privateView?.skills?.roleModelId && (
-                  <div className="card-front-extra">
-                    <strong>THẦN TƯỢNG: </strong>
-                    <span>
-                      {(() => {
-                        const idol = players.find(
-                          (pl) => pl.id === privateView.skills?.roleModelId
-                        );
-                        return idol ? `#${idol.seatIndex} ${idol.name}` : 'Chưa chỉ định';
-                      })()}
-                    </span>
-                  </div>
-                )}
-
-                <span className="card-front-footer-note">Thả tay ra để úp bài lại</span>
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Nút hành động phía dưới */}
-          <div className="reveal-bottom-actions">
-            {!isLastPlayer && nextPlayer ? (
-              <button
-                type="button"
-                className="reveal-next-btn"
-                onClick={handleNextPlayer}
-              >
-                Đã nhớ vai ➔ Chuyền cho #{nextPlayer.seatIndex} {nextPlayer.name}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="reveal-next-btn start-night-btn"
-                onClick={handleStartNight}
-              >
-                Tất cả đã ghi nhớ vai ➔ Bắt đầu Đêm 1 🌙
-              </button>
-            )}
-            <p className="reveal-hint-text">
-              {viewedSeatIndices.has(currentPlayer.seatIndex)
-                ? '✓ Bạn đã xem vai trò. Hãy ghi nhớ thân phận trước khi chuyền máy.'
-                : 'Hãy chạm giữ để xem bài của bạn trước khi bấm tiếp tục.'}
-            </p>
+      {/* 3. Mép dưới: Dòng chữ mờ khi chưa mở HOẶC Nút duy nhất khi đã mở */}
+      <div className="ritual-bottom-area">
+        {(stage === 'idle' || stage === 'emerging') && (
+          <div className="ritual-bottom-hint">
+            Chạm vào lá bài để mở
           </div>
-        </section>
-      )}
+        )}
+
+        {stage === 'settled' && (
+          <button
+            type="button"
+            className={`ritual-pass-btn ${isLastPlayer ? 'is-final' : ''}`}
+            onClick={handlePassOrStartNight}
+          >
+            {isLastPlayer
+              ? 'Tất cả đã nhớ vai · Bắt đầu Đêm 1 🌙'
+              : `Đã nhớ · Chuyền cho ${nextPlayer?.name}`}
+          </button>
+        )}
+      </div>
     </main>
   );
 }
