@@ -186,19 +186,23 @@
 /* =========================================================================
    MẶT TRƯỚC: Lá bài vai trò (Lộ diện khi nhấn giữ, úp lại khi thả tay)
    ========================================================================= */
+/* =========================================================================
+   MẶT TRƯỚC: 3 VÙNG TỶ LỆ CHUẨN (Top 15% - Mid 55% - Bottom 30%)
+   ========================================================================= */
 .ritual-card-front {
-  background: #0d0f15;
-  border: 1px solid rgba(201, 134, 56, 0.5);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), inset 0 0 0 6px #0d0f15, inset 0 0 0 7.5px rgba(201, 134, 56, 0.2);
+  background: #0b0e14;
+  border: 1px solid rgba(201, 134, 56, 0.45);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(201, 134, 56, 0.15);
   opacity: 0;
   transform: rotateY(-180deg);
   z-index: 1;
   pointer-events: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: space-between;
-  padding: 0;
+  align-items: center;
+  padding: 14px 12px 14px;
+  box-sizing: border-box;
   overflow: hidden;
   text-align: center;
 }
@@ -211,207 +215,170 @@
   pointer-events: auto;
 }
 
-/* Gradient nền theo phe */
+/* Gradient nền tinh tế tỏa nhẹ từ tâm ngực nhân vật */
 .ritual-card-front.faction-VILLAGER {
-  background: radial-gradient(circle at 50% 35%, rgba(201, 134, 56, 0.22) 0%, #0d0f15 72%);
-  border-color: rgba(201, 134, 56, 0.6);
+  background: radial-gradient(circle at 50% 42%, rgba(201, 134, 56, 0.18) 0%, #0b0e14 65%);
+  border-color: rgba(201, 134, 56, 0.55);
 }
 
 .ritual-card-front.faction-WEREWOLF {
-  background: radial-gradient(circle at 50% 35%, rgba(180, 32, 40, 0.28) 0%, #0d0f15 72%);
-  border-color: rgba(196, 43, 28, 0.6);
+  background: radial-gradient(circle at 50% 42%, rgba(180, 32, 40, 0.22) 0%, #0b0e14 65%);
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.9), 0 0 22px rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(245, 158, 11, 0.22);
 }
 
 .ritual-card-front.faction-THIRD_PARTY {
-  background: radial-gradient(circle at 50% 35%, rgba(138, 58, 178, 0.28) 0%, #0d0f15 72%);
-  border-color: rgba(155, 89, 182, 0.6);
+  background: radial-gradient(circle at 50% 42%, rgba(138, 58, 178, 0.22) 0%, #0b0e14 65%);
+  border-color: rgba(168, 85, 247, 0.55);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.9), 0 0 22px rgba(168, 85, 247, 0.2), inset 0 0 0 1px rgba(245, 158, 11, 0.22);
 }
 
-/* Thẻ bài tràn viền tranh minh họa (Full Tarot Card Art) */
-.ritual-card-front.has-art {
-  padding: 0;
-  overflow: hidden;
-  background: #0b0e14;
-  border: 1.5px solid rgba(245, 158, 11, 0.55);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85), inset 0 0 0 1px rgba(245, 158, 11, 0.2);
-}
-
-.ritual-card-front.has-art.faction-WEREWOLF {
-  border-color: rgba(239, 68, 68, 0.65);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 24px rgba(239, 68, 68, 0.25), inset 0 0 0 1px rgba(245, 158, 11, 0.3);
-}
-
-.ritual-card-art-backdrop {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
+/* 1. VÙNG TRÊN (~15% chiều cao): Badge Phe đứng độc lập */
+.ritual-card-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  background: #0b0e14;
-}
-
-.ritual-card-full-art {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 18%;
-  display: block;
-  transform: scale(1.08);
-  filter: drop-shadow(0 0 24px rgba(239, 68, 68, 0.3));
-  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.is-holding .ritual-card-full-art {
-  transform: scale(1.14);
-}
-
-.ritual-card-art-vignette {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    rgba(11, 14, 20, 0.72) 0%,
-    rgba(11, 14, 20, 0.1) 18%,
-    rgba(11, 14, 20, 0) 42%,
-    rgba(11, 14, 20, 0.65) 68%,
-    rgba(11, 14, 20, 0.92) 84%,
-    #0b0e14 100%
-  );
-}
-
-.ritual-card-inner {
-  position: relative;
+  padding-top: 2px;
   z-index: 2;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  padding: 22px 16px 20px;
-  box-sizing: border-box;
 }
 
-.has-art .ritual-card-inner {
-  padding: 16px 14px 14px;
-}
-
-.has-art .ritual-faction-label {
-  background: rgba(11, 14, 20, 0.75);
+.ritual-faction-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(11, 14, 20, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
-  letter-spacing: 0.18em;
-}
-
-.has-art .ritual-role-info {
-  background: linear-gradient(to top, rgba(11, 14, 20, 0.96) 0%, rgba(11, 14, 20, 0.88) 70%, rgba(11, 14, 20, 0) 100%);
-  padding: 24px 10px 8px;
-  border-radius: 0 0 14px 14px;
-  width: 100%;
-  gap: 4px;
-}
-
-.has-art .ritual-role-name {
-  font-size: 1.4rem;
-  letter-spacing: 0.08em;
-  color: #fff6e8;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.95);
-}
-
-.has-art .ritual-role-desc {
-  font-size: 11.5px;
-  line-height: 1.4;
-  color: #d1c7b7;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
-}
-
-/* Nhãn phe nhỏ tinh tế */
-.ritual-faction-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+  user-select: none;
 }
 
 .faction-VILLAGER .ritual-faction-label {
   color: #cca45e;
+  border-color: rgba(201, 134, 56, 0.35);
+  background: rgba(201, 134, 56, 0.12);
 }
 
 .faction-WEREWOLF .ritual-faction-label {
-  color: #e55353;
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .faction-THIRD_PARTY .ritual-faction-label {
   color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.12);
 }
 
-/* Icon vai trò to, sắc nét */
+/* 2. VÙNG GIỮA (50%–55% chiều cao): Chân dung nhân vật 75%–80% chiều rộng */
+.ritual-card-art-zone {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  padding: 4px 0 0;
+}
+
+/* Khung chân dung thu gọn 78% bề ngang, để hở an toàn > 24px hai bên */
+.ritual-portrait-frame {
+  width: 78%;
+  max-width: 188px;
+  aspect-ratio: 1 / 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ritual-portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.32)) drop-shadow(0 8px 24px rgba(0, 0, 0, 0.9));
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.is-holding .ritual-portrait-img {
+  transform: scale(1.04);
+}
+
+/* Gradient fade ở đáy chân dung: mờ dần vào nền đen #0B0E14 TRƯỚC KHI chạm chữ */
+.ritual-portrait-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(11, 14, 20, 0.85) 65%, #0b0e14 100%);
+  pointer-events: none;
+}
+
+/* Fallback icon khi role chưa có ảnh minh họa */
 .ritual-role-icon {
   font-size: 58px;
   line-height: 1;
-  margin: 6px 0;
   filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.8));
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.ritual-role-img {
-  width: 98px;
-  height: 98px;
-  object-fit: cover;
-  border-radius: 50%;
-  border: 1.5px solid rgba(245, 158, 11, 0.55);
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.35), 0 8px 24px rgba(0, 0, 0, 0.9);
-  display: block;
-}
-
-/* Khối nội dung vai trò: Tên vai & 1 dòng kỹ năng */
+/* 3. VÙNG DƯỚI (~30% chiều cao): Tên vai và mô tả trên nền tối sạch sẽ */
 .ritual-role-info {
+  flex: 0 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 100%;
+  gap: 4px;
+  z-index: 2;
+  padding: 4px 10px 2px;
+  box-sizing: border-box;
+  background: transparent;
 }
 
 .ritual-role-name {
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #f3ece0;
+  letter-spacing: 0.06em;
+  color: #f7ecd9;
   margin: 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
 }
 
 .ritual-role-desc {
-  font-size: 12px;
-  line-height: 1.45;
-  color: #a89f91;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #b3a99b;
   margin: 0;
-  max-width: 90%;
+  max-width: 95%;
+  text-align: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
 }
 
-/* Danh sách đồng đội sói nhỏ gọn (nếu có) */
+/* Danh sách đồng đội sói nhỏ gọn */
 .ritual-wolf-pack {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: 4px;
+  font-size: 10.5px;
   color: #f87171;
-  background: rgba(180, 32, 40, 0.18);
+  background: rgba(180, 32, 40, 0.16);
   border: 1px solid rgba(180, 32, 40, 0.35);
   border-radius: 6px;
-  padding: 4px 10px;
-  width: 88%;
+  padding: 3px 8px;
+  width: 92%;
   box-sizing: border-box;
 }
 

@@ -262,18 +262,8 @@ export default function RoleRevealScreen({}: Props) {
 
             {/* Mặt trước: Lật mở hiển thị vai trò (Hiện khi nhấn giữ) */}
             <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction} ${roleImage ? 'has-art' : ''}`}>
-              {roleImage && (
-                <div className="ritual-card-art-backdrop" aria-hidden="true">
-                  <img
-                    src={roleImage}
-                    alt={roleDef.nameVi}
-                    className="ritual-card-full-art"
-                  />
-                  <div className="ritual-card-art-vignette" />
-                </div>
-              )}
-
-              <div className="ritual-card-inner">
+              {/* 1. Vùng trên (15% chiều cao): Badge phe độc lập, thoáng đãng */}
+              <header className="ritual-card-header">
                 <span className="ritual-faction-label">
                   {roleDef.faction === 'WEREWOLF'
                     ? 'PHE MA SÓI'
@@ -281,37 +271,50 @@ export default function RoleRevealScreen({}: Props) {
                     ? 'PHE THỨ BA'
                     : 'PHE DÂN LÀNG'}
                 </span>
+              </header>
 
-                {!roleImage && (
-                  <div className="ritual-role-icon" aria-hidden="true">
+              {/* 2. Vùng giữa (50%–55% chiều cao): Chân dung nhân vật 75%–80% chiều rộng, đáy mờ dần */}
+              <div className="ritual-card-art-zone" aria-hidden="true">
+                {roleImage ? (
+                  <div className="ritual-portrait-frame">
+                    <img
+                      src={roleImage}
+                      alt={roleDef.nameVi}
+                      className="ritual-portrait-img"
+                    />
+                    <div className="ritual-portrait-fade" />
+                  </div>
+                ) : (
+                  <div className="ritual-role-icon">
                     <span>{getRoleIcon(myRoleId, roleDef.faction)}</span>
                   </div>
                 )}
-
-                <div className="ritual-role-info">
-                  <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
-                  <p className="ritual-role-desc">{conciseDesc}</p>
-
-                  {isWerewolf && wolfPartners.length > 0 && (
-                    <div className="ritual-wolf-pack">
-                      Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
-                    </div>
-                  )}
-
-                  {isMason && masonPartners.length > 0 && (
-                    <div
-                      className="ritual-wolf-pack"
-                      style={{
-                        borderColor: 'rgba(201, 134, 56, 0.45)',
-                        background: 'rgba(201, 134, 56, 0.15)',
-                        color: '#ecc94b',
-                      }}
-                    >
-                      Anh em Tam Điểm: <b>{masonPartners.join(', ')}</b>
-                    </div>
-                  )}
-                </div>
               </div>
+
+              {/* 3. Vùng dưới (30% chiều cao): Tên vai và mô tả trên nền tối sạch sẽ */}
+              <footer className="ritual-role-info">
+                <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
+                <p className="ritual-role-desc">{conciseDesc}</p>
+
+                {isWerewolf && wolfPartners.length > 0 && (
+                  <div className="ritual-wolf-pack">
+                    Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
+                  </div>
+                )}
+
+                {isMason && masonPartners.length > 0 && (
+                  <div
+                    className="ritual-wolf-pack"
+                    style={{
+                      borderColor: 'rgba(201, 134, 56, 0.45)',
+                      background: 'rgba(201, 134, 56, 0.15)',
+                      color: '#ecc94b',
+                    }}
+                  >
+                    Anh em Tam Điểm: <b>{masonPartners.join(', ')}</b>
+                  </div>
+                )}
+              </footer>
             </div>
           </div>
         </div>
