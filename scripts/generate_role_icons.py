@@ -21,6 +21,29 @@ import requests
 # Default models
 DEFAULT_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
+# System Instructions and Style Locking
+SYSTEM_INSTRUCTION = (
+    "You are a Lead UI Icon Illustrator designing a cohesive character icon set for a modern dark-themed mobile web game.\n\n"
+    "STRICT VISUAL RULES:\n"
+    "1. Art Direction: Modern dark atmospheric emblem illustration. Bold, clean geometric silhouettes that remain instantly readable even when scaled down to a 40x40px mobile avatar. Avoid overly intricate, cluttered, or messy filigree details.\n"
+    "2. Background: Pure, flat, uniform obsidian black (#0B0E14) background. Zero scenery, zero clouds, zero floor, zero textures extending to the edges.\n"
+    "3. Color Hierarchy:\n"
+    "   - 75% Pure Obsidian Black (#0B0E14) background and deep shadows.\n"
+    "   - 20% Warm Amber Gold (#F59E0B) primary metallic foil line-art and rim lighting.\n"
+    "   - 5% Faction Accent Color (used strictly for small focal points like glowing eyes, magic orbs, potion liquids, or gem details — never flood the whole character).\n"
+    "4. Framing: Centered symmetrical upper-body bust or iconic emblem with at least 18% empty black margin on all four sides so circular avatar crops never clip the subject.\n"
+    "5. Forbidden: NO text, NO letters, NO numbers, NO playing card borders, NO frames, NO watermarks."
+)
+
+STYLE_LOCK_PROMPT = (
+    "Style Reference Requirement: Closely lock and match the exact art style, stroke line width, "
+    "angular geometric planar facets, and crisp gold foil rim lighting. "
+    "Background must be solid flat obsidian black (#0B0E14). Maintain warm amber gold (#F59E0B) line-art "
+    "with the specified pinpoint faction accent color. Square 1:1 framing, centered symmetrical "
+    "upper-body bust portrait, flat 2D graphic design tarot emblem with zero clutter, no text, "
+    "no numbers, and no card borders or frames."
+)
+
 # SDXL negative prompt to ensure clean vector/emblem output
 NEGATIVE_PROMPT = (
     "text, letters, words, numbers, signature, watermark, username, playing card border, "
@@ -157,8 +180,15 @@ def generate_single_icon(
     faction = item.get("faction", "VILLAGER")
     prompt_text = item["prompt"]
 
+    # Combine System Instructions, Style Locking, and Role Specification
+    full_prompt = (
+        f"{SYSTEM_INSTRUCTION}\n\n"
+        f"{STYLE_LOCK_PROMPT}\n\n"
+        f"CHARACTER SPECIFICATION:\n{prompt_text}"
+    )
+
     print(f"[{role_id}] Requesting generation ({faction}, model: {model_name})...")
-    img = call_cloudflare_workers_ai(account_id, api_token, model_name, prompt_text)
+    img = call_cloudflare_workers_ai(account_id, api_token, model_name, full_prompt)
     post_process_and_save(img, output_path)
     size_kb = output_path.stat().st_size / 1024
     print(f"[{role_id}] ✓ Successfully generated and saved to {output_path} ({size_kb:.1f} KB)")
