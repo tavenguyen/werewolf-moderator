@@ -21,7 +21,6 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [piedPiperTargets, setPiedPiperTargets] = useState<PlayerId[]>([]);
   const [witchPoisonTargetId, setWitchPoisonTargetId] = useState<PlayerId | null>(null);
   const [isWitchHeal, setIsWitchHeal] = useState(false);
-  const [isShowingRole, setIsShowingRole] = useState(false);
   const [notice, setNotice] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
@@ -355,7 +354,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               onClick={() => setMode('sleep')}
               className={mode === 'sleep' ? 'segment active' : 'segment'}
             >
-              Thổi nến & Xem vai
+              Đêm tối
             </button>
             <button
               type="button"
@@ -369,310 +368,43 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         )}
       </header>
 
-      {/* 1. Sleep & Secret Role Overlay (Thổi tắt ngọn nến & Xem vai bí mật chung) */}
+      {/* 1. Màn hình Đêm Tĩnh Lặng */}
       {mode === 'sleep' && (
         <section className="night-content sleep-content" aria-live="polite">
-          {/* Status banner của lượt gọi ban đêm */}
-          <div className="night-turn-status-card">
-            <span className="turn-step-pill">
-              {currentTurnInfo?.totalTurns
-                ? `LƯỢT ${currentTurnInfo.turnIndex ?? 1}/${currentTurnInfo.totalTurns}`
-                : 'ĐÊM TỐI'}
-            </span>
-            <h2 className="current-turn-title">
-              {currentTurnInfo ? currentTurnInfo.titleVi : 'Đêm tĩnh lặng'}
-            </h2>
-            {currentTurnInfo?.isFake ? (
-              <p className="turn-sub-hint">✦ Lượt gọi giả lập để bảo vệ nhịp độ và chống lộ thông tin</p>
-            ) : canAct ? (
-              <button
-                type="button"
-                className="jump-to-action-btn"
-                onClick={() => setMode('action')}
-              >
-                ⚡ Đến lượt bạn thức dậy! Bấm để thực hiện hành động ➔
-              </button>
-            ) : (
-              <p className="turn-sub-hint">☾ Nhắm mắt lại và lắng nghe khẩu lệnh của quản trò</p>
-            )}
-          </div>
-
           <div className="stealth-moon-wrap" aria-hidden="true">
             <div className="stealth-moon-ring" />
             <div className="sleep-icon">☾</div>
           </div>
-          <h1>THỔI TẮT NGỌN NẾN</h1>
-          <p>Nhắm mắt lại và lắng nghe lời dẫn từ quản trò.</p>
 
-          {/* Banner chúc mừng tỉnh rượu nếu là Drunk ở Đêm 3+ */}
-          {privateView?.skills?.drunkRealRoleId && (
-            <div className="drunk-sober-banner" role="alert">
-              <div className="drunk-sober-icon">🍺✨</div>
-              <div className="drunk-sober-content">
-                <strong>CHÚC MỪNG BẠN ĐÃ TỈNH RƯỢU!</strong>
-                <p>
-                  Cơn say 2 đêm đã tan biến. Vai trò thực sự của bạn đã được đánh thức:{' '}
-                  <b className="drunk-real-role-name">
-                    {ROLES_BY_ID[privateView.skills.drunkRealRoleId]?.nameVi ||
-                      privateView.skills.drunkRealRoleId}
-                  </b>
-                  !
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="press-hold-card-wrapper">
-            <button
-              type="button"
-              className={`press-hold-card ${isShowingRole ? 'is-revealed' : ''}`}
-              onPointerDown={() => setIsShowingRole(true)}
-              onPointerUp={() => setIsShowingRole(false)}
-              onPointerLeave={() => setIsShowingRole(false)}
-              onContextMenu={(e) => e.preventDefault()}
-              aria-label="Nhấn giữ để xem vai trò bí mật"
-            >
-              {isShowingRole ? (
-                <div className="revealed-role-box">
-                  <span className="role-side-badge">
-                    {roleDef.faction === 'WEREWOLF'
-                      ? 'PHE MA SÓI'
-                      : roleDef.faction === 'THIRD_PARTY'
-                      ? 'PHE THỨ BA'
-                      : 'PHE DÂN LÀNG'}
-                  </span>
-
-                  {/* Huy hiệu bùa chú bí mật */}
-                  {privateView?.skills?.isEnchanted && (
-                    <div className="status-badge enchanted-badge" title="Bạn đã bị Người thổi sáo thôi miên">
-                      🎵 Đã bị thôi miên
-                    </div>
-                  )}
-                  {privateView?.skills?.isCultMember && (
-                    <div className="status-badge cult-member-badge" title="Bạn đã được Trưởng giáo phái kết nạp">
-                      🕯️ Tín đồ Giáo phái
-                    </div>
-                  )}
-
-                  <div className="role-icon-big">
-                    {roleDef.faction === 'WEREWOLF'
-                      ? '🐺'
-                      : myRoleId === 'seer'
-                      ? '🔮'
-                      : myRoleId === 'witch'
-                      ? '🧪'
-                      : myRoleId === 'bodyguard'
-                      ? '⚔️'
-                      : myRoleId === 'mason'
-                      ? '🏛️'
-                      : myRoleId === 'wild_child'
-                      ? '👶'
-                      : myRoleId === 'dire_wolf'
-                      ? '❄️'
-                      : myRoleId === 'hoodlum'
-                      ? '🗡️'
-                      : myRoleId === 'pied_piper'
-                      ? '🎵'
-                      : myRoleId === 'cult_leader'
-                      ? '🕯️'
-                      : myRoleId === 'doppelganger'
-                      ? '👥'
-                      : myRoleId === 'drunk'
-                      ? '🍺'
-                      : '🛡️'}
-                  </div>
-                  <h2>{roleDef.nameVi}</h2>
-                  <p>{roleDef.shortDesc}</p>
-
-                  {myRoleId === 'mason' && (
-                    <div className="revealed-role-details">
-                      <strong>ANH EM HỘI TAM ĐIỂM:</strong>
-                      <span>
-                        {privateView?.skills?.masonPartnerIds && privateView.skills.masonPartnerIds.length > 0
-                          ? privateView.skills.masonPartnerIds
-                              .map((id) => {
-                                const p = publicView?.players.find((pl) => pl.id === id);
-                                return p ? `#${p.seatIndex} ${p.name}` : id;
-                              })
-                              .join(', ')
-                          : 'Bạn là thành viên Hội Tam Điểm duy nhất trong làng.'}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'wild_child' && privateView?.skills?.roleModelId && (
-                    <div className="revealed-role-details">
-                      <strong>THẦN TƯỢNG CỦA BẠN:</strong>
-                      <span>
-                        {(() => {
-                          const p = publicView?.players.find((pl) => pl.id === privateView.skills?.roleModelId);
-                          return p ? `#${p.seatIndex} ${p.name}` : 'Chưa chọn';
-                        })()}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'dire_wolf' && privateView?.skills?.companionId && (
-                    <div className="revealed-role-details">
-                      <strong>BẠN ĐỒNG HÀNH:</strong>
-                      <span>
-                        {(() => {
-                          const p = publicView?.players.find((pl) => pl.id === privateView.skills?.companionId);
-                          return p ? `#${p.seatIndex} ${p.name}` : 'Chưa chọn';
-                        })()}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'hoodlum' && privateView?.skills?.hoodlumTargetIds && (
-                    <div className="revealed-role-details">
-                      <strong>2 KẺ THÙ CẦN TRỪ KHỬ:</strong>
-                      <span>
-                        {(() => {
-                          const ids = privateView.skills.hoodlumTargetIds;
-                          const p1 = publicView?.players.find((pl) => pl.id === ids[0]);
-                          const p2 = publicView?.players.find((pl) => pl.id === ids[1]);
-                          return `${p1 ? `#${p1.seatIndex} ${p1.name}` : ids[0]} & ${p2 ? `#${p2.seatIndex} ${p2.name}` : ids[1]}`;
-                        })()}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'lone_wolf' && (
-                    <div className="revealed-role-details">
-                      <strong>MỤC TIÊU SÓI CÔ ĐƠN:</strong>
-                      <span>Bạn cắn cùng bầy Sói mỗi đêm, nhưng chỉ thắng nếu phe Sói thắng và bạn là người duy nhất sống sót.</span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'wolf_accursed' && (
-                    <div className="revealed-role-details">
-                      <strong>TRẠNG THÁI PHÉP NGUYỀN:</strong>
-                      <span>
-                        {privateView?.skills?.accursedWolfUsed
-                          ? 'Đã sử dụng phép nguyền'
-                          : 'Còn 1 lần nguyền biến nạn nhân thành Ma Sói'}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'big_bad_wolf' && (
-                    <div className="revealed-role-details">
-                      <strong>SÓI ĐẠI CA:</strong>
-                      <span>Được cắn thêm 1 nạn nhân mỗi đêm khi chưa có Ma Sói nào trong đàn bị chết.</span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'aura_seer' && (
-                    <div className="revealed-role-details">
-                      <strong>TIÊN TRI HÀO QUANG:</strong>
-                      <span>Mỗi đêm quan sát 1 người để nhận biết họ là Người thường (Dân thường/Sói thường) hay có Hào quang đặc biệt.</span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'fox' && (
-                    <div className="revealed-role-details">
-                      <strong>CON CÁO:</strong>
-                      <span>
-                        {privateView?.skills?.foxLostPower
-                          ? 'Đã mất khứu giác đánh hơi do đã từng chỉ vào cụm an toàn.'
-                          : 'Mỗi đêm chọn 1 người làm tâm điểm để đánh hơi bầy Sói trong cụm 3 người. Nếu cụm an toàn, bạn sẽ mất phép.'}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'pi' && (
-                    <div className="revealed-role-details">
-                      <strong>THÁM TỬ TƯ (P.I.):</strong>
-                      <span>
-                        {privateView?.skills?.piUsed
-                          ? 'Đã sử dụng lượt điều tra duy nhất.'
-                          : 'Còn 1 lần duy nhất trong cả ván để điều tra 1 nghi phạm và 2 người ngồi cạnh xem có Ma Sói không.'}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'spellcaster' && (
-                    <div className="revealed-role-details">
-                      <strong>NGƯỜI PHÙ PHÉP:</strong>
-                      <span>Mỗi đêm chọn 1 người để cấm họ phát biểu vào ban ngày hôm sau (không được chọn trùng người 2 đêm liên tiếp).</span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'troublemaker' && (
-                    <div className="revealed-role-details">
-                      <strong>KẺ PHÁ RỐI:</strong>
-                      <span>
-                        {privateView?.skills?.troublemakerUsed
-                          ? 'Đã kích hoạt hỗn loạn.'
-                          : 'Còn 1 lần duy nhất trong ván để kích hoạt treo cổ 2 người trong ngày hôm sau thay vì 1 người.'}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'apprentice_seer' && (
-                    <div className="revealed-role-details">
-                      <strong>TIÊN TRI TẬP SỰ:</strong>
-                      <span>Khi Tiên tri thật chết hoặc hóa Sói, bạn sẽ thức tỉnh và kế thừa toàn bộ năng lực soi phe mỗi đêm.</span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'doppelganger' && (
-                    <div className="revealed-role-details">
-                      <strong>BẢN SAO CỦA BẠN:</strong>
-                      <span>
-                        {(() => {
-                          const targetId = privateView?.skills?.doppelgangerTargetId;
-                          const p = publicView?.players.find((pl) => pl.id === targetId);
-                          return p ? `#${p.seatIndex} ${p.name}` : targetId ? targetId : 'Chưa chọn';
-                        })()}
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'pied_piper' && (
-                    <div className="revealed-role-details">
-                      <strong>NGƯỜI THỔI SÁO:</strong>
-                      <span>
-                        Mỗi đêm thôi miên tối đa 2 người. Bạn thắng độc tôn khi tất cả người chơi còn sống đều đã bị thôi miên!
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'cult_leader' && (
-                    <div className="revealed-role-details">
-                      <strong>TRƯỞNG GIÁO PHÁI:</strong>
-                      <span>
-                        Mỗi đêm kết nạp 1 tín đồ. Bạn thắng độc tôn khi tất cả người chơi còn sống đều là tín đồ của giáo phái!
-                      </span>
-                    </div>
-                  )}
-
-                  {myRoleId === 'drunk' && (
-                    <div className="revealed-role-details">
-                      <strong>KẺ SAY RƯỢU:</strong>
-                      <span>
-                        {privateView?.skills?.drunkRealRoleId
-                          ? `Bạn đã tỉnh rượu! Vai thật của bạn là: ${ROLES_BY_ID[privateView.skills.drunkRealRoleId]?.nameVi || privateView.skills.drunkRealRoleId}`
-                          : 'Cơn say vẫn còn nồng, bạn vẫn nghĩ mình là Dân làng. Đầu Đêm 3 bạn sẽ tỉnh rượu!'}
-                      </span>
-                    </div>
-                  )}
-
-                  <small className="release-hint">Thả tay để che lại ngay lập tức</small>
-                </div>
-              ) : (
-                <div className="unrevealed-card-box">
-                  <div className="card-tarot-icon">🎴</div>
-                  <strong>NHẤN VÀ GIỮ VÀO ĐÂY</strong>
-                  <span>để mở lá bài xem vai bí mật</span>
-                  <small>Buông tay màn hình sẽ tự động che lại</small>
-                </div>
-              )}
-            </button>
+          <div className="night-calling-card">
+            <span className="turn-step-pill">
+              {currentTurnInfo?.totalTurns
+                ? `LƯỢT ${currentTurnInfo.turnIndex ?? 1} / ${currentTurnInfo.totalTurns}`
+                : 'ĐÊM TỐI'}
+            </span>
+            <h1 className="night-calling-title">
+              {currentTurnInfo ? currentTurnInfo.titleVi : 'Đêm tĩnh lặng'}
+            </h1>
+            <p className="night-calling-hint">
+              {currentTurnInfo?.isFake
+                ? '✦ Quản trò đang phát thanh điều phối nhịp độ ván đấu.'
+                : canAct
+                ? 'Đã đến lượt thức dậy của bạn!'
+                : 'Nhắm mắt lại và lắng nghe lời dẫn từ quản trò.'}
+            </p>
           </div>
 
-          {/* Nút điều phối chuyển lượt cho 1 máy offline */}
+          {canAct && (
+            <button
+              type="button"
+              className="jump-to-action-btn"
+              onClick={() => setMode('action')}
+            >
+              ⚡ Vào lượt hành động của bạn ➔
+            </button>
+          )}
+
+          {/* Nút điều phối chuyển lượt cho chế độ 1 máy offline */}
           {isSingleDevice && (
             <div className="night-offline-advance-bar">
               <button
