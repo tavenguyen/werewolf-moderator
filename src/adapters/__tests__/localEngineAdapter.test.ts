@@ -59,6 +59,9 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     state = adapter.getState();
     expect(state.publicView?.phase).toBe('NIGHT');
     expect(state.publicView?.currentTurnInfo).toBeDefined();
+    expect(state.publicView?.currentTurnInfo?.turnIndex).toBe(1);
+    expect(state.publicView?.currentTurnInfo?.totalTurns).toBeGreaterThan(0);
+    expect(state.playerId).toBeDefined();
   });
 
   it('điều phối lần lượt các lượt đêm và chuyển sang Ngày thảo luận', async () => {

@@ -38,10 +38,16 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
   if (gameState?.phase === 'NIGHT' && room.nightTurnPlan.length > 0) {
     const currentTurn = room.nightTurnPlan[room.currentNightTurnIndex];
     if (currentTurn) {
+      const nextTurn = room.nightTurnPlan[room.currentNightTurnIndex + 1];
       currentTurnInfo = {
         turnKey: currentTurn.turnKey,
         titleVi: currentTurn.titleVi,
         titleEn: currentTurn.titleEn,
+        turnIndex: room.currentNightTurnIndex + 1,
+        totalTurns: room.nightTurnPlan.length,
+        nextTurnTitleVi: nextTurn ? nextTurn.titleVi : null,
+        isFake: currentTurn.isFake,
+        canAct: currentTurn.canAct,
       };
     }
   }

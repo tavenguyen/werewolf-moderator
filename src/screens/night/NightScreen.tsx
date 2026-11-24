@@ -14,7 +14,8 @@ type NightScreenProps = {
 export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenProps) {
   const { state, actions, deviceMode } = useGameSession();
 
-  const [mode, setMode] = useState<'sleep' | 'action' | 'my_role'>('sleep');
+  const [mode, setMode] = useState<'sleep' | 'action'>('sleep');
+  const [advancePressed, setAdvancePressed] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState<PlayerId | null>(null);
   const [hoodlumTargets, setHoodlumTargets] = useState<PlayerId[]>([]);
   const [piedPiperTargets, setPiedPiperTargets] = useState<PlayerId[]>([]);
@@ -266,6 +267,13 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   };
 
   const handleAdvanceLocal = () => {
+    setAdvancePressed(true);
+    setTimeout(() => setAdvancePressed(false), 250);
+    try {
+      navigator.vibrate?.(40);
+    } catch {
+      // ignore
+    }
     actions.advanceLocalTurn();
     setHasSubmitted(false);
     setSelectedTargetId(null);
@@ -339,24 +347,16 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           </span>
         </div>
 
-        <nav aria-label="Chế độ ban đêm" className="segmented-control">
-          <button
-            type="button"
-            aria-pressed={mode === 'sleep'}
-            onClick={() => setMode('sleep')}
-            className={mode === 'sleep' ? 'segment active' : 'segment'}
-          >
-            Thổi nến (Ngủ)
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === 'my_role'}
-            onClick={() => setMode('my_role')}
-            className={mode === 'my_role' ? 'segment active' : 'segment'}
-          >
-            Xem vai bí mật
-          </button>
-          {canAct && (
+        {canAct && (
+          <nav aria-label="Chế độ ban đêm" className="segmented-control">
+            <button
+              type="button"
+              aria-pressed={mode === 'sleep'}
+              onClick={() => setMode('sleep')}
+              className={mode === 'sleep' ? 'segment active' : 'segment'}
+            >
+              Thổi nến & Xem vai
+            </button>
             <button
               type="button"
               aria-pressed={mode === 'action'}
@@ -365,23 +365,38 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             >
               Hành động
             </button>
-          )}
-        </nav>
+          </nav>
+        )}
       </header>
 
-      {/* Thông báo tỉnh rượu nổi bật nếu là Drunk ở Đêm 3+ */}
-      {privateView?.skills?.drunkRealRoleId && mode !== 'my_role' && (
-        <div className="drunk-sober-toast" onClick={() => setMode('my_role')}>
-          <span>
-            🍺 <b>Bạn đã tỉnh rượu!</b> Nhấn để xem vai trò thật:{' '}
-            <b>{ROLES_BY_ID[privateView.skills.drunkRealRoleId]?.nameVi || privateView.skills.drunkRealRoleId}</b>
-          </span>
-        </div>
-      )}
-
-      {/* 1. Sleep Overlay (Thổi tắt ngọn nến) */}
+      {/* 1. Sleep & Secret Role Overlay (Thổi tắt ngọn nến & Xem vai bí mật chung) */}
       {mode === 'sleep' && (
         <section className="night-content sleep-content" aria-live="polite">
+          {/* Status banner của lượt gọi ban đêm */}
+          <div className="night-turn-status-card">
+            <span className="turn-step-pill">
+              {currentTurnInfo?.totalTurns
+                ? `LƯỢT ${currentTurnInfo.turnIndex ?? 1}/${currentTurnInfo.totalTurns}`
+                : 'ĐÊM TỐI'}
+            </span>
+            <h2 className="current-turn-title">
+              {currentTurnInfo ? currentTurnInfo.titleVi : 'Đêm tĩnh lặng'}
+            </h2>
+            {currentTurnInfo?.isFake ? (
+              <p className="turn-sub-hint">✦ Lượt gọi giả lập để bảo vệ nhịp độ và chống lộ thông tin</p>
+            ) : canAct ? (
+              <button
+                type="button"
+                className="jump-to-action-btn"
+                onClick={() => setMode('action')}
+              >
+                ⚡ Đến lượt bạn thức dậy! Bấm để thực hiện hành động ➔
+              </button>
+            ) : (
+              <p className="turn-sub-hint">☾ Nhắm mắt lại và lắng nghe khẩu lệnh của quản trò</p>
+            )}
+          </div>
+
           <div className="stealth-moon-wrap" aria-hidden="true">
             <div className="stealth-moon-ring" />
             <div className="sleep-icon">☾</div>
@@ -393,31 +408,8 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             <span>TĨNH LẶNG · BẢO MẬT BAN ĐÊM (KHÔNG RUNG)</span>
           </div>
           <p className="demo-note">
-            Độ sáng tối thiểu (OLED True Black). Hãy úp điện thoại xuống bàn để giữ bí mật tuyệt đối.
+            Độ sáng tối thiểu (OLED True Black). Thẻ bài bên dưới luôn được che kín.
           </p>
-
-          {/* Nút điều phối chuyển lượt cho 1 máy offline */}
-          {isSingleDevice && (
-            <div className="night-offline-advance-bar">
-              <button
-                type="button"
-                className="offline-advance-btn"
-                onClick={handleAdvanceLocal}
-              >
-                <span>Xong lượt này ➔ Chuyển lượt gọi tiếp theo</span>
-              </button>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 2. Xem Vai Bí Mật (Press-and-Hold để xem, thả tay tự che) */}
-      {mode === 'my_role' && (
-        <section className="night-content role-reveal-content">
-          <div className="screen-title">
-            <span>BẢO MẬT THÂN PHẬN</span>
-            <h1>Lá bài bí mật của bạn</h1>
-          </div>
 
           {/* Single-device: Bộ chọn người đang cầm máy */}
           {isSingleDevice && (
@@ -704,6 +696,26 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               )}
             </button>
           </div>
+
+          {/* Nút điều phối chuyển lượt cho 1 máy offline */}
+          {isSingleDevice && (
+            <div className="night-offline-advance-bar">
+              <button
+                type="button"
+                className={`offline-advance-btn ${advancePressed ? 'btn-pop' : ''}`}
+                onClick={handleAdvanceLocal}
+              >
+                {currentTurnInfo?.nextTurnTitleVi ? (
+                  <span>
+                    Xong lượt này ➔ Lượt tiếp: <b>{currentTurnInfo.nextTurnTitleVi}</b> (
+                    {(currentTurnInfo.turnIndex ?? 1) + 1}/{currentTurnInfo.totalTurns})
+                  </span>
+                ) : (
+                  <span>🌙 Hoàn tất các lượt đêm ➔ Bắt đầu Ban Ngày ☀️</span>
+                )}
+              </button>
+            </div>
+          )}
         </section>
       )}
 

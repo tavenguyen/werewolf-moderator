@@ -146,6 +146,11 @@ export interface PublicRoomView {
     turnKey: string;
     titleVi: string;
     titleEn: string;
+    turnIndex?: number;
+    totalTurns?: number;
+    nextTurnTitleVi?: string | null;
+    isFake?: boolean;
+    canAct?: boolean;
   };
   lastVoteTally?: {
     tallies: Record<PlayerId, number>;

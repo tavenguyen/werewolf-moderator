@@ -337,6 +337,11 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.nightActionsAccumulator = {};
     this.roomState.nightActionAcks.clear();
 
+    const firstTurn = this.roomState.nightTurnPlan[0];
+    if (firstTurn && firstTurn.activePlayerIds.length > 0) {
+      this.activeLocalPlayerId = firstTurn.activePlayerIds[0];
+    }
+
     audioController.playNightBGM();
     this.announceCurrentNightTurn();
     this.emitState();
@@ -567,6 +572,10 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
     if (this.roomState.currentNightTurnIndex < this.roomState.nightTurnPlan.length) {
       this.roomState.nightActionAcks.clear();
+      const currentTurn = this.roomState.nightTurnPlan[this.roomState.currentNightTurnIndex];
+      if (currentTurn && currentTurn.activePlayerIds.length > 0) {
+        this.activeLocalPlayerId = currentTurn.activePlayerIds[0];
+      }
       this.announceCurrentNightTurn();
       this.emitState();
     } else {
@@ -681,6 +690,11 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.auraInvestigationResult = undefined;
     this.roomState.foxInvestigationResult = undefined;
     this.roomState.piInvestigationResult = undefined;
+
+    const firstTurn = this.roomState.nightTurnPlan[0];
+    if (firstTurn && firstTurn.activePlayerIds.length > 0) {
+      this.activeLocalPlayerId = firstTurn.activePlayerIds[0];
+    }
 
     audioController.playNightBGM();
     this.announceCurrentNightTurn();
