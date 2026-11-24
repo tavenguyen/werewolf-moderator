@@ -30,6 +30,20 @@ DEFAULT_REF_MAP = {
     "THIRD_PARTY": Path("scripts/refs/ref_third.png"),
 }
 
+SYSTEM_INSTRUCTION = (
+    "You are a Lead UI Icon Illustrator designing a cohesive 39-card character icon set for a modern dark-themed mobile web game.\n\n"
+    "STRICT VISUAL RULES:\n"
+    "1. Art Direction: Modern dark atmospheric emblem illustration. Bold, clean geometric silhouettes that remain instantly readable even when scaled down to a 40x40px mobile avatar. Avoid overly intricate, cluttered, or messy filigree details.\n"
+    "2. Background: Pure, flat, uniform obsidian black (#0B0E14) background. Zero scenery, zero clouds, zero floor, zero textures extending to the edges.\n"
+    "3. Color Hierarchy:\n"
+    "   - 75% Pure Obsidian Black (#0B0E14) background and deep shadows.\n"
+    "   - 20% Warm Amber Gold (#F59E0B) primary metallic foil line-art and rim lighting.\n"
+    "   - 5% Faction Accent Color (used strictly for small focal points like glowing eyes, magic orbs, potion liquids, or gem details — never flood the whole character).\n"
+    "4. Framing: Centered symmetrical upper-body bust or iconic emblem with at least 18% empty black margin on all four sides so circular avatar crops never clip the subject.\n"
+    "5. Forbidden: NO text, NO letters, NO numbers, NO playing card borders, NO frames, NO watermarks.\n"
+    "6. Output Format: First write 1 short sentence confirming the silhouette and focal accent placement, then generate the image."
+)
+
 STYLE_LOCK_PROMPT = (
     "Style Reference Requirement: Closely lock and match the exact art style, stroke line width, "
     "angular geometric planar facets, and crisp gold foil rim lighting of the reference image. "
@@ -78,25 +92,34 @@ def post_process_and_save(img: Image.Image, output_path: Path):
     resized_img.save(output_path, "WEBP", quality=82, method=6)
 
 
-def extract_image_from_response(response) -> Image.Image:
-    """Extract PIL Image from google-genai response object."""
+def extract_image_from_response(response) -> tuple[Image.Image, str | None]:
+    """Extract PIL Image and optional confirmation text from google-genai response object."""
     if not hasattr(response, "candidates") or not response.candidates:
         raise ValueError("No candidates returned in response")
+
+    img = None
+    note = None
 
     for candidate in response.candidates:
         if not hasattr(candidate, "content") or not candidate.content:
             continue
         for part in candidate.content.parts:
+            # Capture optional confirmation sentence from text part
+            if getattr(part, "text", None) and part.text.strip():
+                note = part.text.strip()
             # Check inline_data bytes
             if getattr(part, "inline_data", None) and part.inline_data.data:
                 data = part.inline_data.data
                 if isinstance(data, str):
                     import base64
                     data = base64.b64decode(data)
-                return Image.open(io.BytesIO(data))
+                img = Image.open(io.BytesIO(data))
             # Check direct image attribute
-            if hasattr(part, "image") and part.image:
-                return part.image
+            elif hasattr(part, "image") and part.image:
+                img = part.image
+
+    if img is not None:
+        return img, note
 
     raise ValueError("No image data found in response parts")
 
@@ -121,8 +144,10 @@ def generate_single_icon(
     ref_image = Image.open(ref_path).convert("RGB")
     combined_prompt = f"{STYLE_LOCK_PROMPT}\n\nTarget Role details:\n{prompt_text}"
 
+    modalities = [m.strip() for m in os.environ.get("RESPONSE_MODALITIES", "IMAGE").split(",") if m.strip()]
     config = types.GenerateContentConfig(
-        response_modalities=["IMAGE"],
+        system_instruction=SYSTEM_INSTRUCTION,
+        response_modalities=modalities,
         image_config=types.ImageConfig(aspect_ratio="1:1"),
     )
 
@@ -136,7 +161,9 @@ def generate_single_icon(
                 contents=contents,
                 config=config,
             )
-            img = extract_image_from_response(response)
+            img, note = extract_image_from_response(response)
+            if note:
+                print(f"[{role_id}] Note: {note}")
             post_process_and_save(img, output_path)
             size_kb = output_path.stat().st_size / 1024
             print(f"[{role_id}] ✓ Successfully generated and saved to {output_path} ({size_kb:.1f} KB)")
