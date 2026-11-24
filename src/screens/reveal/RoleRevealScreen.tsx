@@ -59,7 +59,9 @@ export default function RoleRevealScreen({}: Props) {
   }, []);
 
   // Thông tin vai trò của người chơi đang cầm máy
-  const myRoleId = privateView?.roleId ?? 'villager';
+  const myRoleId = (privateView?.roleId && privateView.roleId.trim() !== '')
+    ? privateView.roleId
+    : 'villager';
   const roleDef = ROLES_BY_ID[myRoleId] ?? {
     id: myRoleId,
     nameVi: 'Dân làng',
@@ -122,27 +124,30 @@ export default function RoleRevealScreen({}: Props) {
   // NHỊP 1 & 2: Chạm để lật mở mượt mà (Flip & Settle đồng bộ 520ms)
   // =========================================================================
   const handleCardClick = () => {
-    if (stage !== 'idle') return;
-
-    // Rung xúc giác nhẹ khi chạm
-    try {
-      navigator.vibrate?.(25);
-    } catch {
-      // ignore
-    }
-
-    // Kích hoạt animation GPU mượt mà (520ms)
-    setStage('flipping');
-
-    // Sau 520ms (trùng khớp chính xác với animation): Đã lật và tiếp đất êm ái
-    timer1Ref.current = window.setTimeout(() => {
+    if (stage === 'idle') {
+      // Rung xúc giác nhẹ khi chạm
       try {
-        navigator.vibrate?.(15);
+        navigator.vibrate?.(25);
       } catch {
         // ignore
       }
-      setStage('revealed');
-    }, 520);
+
+      // Kích hoạt animation GPU mượt mà (520ms)
+      setStage('flipping');
+
+      // Sau 520ms (trùng khớp chính xác với animation): Đã lật và tiếp đất êm ái
+      timer1Ref.current = window.setTimeout(() => {
+        try {
+          navigator.vibrate?.(15);
+        } catch {
+          // ignore
+        }
+        setStage('revealed');
+      }, 520);
+    } else if (stage === 'revealed') {
+      // Khi đã xem xong vai: Người chơi chạm trực tiếp vào lá bài hoặc nút dưới đều chuyền máy
+      handlePassOrStartNight();
+    }
   };
 
   // =========================================================================
@@ -213,7 +218,7 @@ export default function RoleRevealScreen({}: Props) {
           aria-label={
             stage === 'idle'
               ? `Chạm để mở bài xem vai của ${currentPlayer.name}`
-              : `Lá bài vai trò của ${currentPlayer.name}`
+              : `Lá bài vai trò của ${currentPlayer.name}. Chạm để úp bài chuyền cho người tiếp theo.`
           }
         >
           <div className="ritual-card-body">

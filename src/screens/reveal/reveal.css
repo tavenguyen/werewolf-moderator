@@ -1,5 +1,6 @@
 /* =========================================================================
    RITUAL CARD REVEAL — SIÊU MƯỢT (GPU COMPOSITED 60FPS / 120FPS)
+   HOÀN TOÀN CHỐNG LỖI CULLING / FLATTENING TRÊN MỌI TRÌNH DUYỆT
    ========================================================================= */
 
 .ritual-screen {
@@ -25,7 +26,7 @@
   position: absolute;
   top: 45%;
   left: 50%;
-  transform: translate3d(-50%, -50%, 0);
+  transform: translate(-50%, -50%);
   width: min(85vw, 420px);
   height: min(85vw, 420px);
   border-radius: 50%;
@@ -83,7 +84,7 @@
   position: relative;
 }
 
-/* Thẻ bài 3D xoay lật (Tối ưu phần cứng GPU) */
+/* Thẻ bài 3D xoay lật (Không đặt box-shadow hay overflow ở đây để bảo toàn preserve-3d) */
 .ritual-card-body {
   width: 100%;
   height: 100%;
@@ -92,8 +93,6 @@
   -webkit-transform-style: preserve-3d;
   border-radius: 16px;
   will-change: transform, opacity;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 0, 0, 0.5);
-  transform: translate3d(0, 0, 0);
 }
 
 /* Mặt trước và mặt sau dùng chung */
@@ -106,8 +105,7 @@
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   box-sizing: border-box;
-  overflow: hidden;
-  transform: translate3d(0, 0, 0);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 0, 0, 0.5);
 }
 
 /* =========================================================================
@@ -116,12 +114,14 @@
 .ritual-card-back {
   background: #0b0d13;
   border: 1px solid rgba(201, 134, 56, 0.45);
-  box-shadow: inset 0 0 0 6px #0b0d13, inset 0 0 0 7.5px rgba(201, 134, 56, 0.22);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), inset 0 0 0 6px #0b0d13, inset 0 0 0 7.5px rgba(201, 134, 56, 0.22);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  transform: rotateY(0deg) translateZ(1px);
+  transform: rotateY(0deg);
+  z-index: 2;
+  transition: opacity 0.2s ease;
 }
 
 /* Họa tiết mặt lưng tối giản */
@@ -171,19 +171,21 @@
 }
 
 /* =========================================================================
-   MẶT TRƯỚC: Lá bài sau khi lật mở (Hiển thị ngay khi lật qua 90 độ)
+   MẶT TRƯỚC: Lá bài sau khi lật mở (Hiển thị ngay lập tức, không delay)
    ========================================================================= */
 .ritual-card-front {
   background: #0d0f15;
   border: 1px solid rgba(201, 134, 56, 0.5);
-  box-shadow: inset 0 0 0 6px #0d0f15, inset 0 0 0 7.5px rgba(201, 134, 56, 0.2);
-  transform: rotateY(180deg) translateZ(1px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), inset 0 0 0 6px #0d0f15, inset 0 0 0 7.5px rgba(201, 134, 56, 0.2);
+  transform: rotateY(180deg);
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
   padding: 22px 16px 20px;
   text-align: center;
+  transition: opacity 0.2s ease;
 }
 
 /* Gradient nền theo phe */
@@ -204,7 +206,7 @@
 
 /* Nhãn phe nhỏ tinh tế */
 .ritual-faction-label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -224,7 +226,7 @@
 
 /* Icon vai trò to, sắc nét */
 .ritual-role-icon {
-  font-size: 56px;
+  font-size: 58px;
   line-height: 1;
   margin: 10px 0 6px;
   filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.8));
@@ -241,7 +243,7 @@
 
 .ritual-role-name {
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   color: #f3ece0;
@@ -249,7 +251,7 @@
 }
 
 .ritual-role-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.45;
   color: #a89f91;
   margin: 0;
@@ -265,21 +267,33 @@
   border: 1px solid rgba(180, 32, 40, 0.35);
   border-radius: 6px;
   padding: 4px 10px;
-  width: 85%;
+  width: 88%;
   box-sizing: border-box;
 }
 
 /* =========================================================================
-   ANIMATION: MƯỢT MÀ 60FPS CHỈ DÙNG GPU TRANSFORM
+   ANIMATION: MƯỢT MÀ 60FPS CHỈ DÙNG GPU TRANSFORM & CHỐNG LỖI CULLING
    ========================================================================= */
 
 /* Trạng thái Idle */
 .stage-idle .ritual-card-body {
-  transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
+  transform: rotateY(0deg);
 }
 
 .stage-idle .ritual-card-stage:hover .ritual-card-body {
-  transform: translate3d(0, -4px, 0) scale(1.02) rotateY(0deg);
+  transform: translateY(-4px) rotateY(0deg);
+}
+
+.stage-idle .ritual-card-back {
+  opacity: 1;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.stage-idle .ritual-card-front {
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* Nhịp 1 & 2: Lật mở mượt mà 520ms kèm tiếp đất tự nhiên */
@@ -289,25 +303,72 @@
 
 @keyframes ritualFlipAndSettle {
   0% {
-    transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
+    transform: translateY(0) scale(1) rotateY(0deg);
   }
   18% {
-    transform: translate3d(0, 4px, 0) scale(0.97) rotateY(28deg);
+    transform: translateY(4px) scale(0.97) rotateY(25deg);
   }
   65% {
-    transform: translate3d(0, -20px, 0) scale(1.06) rotateY(180deg);
+    transform: translateY(-22px) scale(1.06) rotateY(180deg);
   }
   85% {
-    transform: translate3d(0, 2px, 0) scale(0.99) rotateY(180deg);
+    transform: translateY(2px) scale(0.99) rotateY(180deg);
   }
   100% {
-    transform: translate3d(0, 0, 0) scale(1) rotateY(180deg);
+    transform: translateY(0) scale(1) rotateY(180deg);
   }
 }
 
-/* Trạng thái đã mở hoàn tất */
+/* Chuyển đổi layer an toàn giữa mặt lưng và mặt trước ở góc 90 độ */
+.stage-flipping .ritual-card-back {
+  animation: ritualHideBack 0.52s ease forwards;
+}
+
+.stage-flipping .ritual-card-front {
+  animation: ritualShowFront 0.52s ease forwards;
+}
+
+@keyframes ritualHideBack {
+  0%, 45% {
+    opacity: 1;
+    z-index: 2;
+  }
+  50%, 100% {
+    opacity: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+}
+
+@keyframes ritualShowFront {
+  0%, 45% {
+    opacity: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  50%, 100% {
+    opacity: 1;
+    z-index: 10;
+    pointer-events: auto;
+  }
+}
+
+/* Trạng thái đã mở hoàn tất (Cam kết 100% mặt trước nổi lên trên và nhìn thấy rõ) */
 .stage-revealed .ritual-card-body {
-  transform: translate3d(0, 0, 0) scale(1) rotateY(180deg);
+  transform: rotateY(180deg);
+}
+
+.stage-revealed .ritual-card-back {
+  opacity: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+.stage-revealed .ritual-card-front {
+  opacity: 1 !important;
+  z-index: 10 !important;
+  transform: rotateY(180deg) !important;
+  pointer-events: auto !important;
 }
 
 /* Hào quang bùng nhẹ không giật lag */
@@ -359,16 +420,31 @@
 
 @keyframes ritualSealAndPass {
   0% {
-    transform: translate3d(0, 0, 0) scale(1) rotateY(180deg);
+    transform: translateY(0) scale(1) rotateY(180deg);
     opacity: 1;
   }
   45% {
-    transform: translate3d(0, -6px, 0) scale(1.02) rotateY(90deg);
+    transform: translateY(-8px) scale(1.02) rotateY(90deg);
     opacity: 0.9;
   }
   100% {
-    transform: translate3d(0, 16px, 0) scale(0.93) rotateY(0deg);
+    transform: translateY(20px) scale(0.93) rotateY(0deg);
     opacity: 0;
+  }
+}
+
+.stage-sealing-pass .ritual-card-front {
+  animation: ritualSealFront 0.38s ease forwards;
+}
+
+@keyframes ritualSealFront {
+  0%, 45% {
+    opacity: 1;
+    z-index: 10;
+  }
+  50%, 100% {
+    opacity: 0;
+    z-index: 1;
   }
 }
 
@@ -380,12 +456,22 @@
 @keyframes ritualEmerge {
   0% {
     opacity: 0;
-    transform: translate3d(0, 16px, 0) scale(0.93) rotateY(0deg);
+    transform: translateY(20px) scale(0.93) rotateY(0deg);
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
+    transform: translateY(0) scale(1) rotateY(0deg);
   }
+}
+
+.stage-emerging .ritual-card-back {
+  opacity: 1;
+  z-index: 2;
+}
+
+.stage-emerging .ritual-card-front {
+  opacity: 0;
+  z-index: 1;
 }
 
 /* =========================================================================
@@ -438,11 +524,11 @@
 @keyframes ritualBtnFadeIn {
   0% {
     opacity: 0;
-    transform: translate3d(0, 6px, 0);
+    transform: translateY(6px);
   }
   100% {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translateY(0);
   }
 }
 
