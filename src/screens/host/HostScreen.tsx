@@ -273,9 +273,9 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
               <span aria-hidden="true">{!voteLocked ? '🔓' : '🔒'}</span>
               <span>
                 {voteLocked ? (
-                  <>KHÓA BIỂU QUYẾT: <b>{voteLockRemaining}S TRANH LUẬN ĐẦU</b></>
+                  <>CHƯA ĐẾN GIỜ BỎ PHIẾU: CÒN <b>{voteLockRemaining}S THẢO LUẬN</b></>
                 ) : (
-                  <b className="unlocked-highlight">BỎ PHIẾU ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU VOTE</b>
+                  <b className="unlocked-highlight">HÒM PHIẾU ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU BỎ PHIẾU</b>
                 )}
               </span>
             </div>
@@ -314,8 +314,8 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
               <p>
                 {subtitle ||
                   (publicView?.phase === 'NIGHT'
-                    ? 'Trời tối rồi, tất cả dân làng hãy nhắm mắt đi ngủ và chờ tiếng gọi vai.'
-                    : 'Trời đã sáng, thôn dân cùng nhau bàn bạc và bỏ phiếu tìm ra kẻ phản bội.')}
+                    ? 'Đêm đã buông xuống, cả làng nhắm mắt đi ngủ và lắng nghe lời quản trò.'
+                    : 'Trời đã sáng, dân làng cùng nhau thảo luận và bỏ phiếu tìm ra Ma Sói.')}
               </p>
             </div>
             <button

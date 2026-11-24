@@ -236,7 +236,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               {publicView.bearGrowled ? (
                 <>
                   <strong>GẤU ĐÃ GẦM LÊN!</strong>
-                  <span>Người nuôi gấu cảm nhận được Ma Sói đang ngồi cạnh bên!</span>
+                  <span>Người thuần gấu cảm nhận được Ma Sói đang ngồi cạnh bên!</span>
                 </>
               ) : (
                 <>

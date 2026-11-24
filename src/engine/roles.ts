@@ -448,7 +448,7 @@ export const RAW_ROLES: RawRoleDefinition[] = [
   },
   {
     id: 'bear_tamer',
-    nameVi: 'Gấu thuần hóa',
+    nameVi: 'Người thuần gấu',
     nameEn: 'Bear Tamer',
     pack: 'DEDUCTION',
     faction: 'VILLAGER',
