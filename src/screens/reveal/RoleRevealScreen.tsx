@@ -76,9 +76,10 @@ export default function RoleRevealScreen({}: Props) {
 
   // Danh sách đồng đội nếu là Ma Sói hoặc Hội Tam Điểm
   const isWerewolf = roleDef.faction === 'WEREWOLF';
-  const wolfPartners = isWerewolf
-    ? (privateView?.teammates ?? []).map((t) => t.name)
-    : [];
+  const isMason = myRoleId === 'mason';
+  const teammates = (privateView?.teammates ?? []).map((t) => t.name);
+  const wolfPartners = isWerewolf ? teammates : [];
+  const masonPartners = isMason ? teammates : [];
 
   // Icon nghệ thuật theo vai
   const getRoleIcon = (roleId: string, faction: string) => {
@@ -217,6 +218,19 @@ export default function RoleRevealScreen({}: Props) {
           onPointerUp={handleHoldEnd}
           onPointerLeave={handleHoldEnd}
           onPointerCancel={handleHoldEnd}
+          onKeyDown={(e) => {
+            if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && handoffStage === 'idle') {
+              e.preventDefault();
+              setIsHolding(true);
+              setHasViewed(true);
+            }
+          }}
+          onKeyUp={(e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+              e.preventDefault();
+              setIsHolding(false);
+            }
+          }}
           onContextMenu={(e) => e.preventDefault()}
           role="button"
           tabIndex={0}
@@ -262,6 +276,19 @@ export default function RoleRevealScreen({}: Props) {
                 {isWerewolf && wolfPartners.length > 0 && (
                   <div className="ritual-wolf-pack">
                     Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
+                  </div>
+                )}
+
+                {isMason && masonPartners.length > 0 && (
+                  <div
+                    className="ritual-wolf-pack"
+                    style={{
+                      borderColor: 'rgba(201, 134, 56, 0.45)',
+                      background: 'rgba(201, 134, 56, 0.15)',
+                      color: '#ecc94b',
+                    }}
+                  >
+                    Anh em Tam Điểm: <b>{masonPartners.join(', ')}</b>
                   </div>
                 )}
               </div>

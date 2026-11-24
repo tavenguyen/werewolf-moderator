@@ -40,6 +40,11 @@ function AppContent() {
     const phase = state.publicView?.phase;
     if (!phase) return;
 
+    const isCenterBoardHost =
+      state.deviceMode === 'MULTI_DEVICE' &&
+      state.isHost &&
+      state.hostMode === 'CENTER_BOARD';
+
     if (phase === 'LOBBY') {
       if (screen !== 'home' && screen !== 'lobby' && screen !== 'host') {
         setScreen('lobby');
@@ -49,19 +54,20 @@ function AppContent() {
         setScreen('reveal');
       }
     } else if (phase === 'NIGHT') {
-      if (state.isHost && state.hostMode === 'CENTER_BOARD') {
+      if (isCenterBoardHost) {
         if (screen !== 'host') setScreen('host');
       } else {
         if (screen !== 'night') setScreen('night');
       }
     } else if (
       phase === 'DAY_DISCUSS' ||
+      phase === 'DAY_VOTE' ||
       phase === 'DAY_RUNOFF' ||
       phase === 'DAY_MAYOR_ELECTION' ||
       phase === 'HUNTER_SHOT' ||
       phase === 'MAYOR_SUCCESSION'
     ) {
-      if (state.isHost && state.hostMode === 'CENTER_BOARD') {
+      if (isCenterBoardHost) {
         if (screen !== 'host') setScreen('host');
       } else {
         if (screen !== 'day') setScreen('day');
@@ -69,7 +75,7 @@ function AppContent() {
     } else if (phase === 'GAME_OVER') {
       if (screen !== 'summary') setScreen('summary');
     }
-  }, [state.publicView?.phase, state.isHost, state.hostMode, screen]);
+  }, [state.publicView?.phase, state.deviceMode, state.isHost, state.hostMode, screen]);
 
   // Bắt phím tắt bàn phím [1..6] để dev/tester chuyển nhanh khi cần
   useEffect(() => {
