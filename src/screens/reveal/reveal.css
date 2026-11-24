@@ -240,7 +240,8 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding-top: 2px;
+  padding-top: 4px;
+  margin-bottom: 2px;
   z-index: 2;
 }
 
@@ -277,7 +278,7 @@
   background: rgba(168, 85, 247, 0.12);
 }
 
-/* 2. VÙNG GIỮA (50%–55% chiều cao): Chân dung nhân vật 75%–80% chiều rộng */
+/* 2. VÙNG GIỮA (50%–55% chiều cao): Chân dung nhân vật 84%–86% chiều rộng */
 .ritual-card-art-zone {
   flex: 1 1 auto;
   width: 100%;
@@ -287,13 +288,13 @@
   justify-content: center;
   position: relative;
   z-index: 1;
-  padding: 4px 0 0;
+  margin: 0;
 }
 
-/* Khung chân dung thu gọn 78% bề ngang, để hở an toàn > 24px hai bên */
+/* Khung chân dung chuẩn tỷ lệ 85% bề ngang (~208px), chừa khoảng thở 18px hai bên */
 .ritual-portrait-frame {
-  width: 78%;
-  max-width: 188px;
+  width: 85%;
+  max-width: 208px;
   aspect-ratio: 1 / 1;
   position: relative;
   display: flex;
@@ -306,22 +307,28 @@
   height: 100%;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.32)) drop-shadow(0 8px 24px rgba(0, 0, 0, 0.9));
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Hòa trộn biến nền đen #0B0E14 thành trong suốt tuyệt đối */
+  mix-blend-mode: screen;
+  /* Mask làm mềm 360° xóa sạch đường biên hộp vuông vào nền lá bài */
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 56%, rgba(0, 0, 0, 0.85) 75%, transparent 97%);
+  mask-image: radial-gradient(circle at 50% 50%, black 56%, rgba(0, 0, 0, 0.85) 75%, transparent 97%);
+  filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.35));
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
 }
 
 .is-holding .ritual-portrait-img {
-  transform: scale(1.04);
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 24px rgba(239, 68, 68, 0.55)) drop-shadow(0 0 8px rgba(245, 158, 11, 0.35));
 }
 
-/* Gradient fade ở đáy chân dung: mờ dần vào nền đen #0B0E14 TRƯỚC KHI chạm chữ */
+/* Gradient fade phụ trợ ở đáy chân dung */
 .ritual-portrait-fade {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 24px;
-  background: linear-gradient(to bottom, transparent 0%, rgba(11, 14, 20, 0.85) 65%, #0b0e14 100%);
+  height: 20px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(11, 14, 20, 0.8) 70%, #0b0e14 100%);
   pointer-events: none;
 }
 
@@ -335,16 +342,17 @@
   justify-content: center;
 }
 
-/* 3. VÙNG DƯỚI (~30% chiều cao): Tên vai và mô tả trên nền tối sạch sẽ */
+/* 3. VÙNG DƯỚI (~30% chiều cao): Tên vai và mô tả liên kết chặt chẽ */
 .ritual-role-info {
   flex: 0 0 auto;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   z-index: 2;
-  padding: 4px 10px 2px;
+  padding: 0 10px 4px;
+  margin-top: -6px;
   box-sizing: border-box;
   background: transparent;
 }
