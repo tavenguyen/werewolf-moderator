@@ -225,7 +225,6 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     try {
       const roleIds = convertSelectionToRoleIds(selectedRoles);
       await actions.startGame(roleIds);
-      onNavigate?.('night');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván đấu';
       setNotice(msg);

@@ -45,12 +45,14 @@ function AppContent() {
         setScreen('lobby');
       }
     } else if (phase === 'FIRST_NIGHT_SETUP') {
-      setScreen('reveal');
+      if (screen !== 'reveal') {
+        setScreen('reveal');
+      }
     } else if (phase === 'NIGHT') {
       if (state.isHost && state.hostMode === 'CENTER_BOARD') {
-        setScreen('host');
+        if (screen !== 'host') setScreen('host');
       } else {
-        setScreen('night');
+        if (screen !== 'night') setScreen('night');
       }
     } else if (
       phase === 'DAY_DISCUSS' ||
@@ -60,14 +62,14 @@ function AppContent() {
       phase === 'MAYOR_SUCCESSION'
     ) {
       if (state.isHost && state.hostMode === 'CENTER_BOARD') {
-        setScreen('host');
+        if (screen !== 'host') setScreen('host');
       } else {
-        setScreen('day');
+        if (screen !== 'day') setScreen('day');
       }
     } else if (phase === 'GAME_OVER') {
-      setScreen('summary');
+      if (screen !== 'summary') setScreen('summary');
     }
-  }, [state.publicView?.phase, state.isHost, state.hostMode]);
+  }, [state.publicView?.phase, state.isHost, state.hostMode, screen]);
 
   // Bắt phím tắt bàn phím [1..6] để dev/tester chuyển nhanh khi cần
   useEffect(() => {

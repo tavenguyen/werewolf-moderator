@@ -106,7 +106,6 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
 
     try {
       await actions.hostRematch();
-      onNavigate?.('night');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi khi khởi động ván mới';
       setNotice(msg);
