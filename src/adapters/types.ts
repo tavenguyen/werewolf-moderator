@@ -60,6 +60,7 @@ export interface GameSessionAdapter {
 
   updateSettings(settings: Partial<RoomSettings>): Promise<void>;
   startGame(customRoleIds?: string[]): Promise<void>;
+  startFirstNight?(): Promise<void>;
 
   sendNightAction(roleId: string, action: NightActionInput): Promise<void>;
   sendDayVote(targetPlayerId: PlayerId | null): Promise<void>;

@@ -1,1 +1,1 @@
-export type ScreenName = 'home' | 'lobby' | 'night' | 'day' | 'host' | 'summary';
+export type ScreenName = 'home' | 'lobby' | 'reveal' | 'night' | 'day' | 'host' | 'summary';

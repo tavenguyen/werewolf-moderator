@@ -25,6 +25,7 @@ export interface GameSessionContextValue {
     leaveRoom: () => Promise<void>;
     updateSettings: (settings: Partial<RoomSettings>) => Promise<void>;
     startGame: (customRoleIds?: string[]) => Promise<void>;
+    startFirstNight: () => Promise<void>;
     sendNightAction: (roleId: string, action: NightActionInput) => Promise<void>;
     sendDayVote: (targetPlayerId: PlayerId | null) => Promise<void>;
     sendHunterShot: (targetPlayerId: PlayerId | null) => Promise<void>;
@@ -163,6 +164,11 @@ export function GameSessionProvider({
       },
       startGame: async (customRoleIds?: string[]) => {
         return activeAdapter.startGame(customRoleIds);
+      },
+      startFirstNight: async () => {
+        if (activeAdapter.startFirstNight) {
+          return activeAdapter.startFirstNight();
+        }
       },
       sendNightAction: async (roleId: string, action: NightActionInput) => {
         return activeAdapter.sendNightAction(roleId, action);

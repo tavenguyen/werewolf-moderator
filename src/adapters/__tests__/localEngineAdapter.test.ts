@@ -46,20 +46,25 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(state.publicView?.players.length).toBe(0);
   });
 
-  it('bắt đầu ván đấu chuyển sang NIGHT Đêm 1 và sinh Night Turn Plan', async () => {
+  it('bắt đầu ván đấu chuyển sang FIRST_NIGHT_SETUP để chuyền máy xem vai, sau đó bắt đầu Đêm 1', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
 
-    const state = adapter.getState();
-    expect(state.publicView?.phase).toBe('NIGHT');
+    let state = adapter.getState();
+    expect(state.publicView?.phase).toBe('FIRST_NIGHT_SETUP');
     expect(state.publicView?.roundNumber).toBe(1);
-    expect(state.publicView?.currentTurnInfo).toBeDefined();
     expect(state.privateView?.roleId).toBeDefined();
+
+    await adapter.startFirstNight();
+    state = adapter.getState();
+    expect(state.publicView?.phase).toBe('NIGHT');
+    expect(state.publicView?.currentTurnInfo).toBeDefined();
   });
 
   it('điều phối lần lượt các lượt đêm và chuyển sang Ngày thảo luận', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
+    await adapter.startFirstNight();
 
     // Giả lập gửi action đêm và chuyển hết các lượt gọi
     for (let i = 0; i < 10; i++) {
@@ -77,6 +82,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   it('điều khiển Pause, Resume, Gia hạn và Chốt biểu quyết ban ngày', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
+    await adapter.startFirstNight();
 
     // Chuyển sang ngày
     for (let i = 0; i < 10; i++) {
@@ -107,6 +113,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   it('trục xuất khẩn cấp người chơi sống', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
+    await adapter.startFirstNight();
 
     const state = adapter.getState();
     const target = state.publicView?.players.find((p) => p.isAlive);
@@ -123,6 +130,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   it('lưu kết quả soi của Tiên tri và Pháp sư trong chế độ 1 máy', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame(['seer', 'werewolf', 'werewolf', 'villager', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
 
     // Tìm người chơi được chia vai Tiên tri
     let seerId = '';
@@ -191,10 +199,15 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
   it('thực hiện tái đấu Rematch tạo thế hệ ván mới', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
+    await adapter.startFirstNight();
     await adapter.hostRematch();
 
-    const state = adapter.getState();
+    let state = adapter.getState();
     expect(state.publicView?.gameGeneration).toBe(2);
+    expect(state.publicView?.phase).toBe('FIRST_NIGHT_SETUP');
+
+    await adapter.startFirstNight();
+    state = adapter.getState();
     expect(state.publicView?.phase).toBe('NIGHT');
   });
 

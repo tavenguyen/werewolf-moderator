@@ -323,7 +323,14 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.gameGeneration
     );
 
-    // Chuyển sang NIGHT Đêm 1
+    // Chuyển sang FIRST_NIGHT_SETUP để lần lượt từng người xem vai bí mật (1 máy dùng chung)
+    this.roomState.gameState.phase = 'FIRST_NIGHT_SETUP';
+    this.activeLocalPlayerId = playersList[0]?.id;
+    this.emitState();
+  }
+
+  public async startFirstNight(): Promise<void> {
+    if (!this.roomState.gameState) return;
     this.roomState.gameState.phase = 'NIGHT';
     this.roomState.nightTurnPlan = generateNightTurnPlan(this.roomState.gameState);
     this.roomState.currentNightTurnIndex = 0;
@@ -836,9 +843,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     const roles = preset ? [...preset.roles].sort(() => Math.random() - 0.5) : [];
 
     this.roomState.gameState = createRematchGameState(this.roomState.gameState, roles);
-    this.roomState.gameState.phase = 'NIGHT';
+    this.roomState.gameState.phase = 'FIRST_NIGHT_SETUP';
     this.roomState.gameGeneration += 1;
-    this.startNewLocalNight();
+    const playersList = Array.from(this.roomState.players.values()).sort(
+      (a, b) => a.seatIndex - b.seatIndex
+    );
+    this.activeLocalPlayerId = playersList[0]?.id;
     this.emitState();
   }
 }
