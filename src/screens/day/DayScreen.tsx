@@ -70,8 +70,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
       setVoteSubmitted(true);
       const targetName = selectedPlayerId
         ? players.find((p) => p.id === selectedPlayerId)?.name
-        : 'Phiếu trắng';
-      setNotice(`✓ Đã niêm phong phiếu biểu quyết kín của bạn (${targetName}). Không thể sửa đổi.`);
+        : 'phiếu trắng';
+      setNotice(selectedPlayerId ? `✓ Đã bỏ phiếu kín cho ${targetName}.` : '✓ Đã bỏ phiếu trắng.');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi gửi phiếu';
       setNotice(msg);
@@ -82,7 +82,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     try {
       await actions.finalizePublicVote();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Không thể chốt phán quyết lúc này';
+      const msg = err instanceof Error ? err.message : 'Không thể chốt kết quả lúc này';
       setNotice(msg);
     }
   };
@@ -113,7 +113,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               onClick={() => setMode('player')}
               className={mode === 'player' ? 'day-mode-active' : ''}
             >
-              PHIẾU KÍN
+              BỎ PHIẾU
             </button>
             <button
               type="button"
@@ -121,7 +121,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               onClick={() => setMode('shared')}
               className={mode === 'shared' ? 'day-mode-active' : ''}
             >
-              CHIẾU BÀN
+              BÀN CHƠI
             </button>
           </nav>
           <button
@@ -139,7 +139,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
       <div className="day-main">
         {/* Antique Sundial Countdown Clock */}
         <section className={`day-clock-card ${isUrgent ? 'is-urgent' : ''}`}>
-          <span className="eyebrow">ĐỒNG HỒ NẮNG • THẢO LUẬN DÂN LÀNG</span>
+          <span className="eyebrow">THỜI GIAN THẢO LUẬN</span>
 
           <div className="day-clock-graphic">
             <svg className="timer-svg" viewBox="0 0 160 160">
@@ -166,7 +166,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <div className="clock-digits-wrap">
               <div className="day-clock" aria-live="off">{formatTime(remainingTime)}</div>
               <span className="clock-status-tag">
-                {isPaused ? 'TẠM DỪNG' : isUrgent ? 'HOÀNG HÔN BUÔNG' : 'ĐANG THẢO LUẬN'}
+                {isPaused ? 'TẠM DỪNG' : isUrgent ? 'SẮP HẾT GIỜ' : 'ĐANG THẢO LUẬN'}
               </span>
             </div>
           </div>
@@ -175,9 +175,9 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <span className="lock-icon" aria-hidden="true">{!voteLocked ? '🔓' : '🔒'}</span>
             <span>
               {!voteLocked ? (
-                <strong className="unlocked-text">HÒM PHIẾU ĐÃ MỞ · CẢ LÀNG BỎ PHIẾU TREO CỔ</strong>
+                <strong className="unlocked-text">HÒM PHIẾU ĐÃ MỞ · BẮT ĐẦU BỎ PHIẾU TREO CỔ</strong>
               ) : (
-                <>KHÓA BIỂU QUYẾT: <strong>{voteLockRemaining}S ĐÀM ĐẠO ĐẦU</strong></>
+                <>CHƯA ĐẾN GIỜ BỎ PHIẾU: <strong>CÒN {voteLockRemaining}S THẢO LUẬN</strong></>
               )}
             </span>
           </div>
@@ -191,7 +191,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 onClick={() => (isPaused ? actions.hostResume() : actions.hostPause())}
               >
                 <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
-                <span>{isPaused ? 'TIẾP TỤC ĐẾM' : 'TẠM DỪNG'}</span>
+                <span>{isPaused ? 'TIẾP TỤC' : 'TẠM DỪNG'}</span>
               </button>
               {(publicView?.extensionsUsed ?? 0) < 2 && (
                 <button
@@ -200,7 +200,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                   onClick={() => actions.hostExtendTime()}
                 >
                   <span aria-hidden="true">＋</span>
-                  <span>GIA HẠN +30S</span>
+                  <span>THÊM +30S</span>
                 </button>
               )}
             </div>
@@ -214,11 +214,11 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
           <div className="narration-body">
             <div className="narration-title-bar">
-              <strong>THÔNG CÁO DÂN LÀNG BUỔI SÁNG</strong>
+              <strong>THÔNG BÁO BUỔI SÁNG</strong>
             </div>
             <p>
               {publicView?.publicLogs?.[publicView.publicLogs.length - 1] ??
-                'Trời đã sáng, thôn dân cùng nhau bàn bạc vạch trần kẻ ác ma trước khi hoàng hôn buông xuống.'}
+                'Trời đã sáng, dân làng cùng nhau thảo luận để tìm ra Ma Sói.'}
             </p>
           </div>
         </section>
@@ -235,13 +235,13 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <div className="banner-text">
               {publicView.bearGrowled ? (
                 <>
-                  <strong>TIẾNG GẤU GẦM DỮ DỘI!</strong>
-                  <span>Gấu thuần hóa phát hiện có Ma Sói ngồi ngay cạnh bên!</span>
+                  <strong>GẤU ĐÃ GẦM LÊN!</strong>
+                  <span>Người nuôi gấu cảm nhận được Ma Sói đang ngồi cạnh bên!</span>
                 </>
               ) : (
                 <>
-                  <strong>GẤU THUẦN HÓA YÊN LẶNG</strong>
-                  <span>Không có Ma Sói nào ngồi cạnh người thuần gấu sáng nay.</span>
+                  <strong>GẤU VẪN YÊN LẶNG</strong>
+                  <span>Không có Ma Sói nào ngồi cạnh người nuôi gấu.</span>
                 </>
               )}
             </div>
@@ -253,8 +253,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           <div className="day-event-banner prince-revealed" role="status">
             <span className="banner-icon" aria-hidden="true">👑</span>
             <div className="banner-text">
-              <strong>HOÀNG TỬ ĐÃ LẬT THẺ!</strong>
-              <span>Án treo cổ bị bãi bỏ. Hoàng tử giữ nguyên quyền bỏ phiếu.</span>
+              <strong>HOÀNG TỬ LỘ DIỆN!</strong>
+              <span>Án treo cổ bị hủy bỏ. Hoàng tử vẫn giữ nguyên quyền bỏ phiếu.</span>
             </div>
           </div>
         )}
@@ -267,9 +267,9 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <div className="day-event-banner muted-player-banner" role="status" style={{ borderLeft: '4px solid #ef4444' }}>
               <span className="banner-icon" aria-hidden="true">🔇</span>
               <div className="banner-text">
-                <strong>NGƯỜI CHƠI BỊ PHÙ PHÉP CÂM LẶNG!</strong>
+                <strong>CÓ NGƯỜI BỊ CẤM NÓI!</strong>
                 <span>
-                  #{mutedPlayer.seatIndex} {mutedPlayer.name} đã bị phù phép câm lặng hôm nay! Người này không được phát biểu trong phiên thảo luận làng.
+                  #{mutedPlayer.seatIndex} {mutedPlayer.name} đã bị phù phép câm lặng hôm nay, không được nói trong lúc làng thảo luận.
                 </span>
               </div>
             </div>
@@ -281,8 +281,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           <div className="day-event-banner double-vote-banner" role="status" style={{ borderLeft: '4px solid #eab308' }}>
             <span className="banner-icon" aria-hidden="true">⚡</span>
             <div className="banner-text">
-              <strong>KẺ PHÁ RỐI ĐÃ HÀNH ĐỘNG!</strong>
-              <span>Hôm nay làng sẽ treo cổ 2 người có số phiếu cao nhất thay vì 1 người!</span>
+              <strong>HÔM NAY TREO CỔ 2 NGƯỜI!</strong>
+              <span>Kẻ phá rối đã kích hoạt: làng sẽ treo cổ 2 người có nhiều phiếu nhất!</span>
             </div>
           </div>
         )}
@@ -290,9 +290,9 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
         {/* Cảnh báo riêng cho người bị câm */}
         {(privateView?.skills?.isMuted || state.playerId === publicView?.mutedPlayerId) && (
           <div className="personal-mute-warning" role="alert" style={{ background: '#2d1515', border: '1px solid #dc2626', borderRadius: 8, padding: 12, margin: '8px 0', color: '#fca5a5' }}>
-            <strong>🔇 BẠN ĐÃ BỊ PHÙ PHÉP CÂM LẶNG!</strong>
+            <strong>🔇 BẠN ĐANG BỊ CẤM NÓI!</strong>
             <p style={{ margin: '4px 0 0', fontSize: 13 }}>
-              Bạn tuyệt đối không được nói hay phát biểu trong buổi sáng hôm nay. Tuy nhiên, bạn vẫn có đầy đủ quyền biểu quyết bỏ phiếu treo cổ như bình thường.
+              Bạn không được nói trong suốt buổi thảo luận sáng nay, nhưng vẫn có quyền bỏ phiếu treo cổ như bình thường.
             </p>
           </div>
         )}
@@ -300,7 +300,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
         {/* Kết quả biểu quyết gần nhất nếu có */}
         {lastVoteTally && (
           <section className="last-tally-card">
-            <strong>KẾT QUẢ BIỂU QUYẾT VỪA QUA:</strong>
+            <strong>KẾT QUẢ BỎ PHIẾU GẦN NHẤT:</strong>
             <div className="tally-breakdown">
               {Object.entries(lastVoteTally.tallies).map(([pId, count]) => {
                 const p = players.find((pl) => pl.id === pId);
@@ -331,17 +331,17 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <div className="day-panel-heading">
               <div className="heading-group">
                 <span className="heading-dot" />
-                <strong>BỎ PHIẾU BIỂU QUYẾT KÍN</strong>
+                <strong>BỎ PHIẾU TREO CỔ</strong>
               </div>
               <span className={!voteLocked ? 'unlocked-label' : 'locked-label'}>
-                {!voteLocked ? '✓ HÒM PHIẾU ĐÃ MỞ' : `🔒 KHÓA ${voteLockRemaining}S`}
+                {!voteLocked ? '✓ ĐANG MỞ PHIẾU' : `🔒 ĐỢI ${voteLockRemaining}S`}
               </span>
             </div>
 
             {/* Single-device chọn người đang vote */}
             {isSingleDevice && (
               <div className="offline-voter-bar">
-                <span>Người đang cầm máy bỏ phiếu:</span>
+                <span>Người đang cầm máy:</span>
                 <select
                   value={state.playerId}
                   onChange={(e) => actions.setLocalActivePlayer(e.target.value)}
@@ -390,7 +390,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                       <span className="vote-name">{player.name}</span>
                     </div>
                     <small className="vote-weight">
-                      {player.isMayor ? '👑 Trưởng làng (2 Phiếu)' : '1 Phiếu biểu quyết'}
+                      {player.isMayor ? '👑 Trưởng làng (2 phiếu)' : '1 phiếu'}
                     </small>
                   </button>
                 ) : (
@@ -399,7 +399,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                       <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
                       <span className="vote-name crossed-out">{player.name}</span>
                     </div>
-                    <small className="dead-tag">☠ Đã tử vong</small>
+                    <small className="dead-tag">☠ Đã chết</small>
                   </div>
                 )
               )}
@@ -414,10 +414,10 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               >
                 <span>
                   {voteSubmitted
-                    ? '✓ ĐÃ KHÓA PHIẾU KÍN (KHÔNG THỂ THAY ĐỔI)'
+                    ? '✓ ĐÃ BỎ PHIẾU XONG'
                     : selectedPlayerId
-                    ? `XÁC NHẬN BỎ PHIẾU TREO CỔ: ${players.find((p) => p.id === selectedPlayerId)?.name}`
-                    : 'XÁC NHẬN BỎ PHIẾU TRẮNG'}
+                    ? `BỎ PHIẾU TREO CỔ: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                    : 'BỎ PHIẾU TRẮNG'}
                 </span>
               </button>
             )}
@@ -427,7 +427,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <div className="day-panel-heading">
               <div className="heading-group">
                 <span className="heading-dot" />
-                <strong>CHIẾU BÀN DÂN LÀNG</strong>
+                <strong>BÀN CHƠI DÂN LÀNG</strong>
               </div>
               <span className="player-stats">
                 <b>{livingPlayers.length}</b> Sống · <b>{deadPlayers.length}</b> Chết
@@ -473,8 +473,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <span className="gavel-icon" aria-hidden="true">⚒</span>
             <span>
               {!voteLocked
-                ? 'CHỐT PHÁN QUYẾT BIỂU QUYẾT TREO CỔ'
-                : `ĐANG KHÓA HÒM PHIẾU (${voteLockRemaining}S)`}
+                ? 'CHỐT KẾT QUẢ BỎ PHIẾU'
+                : `CHƯA ĐẾN GIỜ BỎ PHIẾU (${voteLockRemaining}S)`}
             </span>
           </button>
           {notice && <p role="status" className="vote-notice">{notice}</p>}

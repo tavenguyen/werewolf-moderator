@@ -41,7 +41,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
         const finalDef = ROLES_BY_ID[p.finalRoleId];
         const side =
           p.faction === 'WEREWOLF' ? 'wolf' : p.faction === 'THIRD_PARTY' ? 'third' : 'village';
-        const sideName = side === 'wolf' ? 'Phe Ma Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân Làng';
+        const sideName = side === 'wolf' ? 'Phe Ma Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân làng';
         const symbol =
           side === 'wolf' ? '🐺' : p.finalRoleId === 'seer' ? '🔮' : p.finalRoleId === 'witch' ? '🧪' : p.finalRoleId === 'hunter' ? '🎯' : '🛡️';
         return {
@@ -51,7 +51,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
           initialRoleName: initDef?.nameVi ?? p.initialRoleId,
           finalRoleName: finalDef?.nameVi ?? p.finalRoleId,
           symbol,
-          status: p.isAlive ? 'CÒN SỐNG' : 'ĐÃ TỬ VONG',
+          status: p.isAlive ? 'Còn sống' : 'Đã chết',
           side,
           sideName,
           isAlive: p.isAlive,
@@ -68,9 +68,9 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
       initialRoleName: 'Chưa công bố',
       finalRoleName: 'Chưa công bố',
       symbol: '❓',
-      status: p.isAlive ? 'CÒN SỐNG' : 'ĐÃ TỬ VONG',
+      status: p.isAlive ? 'Còn sống' : 'Đã chết',
       side: 'village' as const,
-      sideName: 'Bí Mật',
+      sideName: 'Bí mật',
       isAlive: p.isAlive,
     }));
   })();
@@ -100,14 +100,14 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
 
   const handleRematch = async () => {
     if (!state.isHost) {
-      setNotice('Chỉ Quản trò (Host) mới có quyền bấm Tái đấu.');
+      setNotice('Chỉ quản trò mới có thể bắt đầu ván mới.');
       return;
     }
 
     try {
       await actions.hostRematch();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Lỗi khi khởi động ván mới';
+      const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván mới lúc này';
       setNotice(msg);
     }
   };
@@ -122,9 +122,9 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
       <header className="summary-header">
         <div className="summary-header-title">
           <i aria-hidden="true" />
-          <strong>GIẢI MÃ VÁN ĐẤU <span>• PHÒNG #{roomCode}</span></strong>
+          <strong>KẾT QUẢ VÁN ĐẤU <span>• PHÒNG #{roomCode}</span></strong>
         </div>
-        <span className="summary-badge-complete">HOÀN TẤT VÁN ĐẤU</span>
+        <span className="summary-badge-complete">VÁN ĐÃ KẾT THÚC</span>
       </header>
 
       <div className="summary-content">
@@ -134,21 +134,21 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             <span className="summary-trophy">{isWolfWin ? '🐺' : isCoupleWin ? '💘' : '☀️'}</span>
           </div>
           <div className="summary-winner-copy">
-            <span className="winner-eyebrow">PHE CHIẾN THẮNG CHUNG CUỘC</span>
+            <span className="winner-eyebrow">PHE THẮNG CUỘC</span>
             <h1>
               {isWolfWin
-                ? 'BẦY MA SÓI THỐNG TRỊ!'
+                ? 'PHE MA SÓI CHIẾN THẮNG!'
                 : isCoupleWin
-                ? 'CẶP ĐÔI TÌNH YÊU CHIẾN THẮNG!'
-                : 'THÔN BẢN TOÀN THẮNG!'}
+                ? 'CẶP ĐÔI CHIẾN THẮNG!'
+                : 'PHE DÂN LÀNG CHIẾN THẮNG!'}
             </h1>
             <p>
               {postGame?.winOutcome?.reason ||
-                'Ván đấu kết thúc. Toàn bộ bí mật bóng đêm đã được đưa ra ánh sáng.'}
+                'Ván đấu đã kết thúc. Toàn bộ vai trò trong làng đã được hé lộ.'}
             </p>
           </div>
           <button className="summary-reveal-all" onClick={revealAll}>
-            {allRevealed ? 'ÚP TOÀN BÀN' : 'LẬT TOÀN BÀN ✦'}
+            {allRevealed ? 'ÚP TẤT CẢ' : 'LẬT TẤT CẢ ✦'}
           </button>
         </section>
 
@@ -163,7 +163,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             onClick={() => setTab('cards')}
           >
             <span aria-hidden="true">🎴</span>
-            <span>THẺ BÀI HUYỀN BÍ ({openCards.size}/{rolesList.length})</span>
+            <span>THẺ BÀI ({openCards.size}/{rolesList.length})</span>
           </button>
           <button
             role="tab"
@@ -172,7 +172,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
             onClick={() => setTab('timeline')}
           >
             <span aria-hidden="true">📜</span>
-            <span>BIÊN NIÊN SỬ VÁN ĐẤU</span>
+            <span>DIỄN BIẾN VÁN ĐẤU</span>
           </button>
         </div>
 
@@ -200,7 +200,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                         <small className="card-seat-tag">GHẾ #{String(player.seatIndex).padStart(2, '0')}</small>
                         <div className="tarot-emblem" aria-hidden="true">☾</div>
                         <b className="card-player-name">{player.name}</b>
-                        <small className="summary-card-hint">CHẠM ĐỂ GIẢI MÃ</small>
+                        <small className="summary-card-hint">CHẠM ĐỂ LẬT BÀI</small>
                       </div>
                     </span>
 
@@ -244,16 +244,16 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
         {state.isHost ? (
           <button className="summary-rematch" onClick={handleRematch}>
             <span className="rematch-icon" aria-hidden="true">🎲</span>
-            <span>ĐẢO BÀI &amp; TÁI ĐẤU (REMATCH)</span>
+            <span>CHIA LẠI BÀI &amp; CHƠI TIẾP</span>
           </button>
         ) : (
-          <span className="summary-waiting-rematch">Đang đợi Host bắt đầu ván mới...</span>
+          <span className="summary-waiting-rematch">Đang đợi quản trò bắt đầu ván mới...</span>
         )}
         <button
           className="summary-exit"
           onClick={handleExit}
-          aria-label="Rời phòng về cổng làng"
-          title="Rời phòng về cổng làng"
+          aria-label="Rời phòng"
+          title="Rời phòng"
         >
           ⟵
         </button>

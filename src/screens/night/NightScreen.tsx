@@ -222,38 +222,38 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       const successMsg = isMason
         ? '✓ Đã nhận diện anh em Hội Tam Điểm.'
         : isWildChild
-        ? '✓ Đã chọn thần tượng thành công.'
+        ? '✓ Đã chọn xong thần tượng.'
         : isDireWolf
-        ? '✓ Đã chọn bạn đồng hành thành công.'
+        ? '✓ Đã chọn bạn đồng hành.'
         : isHoodlum
-        ? '✓ Đã chọn 2 kẻ thù trừ khử thành công.'
+        ? '✓ Đã chọn 2 kẻ thù cần loại bỏ.'
         : isWolfAccursed
         ? isCurseAction
           ? '✓ Đã nguyền nạn nhân thành Ma Sói.'
           : '✓ Đã bỏ qua lượt nguyền, giữ lại phép.'
         : isBigBadWolf
-        ? '✓ Đã chọn mục tiêu cắn thêm thành công.'
+        ? '✓ Đã chọn mục tiêu cắn thêm.'
         : isAuraSeer
-        ? '✓ Đã quan sát hào quang người chơi thành công.'
+        ? '✓ Đã soi hào quang người chơi.'
         : isFox
         ? isFoxSkip
-          ? '✓ Con cáo đã bỏ qua lượt đánh hơi đêm nay.'
-          : '✓ Con cáo đã đánh hơi cụm 3 người thành công.'
+          ? '✓ Cáo bỏ qua lượt đánh hơi đêm nay.'
+          : '✓ Cáo đã đánh hơi nhóm 3 người.'
         : isPi
-        ? '✓ Thám tử đã điều tra cụm nghi phạm thành công.'
+        ? '✓ Thám tử đã điều tra nhóm tình nghi.'
         : isSpellcaster
-        ? '✓ Đã phù phép câm lặng người chơi thành công.'
+        ? '✓ Đã phù phép câm lặng mục tiêu.'
         : isTroublemaker
         ? isTroublemakerActive
-          ? '✓ Đã kích hoạt hỗn loạn: hôm nay làng sẽ treo cổ 2 người!'
+          ? '✓ Đã kích hoạt: hôm nay làng sẽ treo cổ 2 người!'
           : '✓ Đã bỏ qua, giữ lại quyền năng cho đêm sau.'
         : isDoppelganger
-        ? '✓ Đã chọn bản sao thành công.'
+        ? '✓ Đã chọn người để sao chép vai.'
         : isPiedPiper
-        ? '✓ Đã cất tiếng sáo thôi miên thành công.'
+        ? '✓ Đã cất tiếng sáo thôi miên.'
         : isCultLeader
-        ? '✓ Đã kết nạp tín đồ mới thành công.'
-        : '✓ Đã xác nhận hành động ban đêm thành công.';
+        ? '✓ Đã kết nạp tín đồ mới.'
+        : '✓ Đã xác nhận hành động đêm.';
       setNotice(successMsg);
       setTimeout(() => {
         setMode('sleep');
@@ -387,10 +387,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             </h1>
             <p className="night-calling-hint">
               {currentTurnInfo?.isFake
-                ? '✦ Quản trò đang phát thanh điều phối nhịp độ ván đấu.'
+                ? '✦ Đêm vẫn đang tiếp diễn. Hãy giữ im lặng.'
                 : canAct
-                ? 'Đã đến lượt thức dậy của bạn!'
-                : 'Nhắm mắt lại và lắng nghe lời dẫn từ quản trò.'}
+                ? 'Đến lượt bạn thức giấc!'
+                : 'Hãy nhắm mắt và lắng nghe lời quản trò.'}
             </p>
           </div>
 
@@ -400,7 +400,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               className="jump-to-action-btn"
               onClick={() => setMode('action')}
             >
-              ⚡ Vào lượt hành động của bạn ➔
+              ⚡ Thức giấc để hành động ➔
             </button>
           )}
 
@@ -414,10 +414,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               >
                 {currentTurnInfo?.nextTurnTitleVi ? (
                   <span>
-                    Chuyển lượt gọi: <b>{currentTurnInfo.nextTurnTitleVi}</b>
+                    Gọi lượt tiếp theo: <b>{currentTurnInfo.nextTurnTitleVi}</b>
                   </span>
                 ) : (
-                  <span>Kết thúc các lượt đêm ➔ Sang Ban Ngày ☀️</span>
+                  <span>Hết các lượt đêm ➔ Trời sáng ☀️</span>
                 )}
               </button>
             </div>
@@ -433,7 +433,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               <span className="role-glyph" aria-hidden="true">✦</span>
               <div>
                 <h2>{roleDef.nameVi} THỨC GIẤC</h2>
-                <small>BẠN ĐANG TRONG LƯỢT KÍN ĐÊM NAY</small>
+                <small>HÃY HÀNH ĐỘNG TRONG YÊN LẶNG</small>
               </div>
             </div>
           </div>
@@ -443,9 +443,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               <div className="mason-header-badge">
                 <span className="mason-symbol" aria-hidden="true">🏛️</span>
                 <div>
-                  <strong>HỘI TAM ĐIỂM (MASONS)</strong>
+                  <strong>HỘI TAM ĐIỂM</strong>
                   <p>
-                    Tất cả thành viên trong Hội Tam Điểm đều thuộc phe Dân làng và biết mặt nhau từ Đêm 1.
+                    Tất cả thành viên Hội Tam Điểm đều thuộc phe Dân làng và biết mặt nhau ngay từ Đêm 1.
                   </p>
                 </div>
               </div>
@@ -453,7 +453,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               <div className="mason-partners-container">
                 <div className="mason-list-header">
                   <span className="mason-dot" aria-hidden="true" />
-                  <span>DANH SÁCH ANH EM TAM ĐIỂM CỦA BẠN</span>
+                  <span>DANH SÁCH ANH EM TRONG HỘI</span>
                 </div>
 
                 {privateView?.skills?.masonPartnerIds && privateView.skills.masonPartnerIds.length > 0 ? (
@@ -468,14 +468,14 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                             <span className="mason-seat-badge">Ghế #{partner.seatIndex}</span>
                             <span className="mason-name">{partner.name}</span>
                           </div>
-                          <span className="mason-partner-badge-green">ANH EM TAM ĐIỂM</span>
+                          <span className="mason-partner-badge-green">ĐỒNG MINH TAM ĐIỂM</span>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
                   <div className="mason-single-note">
-                    <span>Không có anh em nào khác trong hội (bạn là thành viên duy nhất).</span>
+                    <span>Bạn là thành viên duy nhất trong hội, không có ai khác.</span>
                   </div>
                 )}
               </div>
@@ -486,7 +486,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   className="primary-confirm-btn mason-confirm-btn"
                   onClick={handleConfirmAction}
                 >
-                  <span>✓ ĐÃ NHẬN DIỆN ANH EM</span>
+                  <span>✓ ĐÃ BIẾT MẶT ANH EM</span>
                 </button>
               </div>
             </div>
@@ -495,9 +495,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               <div className="wolf-accursed-header-badge">
                 <span className="wolf-glyph" aria-hidden="true">🐺💉</span>
                 <div>
-                  <strong>SÓI NGUYỀN (ACCURSED WOLF)</strong>
+                  <strong>SÓI NGUYỀN</strong>
                   <p>
-                    Bạn có 1 lần duy nhất trong cả ván để truyền nọc độc biến nạn nhân của bầy Sói thành Ma Sói thay vì giết chết họ.
+                    Bạn có 1 cơ hội duy nhất trong cả ván để biến nạn nhân của bầy Sói thành Ma Sói thay vì để họ chết.
                   </p>
                 </div>
               </div>
@@ -520,20 +520,20 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       className={`curse-button ${isCurseAction === true ? 'is-complete' : ''}`}
                       onClick={() => setIsCurseAction(true)}
                     >
-                      <span>{isCurseAction === true ? '✓ ĐÃ CHỌN NGUYỀN NẠN NHÂN' : 'NGUYỀN NẠN NHÂN (HÓA SÓI)'}</span>
+                      <span>{isCurseAction === true ? '✓ ĐÃ CHỌN NGUYỀN (HÓA SÓI)' : 'NGUYỀN NẠN NHÂN (HÓA SÓI)'}</span>
                     </button>
                     <button
                       type="button"
                       className={`skip-curse-button ${isCurseAction === false ? 'is-complete' : ''}`}
                       onClick={() => setIsCurseAction(false)}
                     >
-                      <span>{isCurseAction === false ? '✓ ĐÃ CHỌN GIỮ LẠI PHÉP' : 'BỎ QUA / GIỮ LẠI PHÉP'}</span>
+                      <span>{isCurseAction === false ? '✓ GIỮ LẠI PHÉP CHO ĐÊM SAU' : 'BỎ QUA (GIỮ LẠI PHÉP)'}</span>
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="accursed-empty-note">
-                  <p>Bầy Sói đêm nay không cắn ai hoặc nạn nhân không hợp lệ để nguyền.</p>
+                  <p>Bầy Sói đêm nay không cắn ai hoặc nạn nhân không thể bị nguyền.</p>
                   <button
                     type="button"
                     className="secondary-button"
@@ -541,7 +541,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       setIsCurseAction(false);
                     }}
                   >
-                    Bỏ qua / Giữ lại phép nguyền
+                    Bỏ qua, giữ lại phép
                   </button>
                 </div>
               )}
@@ -555,10 +555,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 >
                   <span>
                     {isCurseAction === true
-                      ? 'XÁC NHẬN NGUYỀN NẠN NHÂN'
+                      ? 'XÁC NHẬN NGUYỀN HÓA SÓI'
                       : isCurseAction === false
-                      ? 'XÁC NHẬN BỎ QUA LƯỢT NGUYỀN'
-                      : 'VUI LÒNG CHỌN NGUYỀN HOẶC BỎ QUA'}
+                      ? 'XÁC NHẬN BỎ QUA ĐÊM NAY'
+                      : 'CHỌN NGUYỀN HOẶC BỎ QUA'}
                   </span>
                 </button>
               </div>
@@ -568,9 +568,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               <div className="troublemaker-header-badge wolf-accursed-header-badge">
                 <span className="troublemaker-glyph wolf-glyph" aria-hidden="true">⚡🎭</span>
                 <div>
-                  <strong>KẺ PHÁ RỐI (TROUBLEMAKER)</strong>
+                  <strong>KẺ PHÁ RỐI</strong>
                   <p>
-                    Bạn có 1 lần duy nhất trong cả ván để gây hỗn loạn, khiến cả làng phải biểu quyết treo cổ 2 người trong ngày hôm sau thay vì 1 người!
+                    Bạn có 1 lần duy nhất trong cả ván để khuấy đảo, khiến cả làng phải biểu quyết treo cổ 2 người vào ngày hôm sau!
                   </p>
                 </div>
               </div>
@@ -581,14 +581,14 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   className={`curse-button ${isTroublemakerActive === true ? 'is-complete' : ''}`}
                   onClick={() => setIsTroublemakerActive(true)}
                 >
-                  <span>{isTroublemakerActive === true ? '✓ ĐÃ CHỌN KÍCH HOẠT TREO CỔ 2 NGƯỜI' : '⚡ KÍCH HOẠT TREO CỔ 2 NGƯỜI'}</span>
+                  <span>{isTroublemakerActive === true ? '✓ ĐÃ CHỌN TREO CỔ 2 NGƯỜI' : '⚡ GÂY RỐI (TREO CỔ 2 NGƯỜI)'}</span>
                 </button>
                 <button
                   type="button"
                   className={`skip-curse-button ${isTroublemakerActive === false ? 'is-complete' : ''}`}
                   onClick={() => setIsTroublemakerActive(false)}
                 >
-                  <span>{isTroublemakerActive === false ? '✓ ĐÃ CHỌN GIỮ LẠI CHO ĐÊM SAU' : 'BỎ QUA / GIỮ LẠI CHO ĐÊM SAU'}</span>
+                  <span>{isTroublemakerActive === false ? '✓ GIỮ LẠI CHO ĐÊM SAU' : 'BỎ QUA (GIỮ CHO ĐÊM SAU)'}</span>
                 </button>
               </div>
 
@@ -601,10 +601,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 >
                   <span>
                     {isTroublemakerActive === true
-                      ? 'XÁC NHẬN KÍCH HOẠT HỖN LOẠN'
+                      ? 'XÁC NHẬN GÂY RỐI'
                       : isTroublemakerActive === false
                       ? 'XÁC NHẬN BỎ QUA ĐÊM NAY'
-                      : 'VUI LÒNG CHỌN KÍCH HOẠT HOẶC BỎ QUA'}
+                      : 'CHỌN GÂY RỐI HOẶC BỎ QUA'}
                   </span>
                 </button>
               </div>
@@ -628,7 +628,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                     className={`hold-button heal-button ${isWitchHeal ? 'is-complete' : ''}`}
                     onClick={() => setIsWitchHeal((prev) => !prev)}
                   >
-                    <span>{isWitchHeal ? '✓ ĐÃ CHỌN DÙNG BÌNH CỨU' : 'DÙNG BÌNH TIÊN DƯỢC (CỨU)'}</span>
+                    <span>{isWitchHeal ? '✓ DÙNG BÌNH CỨU' : 'DÙNG BÌNH CỨU NGƯỜI'}</span>
                   </button>
                 </div>
               )}
@@ -636,7 +636,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               {/* Thông báo Con Cáo mất phép hoặc nút bỏ qua */}
               {isFox && privateView?.skills?.foxLostPower && (
                 <div className="fox-lost-power-banner" style={{ background: '#261b1b', border: '1px solid #7f1d1d', borderRadius: 8, padding: 12, margin: '8px 0', color: '#fca5a5', fontSize: 13 }}>
-                  <span>⚠️ Con cáo đã mất khứu giác đánh hơi vĩnh viễn do đã từng đánh hơi cụm an toàn không có Ma Sói.</span>
+                  <span>⚠️ Cáo đã mất khứu giác do từng đánh hơi trúng nhóm an toàn (không có Ma Sói).</span>
                 </div>
               )}
 
@@ -651,7 +651,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                     }}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8 }}
                   >
-                    <span>{isFoxSkip ? '✓ ĐÃ CHỌN BỎ QUA ĐÊM NAY' : 'BỎ QUA KHÔNG ĐÁNH HƠI ĐÊM NAY (BẢO TOÀN PHÉP)'}</span>
+                    <span>{isFoxSkip ? '✓ ĐÊM NAY KHÔNG ĐÁNH HƠI' : 'BỎ QUA ĐÊM NAY (GIỮ NGUYÊN PHÉP)'}</span>
                   </button>
                 </div>
               )}
@@ -661,53 +661,53 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 <div>
                   <strong>
                     {isHoodlum
-                      ? 'CHỌN 2 KẺ THÙ CẦN TRỪ KHỬ'
+                      ? 'CHỌN 2 KẺ THÙ CẦN LOẠI BỎ'
                       : isWildChild
-                      ? 'CHỌN 1 THẦN TƯỢNG CỦA BẠN'
+                      ? 'CHỌN 1 NGƯỜI LÀM THẦN TƯỢNG'
                       : isDireWolf
                       ? 'CHỌN 1 BẠN ĐỒNG HÀNH'
                       : isBigBadWolf
                       ? 'CHỌN 1 MỤC TIÊU CẮN THÊM'
                       : isAuraSeer
-                      ? 'CHỌN 1 NGƯỜI ĐỂ QUAN SÁT HÀO QUANG'
+                      ? 'CHỌN 1 NGƯỜI ĐỂ SOI HÀO QUANG'
                       : isFox
-                      ? 'CHỌN 1 NGƯỜI LÀM TÂM ĐIỂM ĐÁNH HƠI'
+                      ? 'CHỌN 1 NGƯỜI ĐỂ ĐÁNH HƠI'
                       : isPi
-                      ? 'CHỌN 1 NGHI PHẠM ĐỂ ĐIỀU TRA'
+                      ? 'CHỌN 1 NGƯỜI ĐỂ THÁM TỬ ĐIỀU TRA'
                       : isSpellcaster
-                      ? 'CHỌN 1 NGƯỜI ĐỂ PHÙ PHÉP CÂM LẶNG'
+                      ? 'CHỌN 1 NGƯỜI ĐỂ CẤM NÓI'
                       : isDoppelganger
-                      ? 'CHỌN 1 NGƯỜI LÀM BẢN SAO'
+                      ? 'CHỌN 1 NGƯỜI ĐỂ SAO CHÉP VAI'
                       : isPiedPiper
                       ? `CHỌN NGƯỜI ĐỂ THÔI MIÊN (TỐI ĐA ${maxPiedPiperTargets})`
                       : isCultLeader
-                      ? 'CHỌN 1 TÍN ĐỒ GIA NHẬP GIÁO PHÁI'
+                      ? 'CHỌN 1 NGƯỜI VÀO GIÁO PHÁI'
                       : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
                   </strong>
                   <small>
                     {isHoodlum
-                      ? 'Bạn chỉ thắng nếu cả 2 người này đều chết và bạn còn sống'
+                      ? 'Bạn thắng khi cả 2 người này đều chết và bạn còn sống'
                       : isWildChild
-                      ? 'Nếu người này chết, bạn sẽ biến thành Ma Sói từ đêm hôm sau'
+                      ? 'Nếu người này chết, bạn sẽ hóa Ma Sói từ đêm hôm sau'
                       : isDireWolf
                       ? 'Nếu người này chết, bạn sẽ chết theo ngay lập tức'
                       : isBigBadWolf
-                      ? 'Cắn thêm một nạn nhân độc lập với bầy Sói'
+                      ? 'Cắn thêm một người, độc lập với bầy Sói'
                       : isAuraSeer
-                      ? 'Nhận biết người đó là Người thường (Dân/Sói thường) hay có Hào quang Đặc biệt'
+                      ? 'Xem người đó là thường dân / Sói thường hay mang Hào quang đặc biệt'
                       : isFox
-                      ? 'Đánh hơi người này và 2 người ngồi cạnh xem có Ma Sói nào không. Có thể chọn chính mình'
+                      ? 'Đánh hơi người này và 2 người bên cạnh xem có Sói không (có thể chọn chính mình)'
                       : isPi
-                      ? 'Điều tra người này và 2 người ngồi cạnh xem có Ma Sói nào không (1 lần duy nhất)'
+                      ? 'Điều tra người này và 2 người bên cạnh xem có Sói không (chỉ dùng 1 lần)'
                       : isSpellcaster
-                      ? 'Người này sẽ bị câm lặng hoàn toàn vào ngày mai (không chọn trùng người đêm trước)'
+                      ? 'Người này sẽ bị câm lặng hoàn toàn vào ngày mai (không chọn người đêm trước)'
                       : isDoppelganger
-                      ? 'Khi người này chết, bạn sẽ nhận vai trò và kỹ năng của họ từ đêm tiếp theo'
+                      ? 'Khi người này chết, bạn sẽ nhận vai trò và kỹ năng của họ'
                       : isPiedPiper
-                      ? 'Chọn những người còn sống chưa bị thôi miên. Bạn thắng khi toàn bộ người sống đều bị thôi miên'
+                      ? 'Thôi miên người còn sống. Bạn thắng khi tất cả người sống đều bị thôi miên'
                       : isCultLeader
-                      ? 'Chọn người còn sống chưa vào giáo phái. Bạn thắng khi toàn bộ người sống đều vào giáo phái'
-                      : 'Chỉ hiển thị các người chơi hợp lệ trong luật'}
+                      ? 'Kết nạp người còn sống. Bạn thắng khi tất cả người sống đều vào giáo phái'
+                      : 'Chọn người chơi theo luật'}
                   </small>
                 </div>
                 <span className="target-hint">
@@ -735,22 +735,22 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : 'Chọn 1 người để soi hào quang'
                     : isFox
                     ? isFoxSkip
-                      ? 'Đã chọn bỏ qua đánh hơi'
+                      ? 'Đã bỏ qua đánh hơi'
                       : selectedTargetId
                       ? `Tâm điểm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
                       : 'Chọn 1 người làm tâm điểm'
                     : isPi
                     ? selectedTargetId
                       ? `Nghi phạm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
-                      : 'Chọn 1 nghi phạm'
+                      : 'Chọn 1 người điều tra'
                     : isSpellcaster
                     ? selectedTargetId
-                      ? `Phù phép câm: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
-                      : 'Chọn 1 người làm câm'
+                      ? `Cấm nói: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người để cấm nói'
                     : isDoppelganger
                     ? selectedTargetId
-                      ? `Bản sao: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
-                      : 'Chọn 1 người làm bản sao'
+                      ? `Sao chép vai: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
+                      : 'Chọn 1 người để sao chép'
                     : isPiedPiper
                     ? `Đã chọn: ${piedPiperTargets.length}/${maxPiedPiperTargets} người`
                     : isCultLeader
@@ -759,7 +759,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : 'Chọn 1 người kết nạp'
                     : selectedTargetId
                     ? `Mục tiêu: ${publicView?.players.find((p) => p.id === selectedTargetId)?.name}`
-                    : 'Chưa chọn'}
+                    : 'Chưa chọn ai'}
                 </span>
               </div>
 
@@ -805,10 +805,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 })}
               </div>
 
-              {/* Bình độc dược cho Phù Thủy */}
+              {/* Bình thuốc độc cho Phù Thủy */}
               {isWitch && !privateView?.skills?.witchPoisonUsed && (
                 <div className="witch-poison-section">
-                  <strong>BÌNH ĐỘC DƯỢC</strong>
+                  <strong>BÌNH THUỐC ĐỘC</strong>
                   <div className="target-grid">
                     {validTargets.map((tId) => {
                       const targetP = publicView?.players.find((p) => p.id === tId);
@@ -839,18 +839,18 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                     {(() => {
                       const inv = privateView.investigationResult;
                       if (inv.result === 'SPECIAL') {
-                        return '🔮 HÀO QUANG ĐẶC BIỆT (Tím)';
+                        return '🔮 CÓ HÀO QUANG ĐẶC BIỆT';
                       }
                       if (inv.result === 'NORMAL') {
-                        return '⚪ HÀO QUANG BÌNH THƯỜNG (Xám)';
+                        return '⚪ HÀO QUANG BÌNH THƯỜNG';
                       }
                       if (typeof inv.hasWerewolf === 'boolean') {
                         return inv.hasWerewolf
-                          ? '🐺 CÓ MA SÓI TRONG CỤM 3 NGƯỜI!'
-                          : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI TRONG CỤM!';
+                          ? '🐺 CÓ MA SÓI TRONG NHÓM 3 NGƯỜI!'
+                          : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
                       }
                       if (typeof inv.result === 'string') {
-                        return inv.result === 'WEREWOLF' ? '🐺 LÀ MA SÓI' : '🛡️ LÀ NGƯỜI LÀNG';
+                        return inv.result === 'WEREWOLF' ? '🐺 LÀ MA SÓI' : '🛡️ LÀ DÂN LÀNG';
                       }
                       return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
                     })()}
@@ -873,7 +873,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : isWildChild
                       ? 'XÁC NHẬN CHỌN THẦN TƯỢNG'
                       : isDireWolf
-                      ? 'XÁC NHẬN CHỌN BẠN ĐỒNG HÀNH'
+                      ? 'XÁC NHẬN BẠN ĐỒNG HÀNH'
                       : isBigBadWolf
                       ? 'XÁC NHẬN CẮN THÊM'
                       : isAuraSeer
@@ -881,17 +881,17 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : isFox
                       ? isFoxSkip
                         ? 'XÁC NHẬN BỎ QUA ĐÊM NAY'
-                        : 'XÁC NHẬN ĐÁNH HƠI CỤM 3 NGƯỜI'
+                        : 'XÁC NHẬN ĐÁNH HƠI'
                       : isPi
-                      ? 'XÁC NHẬN ĐIỀU TRA NGHI PHẠM'
+                      ? 'XÁC NHẬN ĐIỀU TRA'
                       : isSpellcaster
-                      ? 'XÁC NHẬN PHÙ PHÉP CÂM LẶNG'
+                      ? 'XÁC NHẬN CẤM NÓI'
                       : isDoppelganger
-                      ? 'XÁC NHẬN CHỌN BẢN SAO'
+                      ? 'XÁC NHẬN SAO CHÉP VAI'
                       : isPiedPiper
                       ? isPiedPiperValid
                         ? `XÁC NHẬN THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
-                        : `CHỌN ĐỦ SỐ NGƯỜI THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
+                        : `CHỌN ĐỦ NGƯỜI THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
                       : isCultLeader
                       ? 'XÁC NHẬN KẾT NẠP TÍN ĐỒ'
                       : 'XÁC NHẬN HÀNH ĐỘNG'}
@@ -907,7 +907,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       void handleConfirmAction();
                     }}
                   >
-                    Bỏ qua không thực hiện (hoặc thổi nến)
+                    Bỏ qua đêm nay
                   </button>
                 )}
               </div>
@@ -919,9 +919,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       )}
 
       <footer className="screen-footer night-footer">
-        <span>TĨNH LẶNG TUYỆT ĐỐI</span>
+        <span>GIỮ IM LẶNG TUYỆT ĐỐI</span>
         <span>•</span>
-        <span>KHÔNG RUNG BAN ĐÊM</span>
+        <span>KHÔNG GÂY TIẾNG ĐỘNG</span>
       </footer>
     </main>
   );

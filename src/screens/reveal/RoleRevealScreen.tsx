@@ -237,7 +237,7 @@ export default function RoleRevealScreen({}: Props) {
           aria-label={
             isHolding
               ? `Đang xem vai của ${currentPlayer.name}. Thả tay để úp bài lại.`
-              : `Nhấn và giữ lá bài để xem vai của ${currentPlayer.name}`
+              : `Chạm và giữ để xem vai của ${currentPlayer.name}`
           }
         >
           <div className="ritual-card-body">
@@ -301,7 +301,7 @@ export default function RoleRevealScreen({}: Props) {
       <div className="ritual-bottom-area">
         {!hasViewed && (
           <div className="ritual-bottom-hint">
-            {isHolding ? 'Buông tay để úp bài lại' : 'Nhấn và giữ lá bài để xem vai'}
+            {isHolding ? 'Thả tay để úp bài lại' : 'Chạm và giữ để xem vai'}
           </div>
         )}
 
