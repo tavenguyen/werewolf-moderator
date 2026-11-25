@@ -1189,3 +1189,31 @@ body.night-sleep-active {
   background: rgba(168, 85, 247, 0.15);
   box-shadow: 0 0 10px rgba(168, 85, 247, 0.25);
 }
+
+.investigation-result-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0;
+}
+
+.investigation-result-panel .investigation-result-card {
+  margin: 0;
+  padding: 18px 16px;
+}
+
+.investigation-result-panel .investigation-result-card strong {
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+.witch-used-note {
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  color: var(--muted, #9ea3b0);
+  font-size: 13px;
+  text-align: center;
+}

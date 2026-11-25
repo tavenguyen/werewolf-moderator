@@ -13,7 +13,8 @@ import { ROLES_BY_ID } from '../engine/roles';
 import { generateNightTurnPlan } from '../engine/turnPlan';
 import { getSmartPreset } from '../engine/presets';
 import { getAliveNeighbors } from '../engine/seating';
-import { isWerewolfForInvestigation } from '../engine/nightResolution';
+import { getAuraSeerResult, isWerewolfForInvestigation } from '../engine/nightResolution';
+import { tallyDayVotes, tallyMayorElection, tallyRunoffVotes } from '../engine/voting';
 import {
   createHostBoardView,
   createPlayerPrivateView,
@@ -336,6 +337,11 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.currentNightTurnIndex = 0;
     this.roomState.nightActionsAccumulator = {};
     this.roomState.nightActionAcks.clear();
+    this.roomState.seerInvestigationResult = undefined;
+    this.roomState.sorcererInvestigationResult = undefined;
+    this.roomState.auraInvestigationResult = undefined;
+    this.roomState.foxInvestigationResult = undefined;
+    this.roomState.piInvestigationResult = undefined;
 
     const firstTurn = this.roomState.nightTurnPlan[0];
     if (firstTurn && firstTurn.activePlayerIds.length > 0) {
@@ -393,7 +399,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public async sendNightAction(_roleId: string, action: NightActionInput): Promise<void> {
     const currentTurn = this.roomState.nightTurnPlan[this.roomState.currentNightTurnIndex];
-    if (!currentTurn) return;
+    if (!currentTurn || !currentTurn.canAct) return;
 
     const acc = this.roomState.nightActionsAccumulator;
     const actorId = this.activeLocalPlayerId ?? currentTurn.activePlayerIds[0];
@@ -409,28 +415,43 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           acc.bodyguard = { targetId: action.targetId };
         }
         break;
-      case 'wolf_pack':
+      case 'wolf_pack': {
         if (!acc.wolfPack) {
           acc.wolfPack = { targets: [] };
         }
-        if (action.targetId) {
-          acc.wolfPack.targets = [action.targetId];
-        } else if (action.isSkip) {
+        const maxTargets = this.roomState.gameState?.wolfCubDoubleKillNextNight ? 2 : 1;
+        if (action.isSkip) {
           acc.wolfPack.isSkip = true;
+          acc.wolfPack.targets = [];
+        } else if (action.targetIds && action.targetIds.length > 0) {
+          acc.wolfPack.isSkip = false;
+          acc.wolfPack.targets = Array.from(new Set(action.targetIds)).slice(0, maxTargets);
+        } else if (action.targetId) {
+          acc.wolfPack.isSkip = false;
+          acc.wolfPack.targets = [action.targetId];
         }
         break;
+      }
       case 'white_wolf':
         acc.whiteWolf = { targetId: action.targetId ?? null };
         break;
       case 'seer':
+      case 'apprentice_seer':
         if (action.targetId) {
           acc.seer = { targetId: action.targetId };
           const target = this.roomState.gameState?.players.find((p) => p.id === action.targetId);
           if (target) {
             const def = ROLES_BY_ID[target.roleId];
+            let result: string = def?.seerResult ?? 'VILLAGER';
+            if (this.roomState.settings.seerRevealMode === 'EXACT_ROLE') {
+              result = target.roleId;
+            } else {
+              if (target.roleId === 'lycan') result = 'WEREWOLF';
+              if (target.roleId === 'minion') result = 'VILLAGER';
+            }
             this.roomState.seerInvestigationResult = {
               targetId: action.targetId,
-              result: def?.seerResult ?? 'VILLAGER',
+              result,
             };
           }
         }
@@ -489,11 +510,10 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         if (action.targetId) {
           acc.auraSeer = { targetId: action.targetId };
           const target = this.roomState.gameState?.players.find((p) => p.id === action.targetId);
-          if (target) {
-            const isSpecial = target.roleId !== 'villager' && target.roleId !== 'werewolf';
+          if (target && this.roomState.gameState) {
             this.roomState.auraInvestigationResult = {
               targetId: action.targetId,
-              result: isSpecial ? 'SPECIAL' : 'NORMAL',
+              result: getAuraSeerResult(target, this.roomState.gameState.roundNumber),
             };
           }
         }
@@ -515,6 +535,10 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         break;
       case 'fox':
       case 'night_fox':
+        if (this.roomState.gameState?.foxLostPower) {
+          acc.fox = { targetId: '', isSkip: true };
+          break;
+        }
         acc.fox = { targetId: action.targetId ?? '', isSkip: action.isSkip };
         if (action.targetId && !action.isSkip && this.roomState.gameState) {
           const neighbors = getAliveNeighbors(this.roomState.gameState.players, action.targetId);
@@ -675,7 +699,14 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     if (!actorId) return;
 
     if (!this.roomState.gameState.dayState) return;
-    this.roomState.gameState.dayState.ballots[actorId] = targetPlayerId ?? '';
+    if (this.roomState.gameState.phase === 'DAY_RUNOFF') {
+      if (!this.roomState.gameState.dayState.runoffBallots) {
+        this.roomState.gameState.dayState.runoffBallots = {};
+      }
+      this.roomState.gameState.dayState.runoffBallots[actorId] = targetPlayerId ?? null;
+    } else {
+      this.roomState.gameState.dayState.ballots[actorId] = targetPlayerId ?? '';
+    }
     this.emitState();
   }
 
@@ -685,6 +716,11 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.currentNightTurnIndex = 0;
     this.roomState.nightActionsAccumulator = {};
     this.roomState.nightActionAcks.clear();
+    this.roomState.seerInvestigationResult = undefined;
+    this.roomState.sorcererInvestigationResult = undefined;
+    this.roomState.auraInvestigationResult = undefined;
+    this.roomState.foxInvestigationResult = undefined;
+    this.roomState.piInvestigationResult = undefined;
     this.roomState.seerInvestigationResult = undefined;
     this.roomState.sorcererInvestigationResult = undefined;
     this.roomState.auraInvestigationResult = undefined;
@@ -750,22 +786,76 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.dayTimerInterval = null;
     }
 
-    // Tally ballots
-    const ballots = this.roomState.gameState.dayState?.ballots ?? {};
+    if (this.roomState.gameState.phase === 'DAY_MAYOR_ELECTION') {
+      const livingVoters = this.roomState.gameState.players.filter((p) => p.isAlive);
+      const mayorBallots = this.roomState.gameState.dayState?.mayorBallots ?? {};
+      const tallies: Record<PlayerId, number> = {};
+      const voterDetails: Record<PlayerId, PlayerId[]> = {};
+      let abstainCount = 0;
+
+      for (const voter of livingVoters) {
+        const targetId = mayorBallots[voter.id];
+        if (!targetId) {
+          abstainCount += 1;
+          continue;
+        }
+        const target = this.roomState.gameState.players.find((pl) => pl.id === targetId && pl.isAlive);
+        if (!target) {
+          abstainCount += 1;
+          continue;
+        }
+        tallies[targetId] = (tallies[targetId] ?? 0) + 1;
+        if (!voterDetails[targetId]) voterDetails[targetId] = [];
+        voterDetails[targetId].push(voter.id);
+      }
+
+      this.roomState.lastVoteTally = this.roomState.settings.revealVoterIdentities
+        ? { tallies, abstainCount, voterDetails }
+        : { tallies, abstainCount };
+
+      const { nextState, electedMayorId } = tallyMayorElection(this.roomState.gameState);
+      this.roomState.gameState = nextState;
+      if (electedMayorId) {
+        const mayor = this.roomState.gameState.players.find((p) => p.id === electedMayorId);
+        this.roomState.publicHistoryLogs.push(
+          `Ngày ${this.roomState.gameState.roundNumber}: ${mayor?.name ?? 'Người chơi'} được bầu làm Trưởng làng (lá phiếu tính x2).`
+        );
+      }
+      this.startLocalDayTimer();
+      this.emitState();
+      return;
+    }
+
+    const isRunoff = this.roomState.gameState.phase === 'DAY_RUNOFF';
+    const livingVoters = this.roomState.gameState.players.filter(
+      (p) => p.isAlive && p.voteWeight > 0
+    );
+    const ballots = isRunoff
+      ? (this.roomState.gameState.dayState?.runoffBallots ?? {})
+      : (this.roomState.gameState.dayState?.ballots ?? {});
+
     const tallies: Record<PlayerId, number> = {};
     const voterDetails: Record<PlayerId, PlayerId[]> = {};
     let abstainCount = 0;
 
-    for (const [voterId, target] of Object.entries(ballots)) {
-      const p = this.roomState.gameState.players.find((pl) => pl.id === voterId);
-      const weight = p?.voteWeight ?? 1;
-      if (!target) {
-        abstainCount += weight;
-      } else {
-        tallies[target] = (tallies[target] ?? 0) + weight;
-        if (!voterDetails[target]) voterDetails[target] = [];
-        voterDetails[target].push(voterId);
+    for (const voter of livingVoters) {
+      const targetId = ballots[voter.id];
+      if (!targetId) {
+        abstainCount += voter.voteWeight;
+        continue;
       }
+
+      const target = this.roomState.gameState.players.find(
+        (pl) => pl.id === targetId && pl.isAlive
+      );
+      if (!target) {
+        abstainCount += voter.voteWeight;
+        continue;
+      }
+
+      tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
+      if (!voterDetails[targetId]) voterDetails[targetId] = [];
+      voterDetails[targetId].push(voter.id);
     }
 
     if (this.roomState.settings.revealVoterIdentities) {
@@ -774,26 +864,55 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.lastVoteTally = { tallies, abstainCount };
     }
 
-    // Tìm người có nhiều phiếu nhất
-    let executedTargetId: PlayerId | null = null;
-    const sorted = Object.entries(tallies).sort((a, b) => b[1] - a[1]);
-    if (sorted.length > 0) {
-      if (sorted.length === 1 || (sorted[0] && sorted[1] && sorted[0][1] > sorted[1][1])) {
-        const topCandidate = sorted[0];
-        const livingCount = this.roomState.gameState.players.filter((p) => p.isAlive).length;
-        if (
-          this.roomState.settings.lynchThreshold === 'MAJORITY' &&
-          topCandidate[1] <= livingCount / 2
-        ) {
-          executedTargetId = null;
-        } else {
-          executedTargetId = topCandidate[0] ?? null;
+    let targetsToExecute: PlayerId[] = [];
+
+    if (isRunoff) {
+      const { nextState: runoffState, outcome } = tallyRunoffVotes(this.roomState.gameState);
+      this.roomState.gameState = runoffState;
+      this.roomState.publicHistoryLogs.push(outcome.reason);
+      if (outcome.type === 'EXECUTE' && outcome.targetPlayerId) {
+        targetsToExecute = [outcome.targetPlayerId];
+      }
+    } else {
+      const { nextState: talliedState, outcome } = tallyDayVotes(this.roomState.gameState);
+      this.roomState.gameState = talliedState;
+      this.roomState.publicHistoryLogs.push(outcome.reason);
+
+      if (outcome.type === 'RUNOFF' && outcome.candidateIds) {
+        this.roomState.timers.deadlineAt = Date.now() + 30 * 1000;
+        this.emitState();
+        return;
+      }
+
+      if (outcome.type === 'EXECUTE' && outcome.targetPlayerId) {
+        targetsToExecute = [outcome.targetPlayerId];
+
+        if (this.roomState.gameState.doubleVoteDay) {
+          const secondCandidate = Object.entries(tallies)
+            .sort((a, b) => b[1] - a[1])
+            .find(([id]) => id !== outcome.targetPlayerId);
+          if (secondCandidate) {
+            targetsToExecute.push(secondCandidate[0]);
+          }
         }
       }
     }
 
-    const { nextState, winOutcome } = executeDayVote(this.roomState.gameState, executedTargetId);
+    const prevHistoryLen = this.roomState.gameState.historyLogs.length;
+    const { nextState, survivedByReveal, winOutcome } = executeDayVote(
+      this.roomState.gameState,
+      targetsToExecute.length > 0 ? targetsToExecute : null
+    );
     this.roomState.gameState = nextState;
+
+    if (survivedByReveal) {
+      const newLogs = nextState.historyLogs.slice(prevHistoryLen);
+      for (const log of newLogs) {
+        if (log.includes('Thằng ngốc') || log.includes('Hoàng tử')) {
+          this.roomState.publicHistoryLogs.push(log);
+        }
+      }
+    }
 
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
@@ -859,6 +978,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.gameState = createRematchGameState(this.roomState.gameState, roles);
     this.roomState.gameState.phase = 'FIRST_NIGHT_SETUP';
     this.roomState.gameGeneration += 1;
+    this.roomState.seerInvestigationResult = undefined;
+    this.roomState.sorcererInvestigationResult = undefined;
+    this.roomState.auraInvestigationResult = undefined;
+    this.roomState.foxInvestigationResult = undefined;
+    this.roomState.piInvestigationResult = undefined;
+    this.roomState.lastVoteTally = undefined;
     const playersList = Array.from(this.roomState.players.values()).sort(
       (a, b) => a.seatIndex - b.seatIndex
     );

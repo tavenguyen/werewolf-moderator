@@ -221,6 +221,12 @@ export class SocketGateway {
           room.currentNightTurnIndex = 0;
           room.nightActionsAccumulator = {};
           room.nightActionAcks.clear();
+          room.seerInvestigationResult = undefined;
+          room.sorcererInvestigationResult = undefined;
+          room.auraInvestigationResult = undefined;
+          room.foxInvestigationResult = undefined;
+          room.piInvestigationResult = undefined;
+          room.lastVoteTally = undefined;
 
           // Bắt đầu timer cho lượt đêm đầu tiên
           this.startCurrentNightTurnTimer(room);
@@ -336,8 +342,22 @@ export class SocketGateway {
             throw { code: 'NOT_HOST', message: 'Chỉ Host mới có quyền chốt biểu quyết.' };
           }
 
-          if (!room.gameState || room.gameState.phase !== 'DAY_DISCUSS') {
+          const phase = room.gameState?.phase;
+          if (
+            !room.gameState ||
+            (phase !== 'DAY_DISCUSS' && phase !== 'DAY_MAYOR_ELECTION' && phase !== 'DAY_RUNOFF')
+          ) {
             throw { code: 'INVALID_PHASE', message: 'Không ở pha thảo luận biểu quyết.' };
+          }
+
+          if (phase === 'DAY_MAYOR_ELECTION') {
+            this.finalizeMayorElection(room);
+            return { finalized: true };
+          }
+
+          if (phase === 'DAY_RUNOFF') {
+            this.finalizeRunoffVote(room);
+            return { finalized: true };
           }
 
           if (room.gameState.dayState?.voteLocked) {
@@ -556,6 +576,12 @@ export class SocketGateway {
           room.currentNightTurnIndex = 0;
           room.nightActionsAccumulator = {};
           room.nightActionAcks.clear();
+          room.seerInvestigationResult = undefined;
+          room.sorcererInvestigationResult = undefined;
+          room.auraInvestigationResult = undefined;
+          room.foxInvestigationResult = undefined;
+          room.piInvestigationResult = undefined;
+          room.lastVoteTally = undefined;
 
           this.startCurrentNightTurnTimer(room);
           this.broadcastRoom(room);

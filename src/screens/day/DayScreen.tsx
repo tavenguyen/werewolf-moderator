@@ -22,16 +22,34 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   const [mode, setMode] = useState<'shared' | 'player'>('player');
   const [selectedPlayerId, setSelectedPlayerId] = useState<PlayerId | null>(null);
   const [voteSubmitted, setVoteSubmitted] = useState(false);
+  const [isSubmittingSpecial, setIsSubmittingSpecial] = useState(false);
   const [notice, setNotice] = useState('');
   const [remainingTime, setRemainingTime] = useState(180);
+
+  const phase = publicView?.phase ?? 'DAY_DISCUSS';
+  const isHunterShotPhase = phase === 'HUNTER_SHOT';
+  const isMayorSuccessionPhase = phase === 'MAYOR_SUCCESSION';
+  const isMayorElectionPhase = phase === 'DAY_MAYOR_ELECTION';
+  const isRunoffPhase = phase === 'DAY_RUNOFF';
+  const isSpecialInstantPhase = isHunterShotPhase || isMayorSuccessionPhase;
 
   const players = publicView?.players ?? [];
   const livingPlayers = players.filter((p) => p.isAlive);
   const deadPlayers = players.filter((p) => !p.isAlive);
   const isPaused = publicView?.isPaused ?? false;
   const voteLocked = publicView?.voteLocked ?? false;
+  const effectiveVoteLocked = isMayorElectionPhase || isRunoffPhase ? false : voteLocked;
   const voteLockRemaining = publicView?.voteLockRemainingSeconds ?? 0;
   const lastVoteTally = publicView?.lastVoteTally;
+
+  const currentPlayerPublic = players.find((p) => p.id === state.playerId);
+  const isCurrentPlayerAlive = privateView ? privateView.isAlive : (currentPlayerPublic?.isAlive ?? true);
+  const currentVoteWeight = currentPlayerPublic?.voteWeight ?? 1;
+  const cannotVoteReason = !isCurrentPlayerAlive
+    ? 'Bạn đã chết nên không thể tham gia bỏ phiếu.'
+    : currentVoteWeight === 0
+    ? 'Bạn đã mất quyền bỏ phiếu (Thằng Ngốc đã lật bài) nên chỉ có thể theo dõi.'
+    : null;
 
   // Cập nhật đếm ngược theo deadlineAt từ session (đóng băng khi Pause)
   useEffect(() => {
@@ -60,21 +78,67 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   useEffect(() => {
     setVoteSubmitted(false);
     setSelectedPlayerId(null);
+    setIsSubmittingSpecial(false);
+    setNotice('');
   }, [publicView?.roundNumber, publicView?.phase, state.playerId]);
 
+  const effectiveVoteSubmitted =
+    voteSubmitted ||
+    (!isSingleDevice &&
+      (isMayorElectionPhase || isRunoffPhase || publicView?.phase === 'DAY_DISCUSS') &&
+      privateView?.canActCurrentTurn === false);
+
   const handleCastVote = async () => {
-    if (voteSubmitted || voteLocked) return;
+    if (effectiveVoteSubmitted || effectiveVoteLocked || cannotVoteReason) return;
 
     try {
-      await actions.sendDayVote(selectedPlayerId);
+      if (isMayorElectionPhase) {
+        await actions.sendMayorElect(selectedPlayerId);
+      } else {
+        await actions.sendDayVote(selectedPlayerId);
+      }
       setVoteSubmitted(true);
       const targetName = selectedPlayerId
         ? players.find((p) => p.id === selectedPlayerId)?.name
         : 'phiếu trắng';
-      setNotice(selectedPlayerId ? `✓ Đã bỏ phiếu kín cho ${targetName}.` : '✓ Đã bỏ phiếu trắng.');
+      setNotice(
+        isMayorElectionPhase
+          ? selectedPlayerId
+            ? `✓ Đã bỏ phiếu bầu ${targetName} làm Trưởng làng.`
+            : '✓ Đã bỏ phiếu trắng bầu Trưởng làng.'
+          : selectedPlayerId
+          ? `✓ Đã bỏ phiếu kín cho ${targetName}.`
+          : '✓ Đã bỏ phiếu trắng.'
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi gửi phiếu';
       setNotice(msg);
+    }
+  };
+
+  const handleHunterShot = async (targetId: PlayerId | null) => {
+    if (isSubmittingSpecial) return;
+    setIsSubmittingSpecial(true);
+    setNotice('');
+    try {
+      await actions.sendHunterShot(targetId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể thực hiện phát súng Thợ săn';
+      setNotice(msg);
+      setIsSubmittingSpecial(false);
+    }
+  };
+
+  const handleMayorTransfer = async (successorId: PlayerId | null) => {
+    if (isSubmittingSpecial) return;
+    setIsSubmittingSpecial(true);
+    setNotice('');
+    try {
+      await actions.sendMayorTransfer(successorId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể trao huy hiệu Trưởng làng';
+      setNotice(msg);
+      setIsSubmittingSpecial(false);
     }
   };
 
@@ -99,9 +163,20 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
 
       <header className="screen-header day-header">
         <div className="phase-label">
-          <span className="day-candle-flame" aria-hidden="true">☀️</span>
+          <span className="day-candle-flame" aria-hidden="true">
+            {isHunterShotPhase ? '🎯' : isMayorSuccessionPhase || isMayorElectionPhase ? '👑' : isRunoffPhase ? '⚖️' : '☀️'}
+          </span>
           <span>
-            TRỜI SÁNG · NGÀY {publicView?.roundNumber || 1} <b>•</b> THẢO LUẬN DÂN LÀNG
+            TRỜI SÁNG · NGÀY {publicView?.roundNumber || 1} <b>•</b>{' '}
+            {isHunterShotPhase
+              ? 'PHÁT SÚNG THỢ SĂN'
+              : isMayorSuccessionPhase
+              ? 'TRAO HUY HIỆU TRƯỞNG LÀNG'
+              : isMayorElectionPhase
+              ? 'BẦU TRƯỞNG LÀNG'
+              : isRunoffPhase
+              ? 'VÒNG BỎ PHIẾU LẠI'
+              : 'THẢO LUẬN DÂN LÀNG'}
           </span>
         </div>
 
@@ -325,18 +400,199 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </section>
         )}
 
+        {/* Pha đặc biệt: Phát súng Thợ Săn */}
+        {isHunterShotPhase && (() => {
+          const canShoot = Boolean(privateView?.canActCurrentTurn && privateView?.turnKey === 'hunter_shot') || isSingleDevice;
+          const hunterTargets = privateView?.validTargets?.length
+            ? players.filter((p) => privateView.validTargets.includes(p.id))
+            : livingPlayers;
+          return (
+            <section className="day-players-panel special-phase-panel hunter-shot-panel" aria-live="polite">
+              <div className="day-panel-heading">
+                <div className="heading-group">
+                  <span className="heading-dot" />
+                  <strong>🎯 THỢ SĂN NGÃ XUỐNG · PHÁT SÚNG CUỐI CÙNG</strong>
+                </div>
+                {publicView?.deadlineAt && (
+                  <span className="unlocked-label">⏱ {remainingTime}S</span>
+                )}
+              </div>
+              <p className="special-phase-desc">
+                Thợ săn đã bị hạ gục và có quyền nổ một phát súng cuối cùng kéo theo 1 người chơi còn sống.
+              </p>
+
+              {canShoot ? (
+                <>
+                  <div className="day-vote-grid">
+                    {hunterTargets.map((player) => (
+                      <button
+                        key={player.id}
+                        type="button"
+                        disabled={isSubmittingSpecial}
+                        aria-pressed={selectedPlayerId === player.id}
+                        onClick={() => {
+                          setSelectedPlayerId(selectedPlayerId === player.id ? null : player.id);
+                          setNotice('');
+                        }}
+                        className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
+                      >
+                        <div className="vote-card-header">
+                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                          <span className="vote-name">{player.name}</span>
+                        </div>
+                        <small className="vote-weight">
+                          {selectedPlayerId === player.id ? '🎯 Đang ngắm bắn' : 'Chọn mục tiêu'}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="special-phase-actions">
+                    <button
+                      type="button"
+                      disabled={!selectedPlayerId || isSubmittingSpecial}
+                      className="cast-vote-button hunter-fire-button"
+                      onClick={() => handleHunterShot(selectedPlayerId)}
+                    >
+                      <span>
+                        {selectedPlayerId
+                          ? `🎯 BẮN MỤC TIÊU: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                          : 'CHỌN 1 NGƯỜI ĐỂ BẮN'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmittingSpecial}
+                      className="special-skip-button"
+                      onClick={() => handleHunterShot(null)}
+                    >
+                      💨 Bắn trượt (Không bắn ai)
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="special-waiting-note" role="status">
+                  Hãy giữ im lặng! Thợ săn đang ngắm bắn mục tiêu cuối cùng...
+                </div>
+              )}
+              {notice && <p role="status" className="vote-notice">{notice}</p>}
+            </section>
+          );
+        })()}
+
+        {/* Pha đặc biệt: Trao huy hiệu Trưởng Làng */}
+        {isMayorSuccessionPhase && (() => {
+          const canTransfer = Boolean(privateView?.canActCurrentTurn && privateView?.turnKey === 'mayor_succession') || isSingleDevice;
+          const successionTargets = privateView?.validTargets?.length
+            ? players.filter((p) => privateView.validTargets.includes(p.id))
+            : livingPlayers;
+          return (
+            <section className="day-players-panel special-phase-panel mayor-succession-panel" aria-live="polite">
+              <div className="day-panel-heading">
+                <div className="heading-group">
+                  <span className="heading-dot" />
+                  <strong>👑 TRƯỞNG LÀNG TRAO HUY HIỆU KẾ VỊ</strong>
+                </div>
+              </div>
+              <p className="special-phase-desc">
+                Trưởng làng đã ngã xuống. Hãy chọn 1 người chơi còn sống để trao lại huy hiệu Trưởng làng (2 phiếu biểu quyết).
+              </p>
+
+              {canTransfer ? (
+                <>
+                  <div className="day-vote-grid">
+                    {successionTargets.map((player) => (
+                      <button
+                        key={player.id}
+                        type="button"
+                        disabled={isSubmittingSpecial}
+                        aria-pressed={selectedPlayerId === player.id}
+                        onClick={() => {
+                          setSelectedPlayerId(selectedPlayerId === player.id ? null : player.id);
+                          setNotice('');
+                        }}
+                        className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
+                      >
+                        <div className="vote-card-header">
+                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                          <span className="vote-name">{player.name}</span>
+                        </div>
+                        <small className="vote-weight">
+                          {selectedPlayerId === player.id ? '👑 Người kế vị được chọn' : 'Chọn làm Trưởng làng mới'}
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="special-phase-actions">
+                    <button
+                      type="button"
+                      disabled={!selectedPlayerId || isSubmittingSpecial}
+                      className="cast-vote-button"
+                      onClick={() => handleMayorTransfer(selectedPlayerId)}
+                    >
+                      <span>
+                        {selectedPlayerId
+                          ? `👑 TRAO HUY HIỆU CHO: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                          : 'CHỌN 1 NGƯỜI KẾ VỊ'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmittingSpecial}
+                      className="special-skip-button"
+                      onClick={() => handleMayorTransfer(null)}
+                    >
+                      Từ bỏ trao huy hiệu
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="special-waiting-note" role="status">
+                  Trưởng làng đang chọn người kế vị trước khi nhắm mắt...
+                </div>
+              )}
+              {notice && <p role="status" className="vote-notice">{notice}</p>}
+            </section>
+          );
+        })()}
+
         {/* Danh sách người chơi / Bỏ phiếu */}
-        {mode === 'player' ? (
+        {!isSpecialInstantPhase && (mode === 'player' ? (
           <section className="day-players-panel">
             <div className="day-panel-heading">
               <div className="heading-group">
                 <span className="heading-dot" />
-                <strong>BỎ PHIẾU TREO CỔ</strong>
+                <strong>
+                  {isMayorElectionPhase
+                    ? '👑 BẦU CHỌN TRƯỞNG LÀNG (NGÀY 1)'
+                    : isRunoffPhase
+                    ? '⚖️ VÒNG BỎ PHIẾU LẠI (HÒA PHIẾU)'
+                    : 'BỎ PHIẾU TREO CỔ'}
+                </strong>
               </div>
-              <span className={!voteLocked ? 'unlocked-label' : 'locked-label'}>
-                {!voteLocked ? '✓ ĐANG MỞ PHIẾU' : `🔒 ĐỢI ${voteLockRemaining}S`}
+              <span className={!effectiveVoteLocked ? 'unlocked-label' : 'locked-label'}>
+                {!effectiveVoteLocked ? '✓ ĐANG MỞ PHIẾU' : `🔒 ĐỢI ${voteLockRemaining}S`}
               </span>
             </div>
+
+            {isRunoffPhase && (
+              <div className="day-event-banner double-vote-banner" role="status">
+                <span className="banner-icon" aria-hidden="true">⚖️</span>
+                <div className="banner-text">
+                  <strong>VÒNG BỎ PHIẾU LẠI (RUN-OFF)</strong>
+                  <span>Vòng trước hòa phiếu. Chỉ bỏ phiếu cho các ứng viên đang hòa phiếu dưới đây.</span>
+                </div>
+              </div>
+            )}
+
+            {isMayorElectionPhase && (
+              <div className="day-event-banner prince-revealed" role="status">
+                <span className="banner-icon" aria-hidden="true">👑</span>
+                <div className="banner-text">
+                  <strong>BẦU TRƯỞNG LÀNG NGÀY 1</strong>
+                  <span>Người thắng cử sẽ nhận huy hiệu Trưởng làng với 2 phiếu biểu quyết.</span>
+                </div>
+              </div>
+            )}
 
             {/* Single-device chọn người đang vote */}
             {isSingleDevice && (
@@ -349,72 +605,103 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 >
                   {livingPlayers.map((p) => (
                     <option key={p.id} value={p.id}>
-                      #{p.seatIndex} {p.name} {p.isMayor ? '(Trưởng làng - 2 phiếu)' : ''}
+                      #{p.seatIndex} {p.name} {p.isMayor ? '(Trưởng làng - 2 phiếu)' : p.voteWeight === 0 ? '(Mất quyền vote)' : ''}
                     </option>
                   ))}
                 </select>
               </div>
             )}
 
-            <div className="day-vote-grid">
-              {/* Nút Bỏ phiếu trắng */}
-              <button
-                type="button"
-                disabled={voteLocked || voteSubmitted}
-                aria-pressed={selectedPlayerId === null}
-                onClick={() => setSelectedPlayerId(null)}
-                className={`day-vote-card abstain-card ${selectedPlayerId === null ? 'vote-selected' : ''}`}
-              >
-                <div className="vote-card-header">
-                  <span className="vote-seat">⚪</span>
-                  <span className="vote-name">Bỏ phiếu trắng</span>
-                </div>
-                <small className="vote-weight">Không muốn treo cổ ai hôm nay</small>
-              </button>
+            {cannotVoteReason && (
+              <div className="cannot-vote-warning" role="status">
+                <span>⚠️ {cannotVoteReason}</span>
+              </div>
+            )}
 
-              {players.map((player) =>
-                player.isAlive ? (
+            {(() => {
+              const runoffCandidateIds =
+                isRunoffPhase && privateView?.validTargets && privateView.validTargets.length > 0
+                  ? new Set(privateView.validTargets)
+                  : null;
+              const voteCandidates = runoffCandidateIds
+                ? players.filter((p) => runoffCandidateIds.has(p.id))
+                : players;
+              const isVoteDisabled = Boolean(cannotVoteReason) || effectiveVoteLocked || effectiveVoteSubmitted;
+
+              return (
+                <div className="day-vote-grid">
+                  {/* Nút Bỏ phiếu trắng */}
                   <button
-                    key={player.id}
                     type="button"
-                    disabled={voteLocked || voteSubmitted}
-                    aria-pressed={selectedPlayerId === player.id}
-                    onClick={() => {
-                      setSelectedPlayerId(player.id);
-                      setNotice('');
-                    }}
-                    className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
+                    disabled={isVoteDisabled}
+                    aria-pressed={selectedPlayerId === null}
+                    onClick={() => setSelectedPlayerId(null)}
+                    className={`day-vote-card abstain-card ${selectedPlayerId === null ? 'vote-selected' : ''}`}
                   >
                     <div className="vote-card-header">
-                      <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
-                      <span className="vote-name">{player.name}</span>
+                      <span className="vote-seat">⚪</span>
+                      <span className="vote-name">Bỏ phiếu trắng</span>
                     </div>
                     <small className="vote-weight">
-                      {player.isMayor ? '👑 Trưởng làng (2 phiếu)' : '1 phiếu'}
+                      {isMayorElectionPhase ? 'Không bầu ai làm Trưởng làng' : 'Không muốn treo cổ ai hôm nay'}
                     </small>
                   </button>
-                ) : (
-                  <div key={player.id} className="day-vote-card dead-vote-card">
-                    <div className="vote-card-header">
-                      <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
-                      <span className="vote-name crossed-out">{player.name}</span>
-                    </div>
-                    <small className="dead-tag">☠ Đã chết</small>
-                  </div>
-                )
-              )}
-            </div>
 
-            {!voteLocked && (
+                  {voteCandidates.map((player) =>
+                    player.isAlive ? (
+                      <button
+                        key={player.id}
+                        type="button"
+                        disabled={isVoteDisabled}
+                        aria-pressed={selectedPlayerId === player.id}
+                        onClick={() => {
+                          setSelectedPlayerId(player.id);
+                          setNotice('');
+                        }}
+                        className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
+                      >
+                        <div className="vote-card-header">
+                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                          <span className="vote-name">{player.name}</span>
+                        </div>
+                        <small className="vote-weight">
+                          {isMayorElectionPhase
+                            ? 'Ứng viên Trưởng làng'
+                            : player.isMayor
+                            ? '👑 Trưởng làng (2 phiếu)'
+                            : player.voteWeight === 0
+                            ? '🃏 Đã mất quyền vote'
+                            : '1 phiếu'}
+                        </small>
+                      </button>
+                    ) : (
+                      <div key={player.id} className="day-vote-card dead-vote-card">
+                        <div className="vote-card-header">
+                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                          <span className="vote-name crossed-out">{player.name}</span>
+                        </div>
+                        <small className="dead-tag">☠ Đã chết</small>
+                      </div>
+                    )
+                  )}
+                </div>
+              );
+            })()}
+
+            {!effectiveVoteLocked && !cannotVoteReason && (
               <button
                 type="button"
-                disabled={voteSubmitted}
-                className={`cast-vote-button ${voteSubmitted ? 'is-submitted' : ''}`}
+                disabled={effectiveVoteSubmitted}
+                className={`cast-vote-button ${effectiveVoteSubmitted ? 'is-submitted' : ''}`}
                 onClick={handleCastVote}
               >
                 <span>
-                  {voteSubmitted
+                  {effectiveVoteSubmitted
                     ? '✓ ĐÃ BỎ PHIẾU XONG'
+                    : isMayorElectionPhase
+                    ? selectedPlayerId
+                      ? `BẦU TRƯỞNG LÀNG: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                      : 'BỎ PHIẾU TRẮNG'
                     : selectedPlayerId
                     ? `BỎ PHIẾU TREO CỔ: ${players.find((p) => p.id === selectedPlayerId)?.name}`
                     : 'BỎ PHIẾU TRẮNG'}
@@ -458,22 +745,26 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               ))}
             </div>
           </section>
-        )}
+        ))}
       </div>
 
       {/* Footer Host chốt phán quyết */}
-      {state.isHost && (
+      {state.isHost && !isSpecialInstantPhase && (
         <footer className="day-bottom-bar">
           <button
             type="button"
             className="finalize-button"
-            disabled={voteLocked}
+            disabled={effectiveVoteLocked}
             onClick={handleFinalizeVote}
           >
             <span className="gavel-icon" aria-hidden="true">⚒</span>
             <span>
-              {!voteLocked
-                ? 'CHỐT KẾT QUẢ BỎ PHIẾU'
+              {!effectiveVoteLocked
+                ? isMayorElectionPhase
+                  ? 'CHỐT KẾT QUẢ BẦU TRƯỞNG LÀNG'
+                  : isRunoffPhase
+                  ? 'CHỐT KẾT QUẢ BỎ PHIẾU LẠI'
+                  : 'CHỐT KẾT QUẢ BỎ PHIẾU'
                 : `CHƯA ĐẾN GIỜ BỎ PHIẾU (${voteLockRemaining}S)`}
             </span>
           </button>

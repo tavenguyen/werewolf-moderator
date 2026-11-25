@@ -3,7 +3,91 @@ import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
+import type { WinOutcome } from '../../engine/types';
 import './summary.css';
+
+interface WinnerBannerConfig {
+  className: string;
+  icon: string;
+  eyebrow: string;
+  title: string;
+}
+
+const WINNER_BANNER_MAP: Record<NonNullable<WinOutcome['winner']>, WinnerBannerConfig> = {
+  WEREWOLF: {
+    className: 'wolf-victory',
+    icon: '🐺',
+    eyebrow: 'PHE THẮNG CUỘC',
+    title: 'PHE MA SÓI CHIẾN THẮNG!',
+  },
+  VILLAGER: {
+    className: 'village-victory',
+    icon: '☀️',
+    eyebrow: 'PHE THẮNG CUỘC',
+    title: 'PHE DÂN LÀNG CHIẾN THẮNG!',
+  },
+  COUPLE: {
+    className: 'couple-victory',
+    icon: '💘',
+    eyebrow: 'PHE THẮNG CUỘC',
+    title: 'CẶP ĐÔI CHIẾN THẮNG!',
+  },
+  TANNER: {
+    className: 'third-victory',
+    icon: '🎭',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'KẺ CHÁN ĐỜI CHIẾN THẮNG!',
+  },
+  PIED_PIPER: {
+    className: 'third-victory',
+    icon: '🎵',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'NGƯỜI THỔI SÁO CHIẾN THẮNG!',
+  },
+  CULT_LEADER: {
+    className: 'third-victory',
+    icon: '🕯️',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'CHỦ GIÁO PHÁI CHIẾN THẮNG!',
+  },
+  ANGEL: {
+    className: 'third-victory',
+    icon: '👼',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'THIÊN THẦN CHIẾN THẮNG!',
+  },
+  WHITE_WOLF: {
+    className: 'third-victory',
+    icon: '🐺❄️',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'SÓI TRẮNG CHIẾN THẮNG!',
+  },
+  LONE_WOLF: {
+    className: 'third-victory',
+    icon: '🐺🌙',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'SÓI CÔ ĐỘC CHIẾN THẮNG!',
+  },
+  HOODLUM: {
+    className: 'third-victory',
+    icon: '🗡️',
+    eyebrow: 'PHE THỨ 3 THẮNG CUỘC',
+    title: 'CÔN ĐỒ CHIẾN THẮNG!',
+  },
+  DRAW: {
+    className: 'draw-victory',
+    icon: '⚖️',
+    eyebrow: 'KẾT QUẢ VÁN ĐẤU',
+    title: 'HÒA CẢ LÀNG!',
+  },
+};
+
+const DEFAULT_WINNER_BANNER: WinnerBannerConfig = {
+  className: 'draw-victory',
+  icon: '🏁',
+  eyebrow: 'KẾT QUẢ VÁN ĐẤU',
+  title: 'VÁN ĐẤU ĐÃ KẾT THÚC',
+};
 
 type SummaryScreenProps = {
   onNavigate?: (screen: ScreenName) => void;
@@ -95,8 +179,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
   })();
 
   const winner = postGame?.winOutcome?.winner;
-  const isWolfWin = winner === 'WEREWOLF';
-  const isCoupleWin = winner === 'COUPLE';
+  const winnerBanner = winner ? WINNER_BANNER_MAP[winner] : DEFAULT_WINNER_BANNER;
 
   const flip = (id: string) => {
     setOpenCards((current) => {
@@ -148,19 +231,13 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
 
       <div className="summary-content">
         {/* Victory Banner */}
-        <section className={`summary-winner ${isWolfWin ? 'wolf-victory' : isCoupleWin ? 'couple-victory' : 'village-victory'}`}>
+        <section className={`summary-winner ${winnerBanner.className}`}>
           <div className="summary-trophy-wrap" aria-hidden="true">
-            <span className="summary-trophy">{isWolfWin ? '🐺' : isCoupleWin ? '💘' : '☀️'}</span>
+            <span className="summary-trophy">{winnerBanner.icon}</span>
           </div>
           <div className="summary-winner-copy">
-            <span className="winner-eyebrow">PHE THẮNG CUỘC</span>
-            <h1>
-              {isWolfWin
-                ? 'PHE MA SÓI CHIẾN THẮNG!'
-                : isCoupleWin
-                ? 'CẶP ĐÔI CHIẾN THẮNG!'
-                : 'PHE DÂN LÀNG CHIẾN THẮNG!'}
-            </h1>
+            <span className="winner-eyebrow">{winnerBanner.eyebrow}</span>
+            <h1>{winnerBanner.title}</h1>
             <p>
               {postGame?.winOutcome?.reason ||
                 'Ván đấu đã kết thúc. Toàn bộ vai trò trong làng đã được hé lộ.'}

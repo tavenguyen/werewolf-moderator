@@ -12,18 +12,35 @@ type NightScreenProps = {
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
 
+const INVESTIGATION_TURN_KEYS = new Set([
+  'seer',
+  'night_seer',
+  'apprentice_seer',
+  'night_apprentice_seer',
+  'aura_seer',
+  'night_aura_seer',
+  'sorcerer',
+  'night_sorcerer',
+  'fox',
+  'night_fox',
+  'pi',
+  'night_pi',
+]);
+
 export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenProps) {
   const { state, actions, deviceMode } = useGameSession();
 
   const [mode, setMode] = useState<'sleep' | 'action'>('sleep');
   const [advancePressed, setAdvancePressed] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState<PlayerId | null>(null);
+  const [cupidTargets, setCupidTargets] = useState<PlayerId[]>([]);
   const [hoodlumTargets, setHoodlumTargets] = useState<PlayerId[]>([]);
   const [piedPiperTargets, setPiedPiperTargets] = useState<PlayerId[]>([]);
   const [witchPoisonTargetId, setWitchPoisonTargetId] = useState<PlayerId | null>(null);
   const [isWitchHeal, setIsWitchHeal] = useState(false);
   const [notice, setNotice] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [showingResult, setShowingResult] = useState(false);
 
   const privateView = state.privateView;
   const publicView = state.publicView;
@@ -38,6 +55,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const currentTurnInfo = publicView?.currentTurnInfo;
 
   const currentTurnKey = privateView?.turnKey || privateView?.roleId || '';
+  const isCupid = currentTurnKey === 'cupid' || currentTurnKey === 'night_cupid';
   const isMason = currentTurnKey === 'mason' || currentTurnKey === 'night_mason';
   const isHoodlum = currentTurnKey === 'hoodlum' || currentTurnKey === 'night_hoodlum';
   const isWildChild = currentTurnKey === 'wild_child' || currentTurnKey === 'night_wild_child';
@@ -59,6 +77,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [isFoxSkip, setIsFoxSkip] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const submitSleepTimerRef = useRef<number | null>(null);
+  const resultTimerRef = useRef<number | null>(null);
   const advancePopTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -69,6 +88,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     return () => {
       if (submitSleepTimerRef.current !== null) {
         window.clearTimeout(submitSleepTimerRef.current);
+      }
+      if (resultTimerRef.current !== null) {
+        window.clearTimeout(resultTimerRef.current);
       }
       if (advancePopTimerRef.current !== null) {
         window.clearTimeout(advancePopTimerRef.current);
@@ -88,6 +110,15 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     ? publicView?.players.find((p) => p.id === accursedVictimId)
     : null;
 
+  // Đóng thẻ kết quả điều tra khi đổi lượt hoặc đổi người chơi
+  useEffect(() => {
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    setShowingResult(false);
+  }, [privateView?.turnKey, privateView?.playerId]);
+
   // Reset trạng thái thao tác khi sang lượt mới / đổi người chơi (hỗ trợ cả Multi-device nhiều lượt trong cùng đêm)
   useEffect(() => {
     if (submitSleepTimerRef.current !== null) {
@@ -96,8 +127,14 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     }
     if (privateView?.canActCurrentTurn) {
       setHasSubmitted(false);
+      if (resultTimerRef.current !== null) {
+        window.clearTimeout(resultTimerRef.current);
+        resultTimerRef.current = null;
+      }
+      setShowingResult(false);
     }
     setSelectedTargetId(null);
+    setCupidTargets([]);
     setHoodlumTargets([]);
     setPiedPiperTargets([]);
     setWitchPoisonTargetId(null);
@@ -110,7 +147,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
 
   // Tự động chuyển giữa màn hình ngủ và màn hình hành động
   useEffect(() => {
-    if (canAct) {
+    if (canAct || showingResult) {
       if (submitSleepTimerRef.current !== null) {
         window.clearTimeout(submitSleepTimerRef.current);
         submitSleepTimerRef.current = null;
@@ -119,7 +156,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     } else {
       setMode('sleep');
     }
-  }, [canAct]);
+  }, [canAct, showingResult]);
 
   useEffect(() => {
     document.body.classList.toggle('night-sleep-active', mode === 'sleep');
@@ -136,8 +173,17 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       if (isWitch) {
         await actions.sendNightAction('witch', {
           heal: isWitchHeal,
-          healTargetId: isWitchHeal ? victimPlayerId : null,
+          healTargetId: isWitchHeal ? (victimPlayerId ?? null) : null,
           poisonTargetId: witchPoisonTargetId,
+        });
+      } else if (isCupid) {
+        if (cupidTargets.length !== 2 || cupidTargets[0] === cupidTargets[1]) {
+          setNotice('Vui lòng chọn đủ 2 người chơi khác nhau để ghép đôi.');
+          return;
+        }
+        await actions.sendNightAction('cupid', {
+          target1: cupidTargets[0],
+          target2: cupidTargets[1],
         });
       } else if (isHoodlum) {
         if (hoodlumTargets.length !== 2 || hoodlumTargets[0] === hoodlumTargets[1]) {
@@ -188,7 +234,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           activate: isTroublemakerActive,
         });
       } else if (isFox) {
-        if (isFoxSkip) {
+        if (privateView?.skills?.foxLostPower || isFoxSkip) {
           await actions.sendNightAction('fox', { isSkip: true });
         } else {
           if (!selectedTargetId) {
@@ -258,6 +304,8 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       setHasSubmitted(true);
       const successMsg = isMason
         ? '✓ Đã nhận diện anh em Hội Tam Điểm.'
+        : isCupid
+        ? '✓ Đã bắn mũi tên ghép đôi hai người chơi.'
         : isWildChild
         ? '✓ Đã chọn xong thần tượng.'
         : isDireWolf
@@ -292,24 +340,56 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         ? '✓ Đã kết nạp tín đồ mới.'
         : '✓ Đã xác nhận hành động đêm.';
       setNotice(successMsg);
-      if (submitSleepTimerRef.current !== null) {
-        window.clearTimeout(submitSleepTimerRef.current);
+      const shouldShowResult =
+        INVESTIGATION_TURN_KEYS.has(currentTurnKey) &&
+        !(isFox && isFoxSkip) &&
+        Boolean(selectedTargetId);
+
+      if (shouldShowResult) {
+        setShowingResult(true);
+        if (resultTimerRef.current !== null) {
+          window.clearTimeout(resultTimerRef.current);
+        }
+        resultTimerRef.current = window.setTimeout(() => {
+          resultTimerRef.current = null;
+          setShowingResult(false);
+          setMode('sleep');
+          setNotice('');
+        }, 5000);
+      } else {
+        if (submitSleepTimerRef.current !== null) {
+          window.clearTimeout(submitSleepTimerRef.current);
+        }
+        submitSleepTimerRef.current = window.setTimeout(() => {
+          submitSleepTimerRef.current = null;
+          setMode('sleep');
+          setNotice('');
+        }, 1000);
       }
-      submitSleepTimerRef.current = window.setTimeout(() => {
-        submitSleepTimerRef.current = null;
-        setMode('sleep');
-        setNotice('');
-      }, 1000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi khi gửi hành động';
       setNotice(msg);
     }
   };
 
+  const handleDismissResult = () => {
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    setShowingResult(false);
+    setMode('sleep');
+    setNotice('');
+  };
+
   const handleAdvanceLocal = () => {
     if (submitSleepTimerRef.current !== null) {
       window.clearTimeout(submitSleepTimerRef.current);
       submitSleepTimerRef.current = null;
+    }
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
     }
     if (advancePopTimerRef.current !== null) {
       window.clearTimeout(advancePopTimerRef.current);
@@ -327,7 +407,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     actions.advanceLocalTurn();
     setAvatarError(false);
     setHasSubmitted(false);
+    setShowingResult(false);
     setSelectedTargetId(null);
+    setCupidTargets([]);
     setHoodlumTargets([]);
     setPiedPiperTargets([]);
     setWitchPoisonTargetId(null);
@@ -339,7 +421,17 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   };
 
   const handleSelectTarget = (tId: PlayerId) => {
-    if (isHoodlum) {
+    if (isCupid) {
+      setCupidTargets((prev) => {
+        if (prev.includes(tId)) {
+          return prev.filter((id) => id !== tId);
+        }
+        if (prev.length < 2) {
+          return [...prev, tId];
+        }
+        return [prev[0], tId];
+      });
+    } else if (isHoodlum) {
       setHoodlumTargets((prev) => {
         if (prev.includes(tId)) {
           return prev.filter((id) => id !== tId);
@@ -368,8 +460,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     }
   };
 
+  const isCupidValid = cupidTargets.length === 2 && cupidTargets[0] !== cupidTargets[1];
   const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
-  const canConfirm = isHoodlum
+  const canConfirm = isCupid
+    ? isCupidValid
+    : isHoodlum
     ? isHoodlumValid
     : isPiedPiper
     ? isPiedPiperValid
@@ -382,7 +477,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     : isTroublemaker
     ? isTroublemakerActive !== null
     : isFox
-    ? isFoxSkip || Boolean(selectedTargetId)
+    ? Boolean(privateView?.skills?.foxLostPower) || isFoxSkip || Boolean(selectedTargetId)
     : true;
 
   return (
@@ -479,7 +574,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       )}
 
       {/* 3. Lượt Hành Động Bí Mật Trong Đêm */}
-      {mode === 'action' && canAct && (
+      {mode === 'action' && (canAct || showingResult) && (
         <section className="night-content role-content" aria-live="polite">
           <div className="role-heading">
             <div className="role-caller">
@@ -503,7 +598,48 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             </div>
           </div>
 
-          {isMason ? (
+          {showingResult ? (
+            <div className="investigation-result-panel">
+              <div className="investigation-result-card">
+                <span>KẾT QUẢ ĐIỀU TRA:</span>
+                <strong>
+                  {(() => {
+                    const inv = privateView?.investigationResult;
+                    if (!inv) {
+                      return 'Đang nhận kết quả điều tra...';
+                    }
+                    if (inv.result === 'SPECIAL') {
+                      return '🔮 CÓ HÀO QUANG ĐẶC BIỆT';
+                    }
+                    if (inv.result === 'NORMAL') {
+                      return '⚪ HÀO QUANG BÌNH THƯỜNG';
+                    }
+                    if (typeof inv.hasWerewolf === 'boolean') {
+                      return inv.hasWerewolf
+                        ? '🐺 CÓ MA SÓI TRONG NHÓM 3 NGƯỜI!'
+                        : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
+                    }
+                    if (typeof inv.result === 'string') {
+                      if (inv.result === 'WEREWOLF') return '🐺 LÀ MA SÓI';
+                      if (inv.result === 'VILLAGER') return '🛡️ LÀ DÂN LÀNG';
+                      const exactRole = ROLES_BY_ID[inv.result];
+                      return exactRole ? `🔮 VAI TRÒ: ${exactRole.nameVi}` : `🔮 ${inv.result}`;
+                    }
+                    return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
+                  })()}
+                </strong>
+              </div>
+              <div className="role-actions">
+                <button
+                  type="button"
+                  className="primary-confirm-btn"
+                  onClick={handleDismissResult}
+                >
+                  <span>Đã nhớ · Úp màn hình</span>
+                </button>
+              </div>
+            </div>
+          ) : isMason ? (
             <div className="mason-turn-panel">
               <div className="mason-header-badge">
                 <span className="mason-symbol" aria-hidden="true">🏛️</span>
@@ -676,16 +812,25 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             </div>
           ) : (
             <>
-              {/* Nạn nhân Phù Thủy nếu có */}
-              {isWitch && victimPlayer && (
+              {/* Nạn nhân Phù Thủy / Bình thuốc cứu */}
+              {isWitch && !privateView?.skills?.witchHealUsed && (
                 <div className="victim-card">
                   <div className="victim-info">
                     <div className="victim-glyph-wrap" aria-hidden="true">
-                      <span className="victim-glyph">☠</span>
+                      <span className="victim-glyph">{victimPlayer ? '☠' : '🧪'}</span>
                     </div>
                     <div className="victim-meta">
-                      <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
-                      <strong>#{victimPlayer.seatIndex} {victimPlayer.name}</strong>
+                      {victimPlayer ? (
+                        <>
+                          <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
+                          <strong>#{victimPlayer.seatIndex} {victimPlayer.name}</strong>
+                        </>
+                      ) : (
+                        <>
+                          <small>BÌNH THUỐC CỨU (CỨU MÙ)</small>
+                          <strong>Không hiển thị nạn nhân theo luật phòng</strong>
+                        </>
+                      )}
                     </div>
                   </div>
                   <button
@@ -693,8 +838,22 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                     className={`hold-button heal-button ${isWitchHeal ? 'is-complete' : ''}`}
                     onClick={() => setIsWitchHeal((prev) => !prev)}
                   >
-                    <span>{isWitchHeal ? '✓ DÙNG BÌNH CỨU' : 'DÙNG BÌNH CỨU NGƯỜI'}</span>
+                    <span>
+                      {victimPlayer
+                        ? isWitchHeal
+                          ? '✓ DÙNG BÌNH CỨU'
+                          : 'DÙNG BÌNH CỨU NGƯỜI'
+                        : isWitchHeal
+                        ? '✓ ĐÃ CHỌN CỨU MÙ'
+                        : 'DÙNG BÌNH CỨU NGƯỜI (CỨU MÙ)'}
+                    </span>
                   </button>
+                </div>
+              )}
+
+              {isWitch && privateView?.skills?.witchHealUsed && (
+                <div className="witch-used-note" role="status">
+                  <span>🧪 Bình thuốc cứu đã được sử dụng trong ván này.</span>
                 </div>
               )}
 
@@ -721,12 +880,16 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 </div>
               )}
 
-              {/* Chọn mục tiêu hợp lệ */}
-              <div className="target-heading">
-                <div>
-                  <strong>
-                    {isHoodlum
-                      ? 'CHỌN 2 KẺ THÙ CẦN LOẠI BỎ'
+              {/* Chọn mục tiêu hợp lệ (ẩn với Phù thủy và Con Cáo đã mất phép) */}
+              {!isWitch && !(isFox && privateView?.skills?.foxLostPower) && (
+                <>
+                  <div className="target-heading">
+                    <div>
+                      <strong>
+                        {isCupid
+                          ? 'CHỌN 2 NGƯỜI ĐỂ GHÉP ĐÔI'
+                          : isHoodlum
+                          ? 'CHỌN 2 KẺ THÙ CẦN LOẠI BỎ'
                       : isWildChild
                       ? 'CHỌN 1 NGƯỜI LÀM THẦN TƯỢNG'
                       : isDireWolf
@@ -750,7 +913,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
                   </strong>
                   <small>
-                    {isHoodlum
+                    {isCupid
+                      ? 'Hai người này sẽ trở thành Cặp đôi (nếu một người chết, người kia cũng chết theo)'
+                      : isHoodlum
                       ? 'Bạn thắng khi cả 2 người này đều chết và bạn còn sống'
                       : isWildChild
                       ? 'Nếu người này chết, bạn sẽ hóa Ma Sói từ đêm hôm sau'
@@ -776,7 +941,13 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   </small>
                 </div>
                 <span className="target-hint">
-                  {isHoodlum
+                  {isCupid
+                    ? cupidTargets.length === 0
+                      ? 'Chọn đúng 2 người khác nhau (0/2)'
+                      : cupidTargets.length === 1
+                      ? `Đã chọn 1/2: #${publicView?.players.find((p) => p.id === cupidTargets[0])?.seatIndex} ${publicView?.players.find((p) => p.id === cupidTargets[0])?.name}`
+                      : `Cặp đôi: #${publicView?.players.find((p) => p.id === cupidTargets[0])?.seatIndex} ${publicView?.players.find((p) => p.id === cupidTargets[0])?.name} & #${publicView?.players.find((p) => p.id === cupidTargets[1])?.seatIndex} ${publicView?.players.find((p) => p.id === cupidTargets[1])?.name}`
+                    : isHoodlum
                     ? hoodlumTargets.length === 0
                       ? 'Chọn đúng 2 người khác nhau (0/2)'
                       : hoodlumTargets.length === 1
@@ -832,11 +1003,14 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 {validTargets.map((tId) => {
                   const targetP = publicView?.players.find((p) => p.id === tId);
                   if (!targetP) return null;
-                  const isSelected = isHoodlum
+                  const isSelected = isCupid
+                    ? cupidTargets.includes(tId)
+                    : isHoodlum
                     ? hoodlumTargets.includes(tId)
                     : isPiedPiper
                     ? piedPiperTargets.includes(tId)
                     : selectedTargetId === tId;
+                  const cupidIdx = cupidTargets.indexOf(tId);
                   const hoodlumIdx = hoodlumTargets.indexOf(tId);
                   const piedPiperIdx = piedPiperTargets.indexOf(tId);
 
@@ -846,14 +1020,18 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       key={tId}
                       aria-pressed={isSelected}
                       onClick={() => handleSelectTarget(tId)}
-                      className={`target-card ${isSelected ? 'selected' : ''} ${isHoodlum && isSelected ? 'hoodlum-selected' : ''} ${isPiedPiper && isSelected ? 'piedpiper-selected' : ''}`}
+                      className={`target-card ${isSelected ? 'selected' : ''} ${(isCupid || isHoodlum) && isSelected ? 'hoodlum-selected' : ''} ${isPiedPiper && isSelected ? 'piedpiper-selected' : ''}`}
                     >
                       <div className="target-meta">
                         <span className="target-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
                         <span className="target-name">{targetP.name}</span>
                       </div>
                       <span className="target-crosshair" aria-hidden="true">
-                        {isHoodlum
+                        {isCupid
+                          ? isSelected
+                            ? `💘 #${cupidIdx + 1}`
+                            : '○'
+                          : isHoodlum
                           ? isSelected
                             ? `🎯 #${hoodlumIdx + 1}`
                             : '○'
@@ -869,6 +1047,8 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   );
                 })}
               </div>
+                </>
+              )}
 
               {/* Bình thuốc độc cho Phù Thủy */}
               {isWitch && !privateView?.skills?.witchPoisonUsed && (
@@ -896,6 +1076,12 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 </div>
               )}
 
+              {isWitch && privateView?.skills?.witchPoisonUsed && (
+                <div className="witch-used-note" role="status">
+                  <span>☠️ Bình thuốc độc đã được sử dụng trong ván này.</span>
+                </div>
+              )}
+
               {/* Kết quả Điều tra (Tiên Tri / Pháp Sư / Tiên Tri Hào Quang / Con Cáo / Thám Tử) */}
               {privateView?.investigationResult && (
                 <div className="investigation-result-card">
@@ -915,7 +1101,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                           : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
                       }
                       if (typeof inv.result === 'string') {
-                        return inv.result === 'WEREWOLF' ? '🐺 LÀ MA SÓI' : '🛡️ LÀ DÂN LÀNG';
+                        if (inv.result === 'WEREWOLF') return '🐺 LÀ MA SÓI';
+                        if (inv.result === 'VILLAGER') return '🛡️ LÀ DÂN LÀNG';
+                        const exactRole = ROLES_BY_ID[inv.result];
+                        return exactRole ? `🔮 VAI TRÒ: ${exactRole.nameVi}` : `🔮 ${inv.result}`;
                       }
                       return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
                     })()}
@@ -931,7 +1120,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   onClick={handleConfirmAction}
                 >
                   <span>
-                    {isHoodlum
+                    {isCupid
+                      ? isCupidValid
+                        ? 'XÁC NHẬN GHÉP ĐÔI'
+                        : `CHỌN ĐỦ 2 NGƯỜI (${cupidTargets.length}/2)`
+                      : isHoodlum
                       ? isHoodlumValid
                         ? 'XÁC NHẬN 2 KẺ THÙ'
                         : `CHỌN ĐỦ 2 KẺ THÙ (${hoodlumTargets.length}/2)`
@@ -944,7 +1137,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : isAuraSeer
                       ? 'XÁC NHẬN SOI HÀO QUANG'
                       : isFox
-                      ? isFoxSkip
+                      ? privateView?.skills?.foxLostPower || isFoxSkip
                         ? 'XÁC NHẬN BỎ QUA ĐÊM NAY'
                         : 'XÁC NHẬN ĐÁNH HƠI'
                       : isPi
@@ -963,12 +1156,14 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   </span>
                 </button>
 
-                {!['wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi', 'doppelganger', 'night_doppelganger', 'pied_piper', 'night_pied_piper', 'cult_leader', 'night_cult_leader'].includes(currentTurnKey) && (
+                {!['cupid', 'night_cupid', 'wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi', 'doppelganger', 'night_doppelganger', 'pied_piper', 'night_pied_piper', 'cult_leader', 'night_cult_leader'].includes(currentTurnKey) && (
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={() => {
                       setSelectedTargetId(null);
+                      setIsWitchHeal(false);
+                      setWitchPoisonTargetId(null);
                       void handleConfirmAction();
                     }}
                   >

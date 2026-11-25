@@ -649,6 +649,36 @@
   background: radial-gradient(ellipse 60% 50% at 50% 20%, rgba(220, 53, 69, 0.2), transparent) !important;
 }
 
+.third-victory {
+  border-color: rgba(217, 119, 6, 0.45) !important;
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.22), rgba(38, 25, 14, 0.45)) !important;
+}
+
+.third-victory .summary-trophy-wrap {
+  background: rgba(217, 119, 6, 0.25);
+  border-color: rgba(217, 119, 6, 0.55);
+  box-shadow: 0 0 16px rgba(217, 119, 6, 0.35);
+}
+
+.third-victory .winner-eyebrow {
+  color: #fcd34d;
+}
+
+.draw-victory {
+  border-color: rgba(148, 163, 184, 0.4) !important;
+  background: linear-gradient(135deg, rgba(100, 116, 139, 0.2), rgba(20, 24, 33, 0.5)) !important;
+}
+
+.draw-victory .summary-trophy-wrap {
+  background: rgba(100, 116, 139, 0.22);
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 0 16px rgba(100, 116, 139, 0.25);
+}
+
+.draw-victory .winner-eyebrow {
+  color: #cbd5e1;
+}
+
 .initial-role-tag {
   font-size: 10px;
   color: #ffb703;

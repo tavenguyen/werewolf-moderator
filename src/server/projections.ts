@@ -1,5 +1,6 @@
 import { canHostTallyEarly } from '../engine/voting';
 import { checkWinCondition } from '../engine/winConditions';
+import { getRawWolfTargets, getWitchVictimsPreview } from '../engine/nightResolution';
 import type {
   HostBoardView,
   PlayerPrivateView,
@@ -243,6 +244,12 @@ export function createPlayerPrivateView(
     }
 
     if (pState.roleId === 'seer' && room.seerInvestigationResult) {
+      investigationResult = room.seerInvestigationResult;
+    } else if (
+      pState.roleId === 'apprentice_seer' &&
+      room.seerInvestigationResult &&
+      !gameState.players.some((p) => p.isAlive && p.roleId === 'seer')
+    ) {
       investigationResult = room.seerInvestigationResult;
     } else if (pState.roleId === 'sorcerer' && room.sorcererInvestigationResult) {
       investigationResult = {
@@ -528,25 +535,34 @@ function calculateNightValidTargets(
  * Lấy mục tiêu thô bầy sói đã vote cắn (chưa kiểm tra bảo vệ hay lời nguyền).
  */
 export function getRawWolfPackVictim(room: RoomState): PlayerId | null {
-  const wolfActions = room.nightActionsAccumulator.wolfPack;
-  if (!wolfActions || wolfActions.isSkip) return null;
-
-  if (wolfActions.targets && wolfActions.targets.length > 0) {
-    return wolfActions.targets[0];
+  if (room.gameState) {
+    const rawTargets = getRawWolfTargets(room.gameState, room.nightActionsAccumulator);
+    return rawTargets[0] ?? null;
   }
 
-  // Fallback: Tally trực tiếp từ individualVotes nếu targets chưa được gán
-  if (wolfActions.individualVotes) {
-    const counts = new Map<PlayerId, number>();
-    for (const targetId of Object.values(wolfActions.individualVotes)) {
-      if (targetId) {
-        counts.set(targetId, (counts.get(targetId) ?? 0) + 1);
+  const wolfActions = room.nightActionsAccumulator.wolfPack;
+  if (wolfActions && !wolfActions.isSkip) {
+    if (wolfActions.targets && wolfActions.targets.length > 0) {
+      return wolfActions.targets[0];
+    }
+
+    // Fallback: Tally trực tiếp từ individualVotes nếu targets chưa được gán
+    if (wolfActions.individualVotes) {
+      const counts = new Map<PlayerId, number>();
+      for (const targetId of Object.values(wolfActions.individualVotes)) {
+        if (targetId) {
+          counts.set(targetId, (counts.get(targetId) ?? 0) + 1);
+        }
+      }
+      if (counts.size > 0) {
+        const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+        return sorted[0][0];
       }
     }
-    if (counts.size > 0) {
-      const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-      return sorted[0][0];
-    }
+  }
+
+  if (room.nightActionsAccumulator.bigBadWolf?.targetId) {
+    return room.nightActionsAccumulator.bigBadWolf.targetId;
   }
 
   return null;
@@ -554,10 +570,15 @@ export function getRawWolfPackVictim(room: RoomState): PlayerId | null {
 
 /**
  * Lấy mục tiêu sói cắn tạm thời để gửi cho Phù thủy biết.
- * Nếu nạn nhân trùng với bodyguard?.targetId hoặc accursedWolf?.curseTargetId:
- * trả về null để Phù thủy không thấy người này bị cắn đêm nay (theo đúng đặc tả P50 preview).
+ * Nhất quán với getWitchVictimsPreview (xử lý big_bad_wolf, wolfCubDoubleKillNextNight,
+ * bảo vệ trùng đêm trước, villagePowerStripped và lời nguyền Sói nguyền).
  */
 export function getWolfPackVictimCandidate(room: RoomState): PlayerId | null {
+  if (room.gameState) {
+    const victims = getWitchVictimsPreview(room.gameState, room.nightActionsAccumulator);
+    return victims[0] ?? null;
+  }
+
   const rawVictim = getRawWolfPackVictim(room);
   if (!rawVictim) return null;
 

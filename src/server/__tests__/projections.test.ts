@@ -124,6 +124,41 @@ describe('Realtime Backend - Projections & Targets for Phase 3 (wolf_accursed, b
       expect(getRawWolfPackVictim(room as RoomState)).toBeNull();
       expect(getWolfPackVictimCandidate(room as RoomState)).toBeNull();
     });
+
+    it('hỗ trợ big_bad_wolf, wolfCubDoubleKillNextNight, lastProtectedPlayerId và villagePowerStripped nhất quán với getWitchVictimsPreview', () => {
+      const room: any = {
+        gameState: {
+          players: [
+            { id: 'p1', roleId: 'big_bad_wolf', faction: 'WEREWOLF', isAlive: true },
+            { id: 'p2', roleId: 'villager', faction: 'VILLAGER', isAlive: true },
+            { id: 'p3', roleId: 'villager', faction: 'VILLAGER', isAlive: true },
+            { id: 'p4', roleId: 'bodyguard', faction: 'VILLAGER', isAlive: true },
+          ],
+          deaths: [],
+          wolfCubDoubleKillNextNight: true,
+          lastProtectedPlayerId: 'p2',
+          villagePowerStripped: false,
+          settings: { allowWolfSkip: true, allowWolfFriendlyFire: false },
+        },
+        nightActionsAccumulator: {
+          wolfPack: { targets: ['p2'] },
+          bigBadWolf: { targetId: 'p3' },
+          // Bảo vệ trùng đêm trước (p2) -> không có hiệu lực
+          bodyguard: { targetId: 'p2' },
+        },
+      };
+
+      expect(getRawWolfPackVictim(room as RoomState)).toBe('p2');
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBe('p2');
+
+      // Nếu p2 được bảo vệ hợp lệ (không trùng lastProtectedPlayerId) -> Phù thủy thấy nạn nhân thứ 2 (p3)
+      room.gameState.lastProtectedPlayerId = null;
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBe('p3');
+
+      // Nếu làng mất phép (villagePowerStripped = true) -> Bảo vệ vô hiệu -> Phù thủy vẫn thấy p2
+      room.gameState.villagePowerStripped = true;
+      expect(getWolfPackVictimCandidate(room as RoomState)).toBe('p2');
+    });
   });
 
   describe('Projections cho wolf_accursed', () => {
