@@ -54,6 +54,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
 
   // Inline Info expansion (shows 1-line description below role name)
   const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
+  const [failedRoleImages, setFailedRoleImages] = useState<Record<string, boolean>>({});
 
   // Settings & QR
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -251,6 +252,29 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
         faction: def?.faction || 'VILLAGER',
       };
     });
+
+  const markRoleImageFailed = (roleId: string) => {
+    setFailedRoleImages((prev) => (prev[roleId] ? prev : { ...prev, [roleId]: true }));
+  };
+
+  const renderRoleMiniAvatar = (roleId: string, faction: string) => {
+    const roleImage = getRoleImage(roleId);
+    if (!roleImage || failedRoleImages[roleId]) return null;
+    const sideClass =
+      faction === 'WEREWOLF' ? 'wolf' : faction === 'THIRD_PARTY' ? 'third' : 'village';
+    return (
+      <img
+        src={roleImage}
+        alt=""
+        aria-hidden="true"
+        className={`role-mini-avatar side-${sideClass}`}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onError={() => markRoleImageFailed(roleId)}
+      />
+    );
+  };
 
   return (
     <div className="lobby-page-compact">
@@ -524,18 +548,10 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                           type="button"
                           className="role-left-click-wrap"
                           onClick={() => setExpandedRoleId(isExpanded ? null : role.id)}
+                          aria-expanded={isExpanded}
                           title="Bấm để xem nhanh kỹ năng"
                         >
-                          {getRoleImage(role.id) && (
-                            <img
-                              src={getRoleImage(role.id)}
-                              alt=""
-                              className="role-mini-avatar"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          )}
+                          {renderRoleMiniAvatar(role.id, role.faction)}
                           <span className="role-title">{role.nameVi}</span>
                           <span className="role-weight-gray">{weightFormatted}</span>
                         </button>
@@ -759,18 +775,10 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                             type="button"
                             className="role-left-click-wrap"
                             onClick={() => setExpandedRoleId(isExpanded ? null : role.id)}
+                            aria-expanded={isExpanded}
                             title="Bấm để xem nhanh kỹ năng"
                           >
-                            {getRoleImage(role.id) && (
-                              <img
-                                src={getRoleImage(role.id)}
-                                alt=""
-                                className="role-mini-avatar"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
+                            {renderRoleMiniAvatar(role.id, role.faction)}
                             <span className="role-title">{role.nameVi}</span>
                             {role.multiDeviceOnly && (
                               <span

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
@@ -58,10 +58,23 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [isTroublemakerActive, setIsTroublemakerActive] = useState<boolean | null>(null);
   const [isFoxSkip, setIsFoxSkip] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const submitSleepTimerRef = useRef<number | null>(null);
+  const advancePopTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setAvatarError(false);
-  }, [myRoleId]);
+  }, [myRoleId, privateView?.turnKey, privateView?.playerId]);
+
+  useEffect(() => {
+    return () => {
+      if (submitSleepTimerRef.current !== null) {
+        window.clearTimeout(submitSleepTimerRef.current);
+      }
+      if (advancePopTimerRef.current !== null) {
+        window.clearTimeout(advancePopTimerRef.current);
+      }
+    };
+  }, []);
 
   // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy
   const victimPlayerId = privateView?.skills?.witchVictimId;
@@ -75,21 +88,38 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     ? publicView?.players.find((p) => p.id === accursedVictimId)
     : null;
 
-  // Tự động mở Action mode nếu đến lượt có thể hành động
+  // Reset trạng thái thao tác khi sang lượt mới / đổi người chơi (hỗ trợ cả Multi-device nhiều lượt trong cùng đêm)
+  useEffect(() => {
+    if (submitSleepTimerRef.current !== null) {
+      window.clearTimeout(submitSleepTimerRef.current);
+      submitSleepTimerRef.current = null;
+    }
+    if (privateView?.canActCurrentTurn) {
+      setHasSubmitted(false);
+    }
+    setSelectedTargetId(null);
+    setHoodlumTargets([]);
+    setPiedPiperTargets([]);
+    setWitchPoisonTargetId(null);
+    setIsWitchHeal(false);
+    setIsCurseAction(null);
+    setIsTroublemakerActive(null);
+    setIsFoxSkip(false);
+    setNotice('');
+  }, [privateView?.turnKey, privateView?.playerId, privateView?.canActCurrentTurn]);
+
+  // Tự động chuyển giữa màn hình ngủ và màn hình hành động
   useEffect(() => {
     if (canAct) {
+      if (submitSleepTimerRef.current !== null) {
+        window.clearTimeout(submitSleepTimerRef.current);
+        submitSleepTimerRef.current = null;
+      }
       setMode('action');
-      setHasSubmitted(false);
-      setSelectedTargetId(null);
-      setHoodlumTargets([]);
-      setPiedPiperTargets([]);
-      setIsCurseAction(null);
-      setIsTroublemakerActive(null);
-      setIsFoxSkip(false);
     } else {
       setMode('sleep');
     }
-  }, [canAct, privateView?.turnKey]);
+  }, [canAct]);
 
   useEffect(() => {
     document.body.classList.toggle('night-sleep-active', mode === 'sleep');
@@ -262,7 +292,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         ? '✓ Đã kết nạp tín đồ mới.'
         : '✓ Đã xác nhận hành động đêm.';
       setNotice(successMsg);
-      setTimeout(() => {
+      if (submitSleepTimerRef.current !== null) {
+        window.clearTimeout(submitSleepTimerRef.current);
+      }
+      submitSleepTimerRef.current = window.setTimeout(() => {
+        submitSleepTimerRef.current = null;
         setMode('sleep');
         setNotice('');
       }, 1000);
@@ -273,14 +307,25 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   };
 
   const handleAdvanceLocal = () => {
+    if (submitSleepTimerRef.current !== null) {
+      window.clearTimeout(submitSleepTimerRef.current);
+      submitSleepTimerRef.current = null;
+    }
+    if (advancePopTimerRef.current !== null) {
+      window.clearTimeout(advancePopTimerRef.current);
+    }
     setAdvancePressed(true);
-    setTimeout(() => setAdvancePressed(false), 250);
+    advancePopTimerRef.current = window.setTimeout(() => {
+      advancePopTimerRef.current = null;
+      setAdvancePressed(false);
+    }, 250);
     try {
       navigator.vibrate?.(40);
     } catch {
       // ignore
     }
     actions.advanceLocalTurn();
+    setAvatarError(false);
     setHasSubmitted(false);
     setSelectedTargetId(null);
     setHoodlumTargets([]);
@@ -290,6 +335,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setIsCurseAction(null);
     setIsTroublemakerActive(null);
     setIsFoxSkip(false);
+    setNotice('');
   };
 
   const handleSelectTarget = (tId: PlayerId) => {
@@ -440,8 +486,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               {myRoleImage && !avatarError ? (
                 <img
                   src={myRoleImage}
-                  alt={roleDef.nameVi}
+                  alt=""
+                  aria-hidden="true"
                   className="night-role-avatar"
+                  decoding="async"
+                  draggable={false}
                   onError={() => setAvatarError(true)}
                 />
               ) : (

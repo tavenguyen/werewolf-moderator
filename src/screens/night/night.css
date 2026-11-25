@@ -180,6 +180,7 @@ body.night-sleep-active {
   border: 1.5px solid rgba(201, 134, 56, 0.55);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(201, 134, 56, 0.2);
   background: #0b0e14;
+  display: block;
   flex: none;
 }
 

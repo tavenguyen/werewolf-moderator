@@ -224,7 +224,13 @@
   border: 0;
   padding: 0;
   cursor: pointer;
-  height: 190px;
+  height: 218px;
+  border-radius: 10px;
+}
+
+.summary-card:focus-visible {
+  outline: 2px solid #e59d4c;
+  outline-offset: 3px;
 }
 
 .summary-card-inner {
@@ -263,7 +269,8 @@
   transition: border-color 0.2s ease;
 }
 
-.summary-card:hover .summary-card-front {
+.summary-card:hover .summary-card-front,
+.summary-card:focus-visible .summary-card-front {
   border-color: rgba(201, 134, 56, 0.5);
 }
 
@@ -313,21 +320,43 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.25s ease;
 }
 
 .summary-card-back.side-village {
   background: linear-gradient(135deg, #1b3827, #13271c);
-  border: 1px solid rgba(43, 88, 62, 0.8);
+  border: 1px solid rgba(43, 88, 62, 0.85);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 14px rgba(56, 178, 172, 0.14);
 }
 
 .summary-card-back.side-wolf {
   background: linear-gradient(135deg, #4d1216, #300a0d);
-  border: 1px solid rgba(142, 30, 36, 0.8);
+  border: 1px solid rgba(220, 38, 38, 0.75);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 16px rgba(220, 38, 38, 0.2);
 }
 
 .summary-card-back.side-third {
   background: linear-gradient(135deg, #3d1b4d, #250f2e);
   border: 1px solid rgba(168, 85, 247, 0.8);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 16px rgba(168, 85, 247, 0.22);
+}
+
+.summary-card.is-open:hover .summary-card-back.side-village,
+.summary-card.is-open:focus-visible .summary-card-back.side-village {
+  border-color: rgba(201, 134, 56, 0.85);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 20px rgba(56, 178, 172, 0.28);
+}
+
+.summary-card.is-open:hover .summary-card-back.side-wolf,
+.summary-card.is-open:focus-visible .summary-card-back.side-wolf {
+  border-color: rgba(248, 113, 113, 0.9);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 22px rgba(220, 38, 38, 0.36);
+}
+
+.summary-card.is-open:hover .summary-card-back.side-third,
+.summary-card.is-open:focus-visible .summary-card-back.side-third {
+  border-color: rgba(192, 132, 252, 0.95);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 22px rgba(168, 85, 247, 0.38);
 }
 
 .summary-card-back.side-seer {
@@ -390,14 +419,35 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 12px rgba(168, 85, 247, 0.35);
 }
 
-.summary-card.is-open:hover .summary-role-img {
+.summary-card.is-open:hover .summary-role-img,
+.summary-card.is-open:focus-visible .summary-role-img {
   transform: scale(1.06);
+}
+
+.summary-card.is-open:hover .summary-card-back.side-village .summary-role-img,
+.summary-card.is-open:focus-visible .summary-card-back.side-village .summary-role-img {
+  border-color: rgba(236, 201, 75, 0.9);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75), 0 0 16px rgba(201, 134, 56, 0.45);
+}
+
+.summary-card.is-open:hover .summary-card-back.side-wolf .summary-role-img,
+.summary-card.is-open:focus-visible .summary-card-back.side-wolf .summary-role-img {
+  border-color: rgba(248, 113, 113, 0.95);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75), 0 0 16px rgba(239, 68, 68, 0.5);
+}
+
+.summary-card.is-open:hover .summary-card-back.side-third .summary-role-img,
+.summary-card.is-open:focus-visible .summary-card-back.side-third .summary-role-img {
+  border-color: rgba(192, 132, 252, 0.95);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75), 0 0 16px rgba(168, 85, 247, 0.52);
 }
 
 .role-title-display {
   font: 800 15px var(--headline);
   letter-spacing: 0.06em;
   color: var(--parchment);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .status-pill {
@@ -603,4 +653,6 @@
   font-size: 10px;
   color: #ffb703;
   margin-top: 2px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }

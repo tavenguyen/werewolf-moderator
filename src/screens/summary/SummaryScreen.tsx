@@ -199,6 +199,8 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
           <section className="summary-cards" aria-label="Vai trò người chơi">
             {rolesList.map((player, index) => {
               const isOpen = openCards.has(player.id);
+              const roleImage = player.finalRoleId ? getRoleImage(player.finalRoleId) : undefined;
+              const imgErrorKey = `${player.id}:${player.finalRoleId}`;
               return (
                 <button
                   key={player.id}
@@ -210,35 +212,42 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                 >
                   <span className="summary-card-inner">
                     {/* Front Face: Rustic Tarot Card Back */}
-                    <span className="summary-card-face summary-card-front">
-                      <div className="tarot-card-border">
+                    <span className="summary-card-face summary-card-front" aria-hidden={isOpen}>
+                      <span className="tarot-card-border">
                         <span className="tarot-corner tl" />
                         <span className="tarot-corner tr" />
                         <span className="tarot-corner bl" />
                         <span className="tarot-corner br" />
                         <small className="card-seat-tag">GHẾ #{String(player.seatIndex).padStart(2, '0')}</small>
-                        <div className="tarot-emblem" aria-hidden="true">☾</div>
+                        <span className="tarot-emblem" aria-hidden="true">☾</span>
                         <b className="card-player-name">{player.name}</b>
                         <small className="summary-card-hint">CHẠM ĐỂ LẬT BÀI</small>
-                      </div>
+                      </span>
                     </span>
 
                     {/* Back Face: Revealed Secret Role */}
-                    <span className={`summary-card-face summary-card-back side-${player.side}`}>
-                      <div className="role-revealed-wrap">
+                    <span className={`summary-card-face summary-card-back side-${player.side}`} aria-hidden={!isOpen}>
+                      <span className="role-revealed-wrap">
                         <span className="role-side-tag">{player.sideName}</span>
-                        <div className="role-symbol-display" aria-hidden="true">
-                          {player.finalRoleId && getRoleImage(player.finalRoleId) && !failedImages[player.id] ? (
+                        <span className="role-symbol-display" aria-hidden="true">
+                          {roleImage && !failedImages[imgErrorKey] ? (
                             <img
-                              src={getRoleImage(player.finalRoleId)}
-                              alt={player.finalRoleName}
+                              src={roleImage}
+                              alt=""
                               className="summary-role-img"
-                              onError={() => setFailedImages((prev) => ({ ...prev, [player.id]: true }))}
+                              loading="lazy"
+                              decoding="async"
+                              draggable={false}
+                              onError={() =>
+                                setFailedImages((prev) =>
+                                  prev[imgErrorKey] ? prev : { ...prev, [imgErrorKey]: true }
+                                )
+                              }
                             />
                           ) : (
                             player.symbol
                           )}
-                        </div>
+                        </span>
                         <b className="role-title-display">{player.finalRoleName}</b>
                         {player.initialRoleName !== player.finalRoleName && (
                           <small className="initial-role-tag">Ban đầu: {player.initialRoleName}</small>
@@ -246,7 +255,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                         <span className={`status-pill ${player.isAlive ? 'status-alive' : 'status-dead'}`}>
                           {player.status}
                         </span>
-                      </div>
+                      </span>
                     </span>
                   </span>
                 </button>

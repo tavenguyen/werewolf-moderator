@@ -17,6 +17,10 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const detailPanelRef = useRef<HTMLElement>(null);
 
+  const markImageFailed = (roleId: string) => {
+    setFailedImages((prev) => (prev[roleId] ? prev : { ...prev, [roleId]: true }));
+  };
+
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
@@ -212,9 +216,11 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                         {selectedRole.image && !failedImages[selectedRole.id] ? (
                           <img
                             src={selectedRole.image}
-                            alt={selectedRole.name}
+                            alt=""
                             className="masa-avatar-seal-img"
-                            onError={() => setFailedImages((prev) => ({ ...prev, [selectedRole.id]: true }))}
+                            decoding="async"
+                            draggable={false}
+                            onError={() => markImageFailed(selectedRole.id)}
                           />
                         ) : (
                           <span>{selectedRole.symbol}</span>
@@ -235,9 +241,11 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                       <div className={`masa-emblem-card-frame side-${selectedRole.side}`}>
                         <img
                           src={selectedRole.image}
-                          alt={selectedRole.name}
+                          alt=""
                           className="masa-emblem-card-art masa-emblem-full-img"
-                          onError={() => setFailedImages((prev) => ({ ...prev, [selectedRole.id]: true }))}
+                          decoding="async"
+                          draggable={false}
+                          onError={() => markImageFailed(selectedRole.id)}
                         />
                         <div className="masa-emblem-card-glow" />
                       </div>
@@ -426,7 +434,10 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                                     src={role.image}
                                     alt=""
                                     className="masa-item-seal-img"
-                                    onError={() => setFailedImages((prev) => ({ ...prev, [role.id]: true }))}
+                                    loading="lazy"
+                                    decoding="async"
+                                    draggable={false}
+                                    onError={() => markImageFailed(role.id)}
                                   />
                                 ) : (
                                   role.symbol

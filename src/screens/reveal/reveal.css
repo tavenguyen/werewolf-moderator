@@ -82,8 +82,14 @@
   height: min(108vw, 368px);
   cursor: pointer;
   position: relative;
+  border-radius: 16px;
   touch-action: none; /* Khóa kéo trang khi ngón tay đang nhấn giữ lá bài */
   -webkit-touch-callout: none;
+}
+
+.ritual-card-stage:focus-visible {
+  outline: 2px solid #e59d4c;
+  outline-offset: 6px;
 }
 
 /* Thẻ bài 3D xoay lật phản hồi mượt mà theo thao tác ngón tay */
@@ -91,6 +97,7 @@
   width: 100%;
   height: 100%;
   position: relative;
+  z-index: 2;
   border-radius: 16px;
   will-change: transform;
   transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
@@ -109,6 +116,8 @@
   height: 100%;
   border-radius: 16px;
   box-sizing: border-box;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 0, 0, 0.5);
   transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.25s ease;
 }
@@ -125,7 +134,7 @@
   align-items: center;
   justify-content: center;
   opacity: 1;
-  transform: rotateY(0deg);
+  transform: perspective(1200px) rotateY(0deg);
   z-index: 2;
   pointer-events: none;
 }
@@ -133,7 +142,7 @@
 /* Khi đang nhấn giữ: Mặt lưng xoay lật 180° và biến mất */
 .is-holding .ritual-card-back {
   opacity: 0;
-  transform: rotateY(180deg);
+  transform: perspective(1200px) rotateY(180deg);
   z-index: 1;
 }
 
@@ -199,7 +208,7 @@
   border: 1px solid rgba(201, 134, 56, 0.45);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(201, 134, 56, 0.15);
   opacity: 0;
-  transform: rotateY(-180deg);
+  transform: perspective(1200px) rotateY(-180deg);
   z-index: 1;
   pointer-events: none;
   box-sizing: border-box;
@@ -210,7 +219,7 @@
 /* Khi đang nhấn giữ: Mặt trước xoay về góc nhìn 0° chính diện, hiển thị 100% rõ ràng */
 .is-holding .ritual-card-front {
   opacity: 1;
-  transform: rotateY(0deg);
+  transform: perspective(1200px) rotateY(0deg);
   z-index: 10;
   pointer-events: auto;
 }
@@ -225,9 +234,15 @@
   opacity: 0.95;
 }
 
+.ritual-card-front.faction-VILLAGER,
+.ritual-card-front.side-VILLAGER {
+  border-color: rgba(201, 134, 56, 0.52);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 22px rgba(56, 178, 172, 0.16), inset 0 0 0 1px rgba(236, 201, 75, 0.2);
+}
+
 .ritual-card-front.faction-VILLAGER::before,
 .ritual-card-front.side-VILLAGER::before {
-  background: radial-gradient(circle at 50% 40%, rgba(201, 134, 56, 0.22) 0%, rgba(11, 14, 20, 0) 65%);
+  background: radial-gradient(circle at 50% 40%, rgba(201, 134, 56, 0.22) 0%, rgba(56, 178, 172, 0.1) 36%, rgba(11, 14, 20, 0) 68%);
 }
 
 .ritual-card-front.faction-WEREWOLF,
@@ -439,19 +454,20 @@
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
 }
 
-/* Hào quang bùng lên khi đang giữ xem bài */
+/* Hào quang bùng lên phía sau thẻ khi đang giữ xem bài */
 .ritual-mist-burst {
   position: absolute;
   inset: -12px;
   border-radius: 24px;
   pointer-events: none;
   opacity: 0;
-  z-index: 5;
-  transition: opacity 0.3s ease;
+  z-index: 0;
+  transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .is-holding .ritual-mist-burst {
   opacity: 0.85;
+  transform: translateY(-12px) scale(1.04);
 }
 
 .faction-VILLAGER .ritual-mist-burst,
@@ -570,6 +586,11 @@
   background: rgba(28, 34, 46, 0.95);
   border-color: #e59d4c;
   transform: translateY(-1px);
+}
+
+.ritual-pass-btn:focus-visible {
+  outline: 2px solid #e59d4c;
+  outline-offset: 3px;
 }
 
 .ritual-pass-btn:active {

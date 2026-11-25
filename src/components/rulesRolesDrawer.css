@@ -293,11 +293,17 @@
   color: inherit;
 }
 
-.masa-catalog-item:hover {
+.masa-catalog-item:hover,
+.masa-catalog-item:focus-visible {
   background: #141822;
   border-color: rgba(201, 134, 56, 0.38);
   transform: translateX(4px);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+.masa-catalog-item:focus-visible {
+  outline: 2px solid #e59d4c;
+  outline-offset: 2px;
 }
 
 .masa-item-left {
@@ -320,18 +326,18 @@
 }
 
 .masa-item-seal {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
   flex: none;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0b0e14;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .masa-item-seal-img {
@@ -343,26 +349,48 @@
 }
 
 .masa-item-seal.side-village {
-  border-color: rgba(61, 110, 82, 0.4);
-  background: rgba(61, 110, 82, 0.12);
+  border-color: rgba(201, 134, 56, 0.45);
+  background: rgba(43, 88, 62, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 8px rgba(56, 178, 172, 0.12);
 }
 
 .masa-item-seal.side-wolf {
-  border-color: rgba(139, 38, 42, 0.4);
-  background: rgba(139, 38, 42, 0.12);
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(139, 38, 42, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 8px rgba(220, 38, 38, 0.16);
 }
 
 .masa-item-seal.side-third {
-  border-color: rgba(130, 105, 75, 0.4);
-  background: rgba(130, 105, 75, 0.12);
+  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(168, 85, 247, 0.16);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 0 8px rgba(168, 85, 247, 0.18);
 }
 
-.masa-catalog-item:hover .masa-item-seal {
+.masa-catalog-item:hover .masa-item-seal,
+.masa-catalog-item:focus-visible .masa-item-seal {
   transform: scale(1.1);
-  border-color: var(--lantern, #c98638);
 }
 
-.masa-catalog-item:hover .masa-item-num {
+.masa-catalog-item:hover .masa-item-seal.side-village,
+.masa-catalog-item:focus-visible .masa-item-seal.side-village {
+  border-color: rgba(236, 201, 75, 0.85);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 12px rgba(201, 134, 56, 0.3);
+}
+
+.masa-catalog-item:hover .masa-item-seal.side-wolf,
+.masa-catalog-item:focus-visible .masa-item-seal.side-wolf {
+  border-color: rgba(248, 113, 113, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 12px rgba(239, 68, 68, 0.35);
+}
+
+.masa-catalog-item:hover .masa-item-seal.side-third,
+.masa-catalog-item:focus-visible .masa-item-seal.side-third {
+  border-color: rgba(192, 132, 252, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 12px rgba(168, 85, 247, 0.38);
+}
+
+.masa-catalog-item:hover .masa-item-num,
+.masa-catalog-item:focus-visible .masa-item-num {
   color: var(--lantern, #c98638);
 }
 
@@ -420,9 +448,9 @@
 }
 
 .masa-item-side-pill.side-third {
-  border-color: rgba(130, 105, 75, 0.4);
-  color: #d1b894;
-  background: rgba(130, 105, 75, 0.12);
+  border-color: rgba(168, 85, 247, 0.45);
+  color: #d8b4fe;
+  background: rgba(168, 85, 247, 0.14);
 }
 
 .masa-item-wake-pill {
@@ -549,9 +577,9 @@
 }
 
 .masa-side-tag.side-third {
-  border-color: rgba(130, 105, 75, 0.45);
-  color: #f3ddbe;
-  background: rgba(130, 105, 75, 0.14);
+  border-color: rgba(168, 85, 247, 0.45);
+  color: #e9d5ff;
+  background: rgba(168, 85, 247, 0.16);
 }
 
 /* Detail Hero Block with Visual Anchor Seal */
@@ -604,7 +632,7 @@
 .masa-emblem-card-frame {
   position: relative;
   width: 170px;
-  height: 170px;
+  aspect-ratio: 1 / 1;
   border-radius: 18px;
   background: #0B0E14;
   border: 1px solid rgba(245, 158, 11, 0.35);
@@ -616,18 +644,21 @@
 }
 
 .masa-emblem-card-frame.side-wolf {
-  border-color: rgba(239, 68, 68, 0.5);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 26px rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.55);
+  background: radial-gradient(circle at 50% 45%, rgba(185, 28, 28, 0.24), #0b0e14 72%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 26px rgba(239, 68, 68, 0.25);
 }
 
 .masa-emblem-card-frame.side-third {
-  border-color: rgba(168, 85, 247, 0.5);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 26px rgba(168, 85, 247, 0.22);
+  border-color: rgba(168, 85, 247, 0.55);
+  background: radial-gradient(circle at 50% 45%, rgba(168, 85, 247, 0.24), #0b0e14 72%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.85), 0 0 26px rgba(168, 85, 247, 0.25);
 }
 
 .masa-emblem-card-frame.side-village {
-  border-color: rgba(201, 134, 56, 0.45);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(201, 134, 56, 0.15);
+  border-color: rgba(201, 134, 56, 0.5);
+  background: radial-gradient(circle at 50% 45%, rgba(56, 178, 172, 0.16), rgba(201, 134, 56, 0.14) 40%, #0b0e14 74%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 22px rgba(201, 134, 56, 0.2);
 }
 
 .masa-emblem-full-img,
@@ -636,7 +667,22 @@
   height: 100%;
   object-fit: contain;
   display: block;
-  transition: transform 0.3s ease;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 64%, rgba(0, 0, 0, 0.85) 82%, transparent 100%);
+  mask-image: radial-gradient(circle at 50% 50%, black 64%, rgba(0, 0, 0, 0.85) 82%, transparent 100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), filter 0.3s ease;
+}
+
+.masa-emblem-card-frame.side-village .masa-emblem-card-art {
+  filter: drop-shadow(0 0 12px rgba(236, 201, 75, 0.35)) drop-shadow(0 0 6px rgba(56, 178, 172, 0.25));
+}
+
+.masa-emblem-card-frame.side-wolf .masa-emblem-card-art {
+  filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.45));
+}
+
+.masa-emblem-card-frame.side-third .masa-emblem-card-art {
+  filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.45));
 }
 
 .masa-emblem-card-frame:hover .masa-emblem-full-img,
@@ -652,21 +698,21 @@
 }
 
 .masa-role-avatar-seal.side-village {
-  border-color: rgba(61, 110, 82, 0.55);
-  background: radial-gradient(circle at center, rgba(61, 110, 82, 0.22), #0a0d12);
-  box-shadow: 0 0 24px rgba(61, 110, 82, 0.25);
+  border-color: rgba(201, 134, 56, 0.55);
+  background: radial-gradient(circle at center, rgba(56, 178, 172, 0.2), rgba(201, 134, 56, 0.16) 50%, #0a0d12);
+  box-shadow: 0 0 22px rgba(201, 134, 56, 0.24);
 }
 
 .masa-role-avatar-seal.side-wolf {
-  border-color: rgba(139, 38, 42, 0.55);
-  background: radial-gradient(circle at center, rgba(139, 38, 42, 0.22), #0a0d12);
-  box-shadow: 0 0 24px rgba(139, 38, 42, 0.25);
+  border-color: rgba(220, 38, 38, 0.6);
+  background: radial-gradient(circle at center, rgba(220, 38, 38, 0.24), #0a0d12);
+  box-shadow: 0 0 24px rgba(220, 38, 38, 0.28);
 }
 
 .masa-role-avatar-seal.side-third {
-  border-color: rgba(130, 105, 75, 0.55);
-  background: radial-gradient(circle at center, rgba(130, 105, 75, 0.22), #0a0d12);
-  box-shadow: 0 0 24px rgba(130, 105, 75, 0.25);
+  border-color: rgba(168, 85, 247, 0.6);
+  background: radial-gradient(circle at center, rgba(168, 85, 247, 0.24), #0a0d12);
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.28);
 }
 
 .masa-hero-titles {

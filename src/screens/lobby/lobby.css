@@ -637,40 +637,75 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   width: 100%;
 }
 
 .role-left-click-wrap {
   display: flex;
   align-items: center;
-  gap: 7px;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
   background: transparent;
   border: 0;
   padding: 0;
+  border-radius: 4px;
   cursor: pointer;
   color: inherit;
   text-align: left;
 }
 
-.role-left-click-wrap:hover .role-title {
+.role-left-click-wrap:focus-visible {
+  outline: 2px solid #c98638;
+  outline-offset: 3px;
+}
+
+.role-left-click-wrap:hover .role-title,
+.role-left-click-wrap:focus-visible .role-title {
   color: #c98638;
 }
 
 .role-mini-avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   object-fit: cover;
   border: 1px solid rgba(245, 158, 11, 0.4);
   background: #0B0E14;
+  display: block;
   flex: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.role-left-click-wrap:hover .role-mini-avatar {
-  border-color: rgba(245, 158, 11, 0.8);
+.role-mini-avatar.side-village {
+  border-color: rgba(201, 134, 56, 0.45);
+}
+
+.role-mini-avatar.side-wolf {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.role-mini-avatar.side-third {
+  border-color: rgba(168, 85, 247, 0.5);
+}
+
+.role-left-click-wrap:hover .role-mini-avatar,
+.role-left-click-wrap:focus-visible .role-mini-avatar {
+  border-color: rgba(245, 158, 11, 0.85);
   transform: scale(1.08);
+}
+
+.role-left-click-wrap:hover .role-mini-avatar.side-wolf,
+.role-left-click-wrap:focus-visible .role-mini-avatar.side-wolf {
+  border-color: rgba(248, 113, 113, 0.9);
+}
+
+.role-left-click-wrap:hover .role-mini-avatar.side-third,
+.role-left-click-wrap:focus-visible .role-mini-avatar.side-third {
+  border-color: rgba(192, 132, 252, 0.9);
 }
 
 .role-title {

@@ -72,7 +72,7 @@ export default function RoleRevealScreen({}: Props) {
 
   useEffect(() => {
     setImgLoadError(false);
-  }, [myRoleId]);
+  }, [myRoleId, currentIndex]);
   const roleDef = ROLES_BY_ID[myRoleId] ?? {
     id: myRoleId,
     nameVi: myRoleId === 'werewolf' ? 'Ma sói' : 'Dân làng',
@@ -223,6 +223,7 @@ export default function RoleRevealScreen({}: Props) {
           onPointerUp={handleHoldEnd}
           onPointerLeave={handleHoldEnd}
           onPointerCancel={handleHoldEnd}
+          onBlur={handleHoldEnd}
           onKeyDown={(e) => {
             if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && handoffStage === 'idle') {
               e.preventDefault();
@@ -239,18 +240,19 @@ export default function RoleRevealScreen({}: Props) {
           onContextMenu={(e) => e.preventDefault()}
           role="button"
           tabIndex={0}
+          aria-pressed={isHolding}
           aria-label={
             isHolding
               ? `Đang xem vai của ${currentPlayer.name}. Thả tay để úp bài lại.`
               : `Chạm và giữ để xem vai của ${currentPlayer.name}`
           }
         >
-          <div className="ritual-card-body">
-            {/* Sương mỏng & bụi sáng bùng lên khi đang giữ mở bài */}
-            <div className={`ritual-mist-burst faction-${roleDef.faction} side-${roleDef.faction}`} aria-hidden="true" />
+          {/* Sương mỏng & bụi sáng bùng lên phía sau thẻ khi đang giữ mở bài */}
+          <div className={`ritual-mist-burst faction-${roleDef.faction} side-${roleDef.faction}`} aria-hidden="true" />
 
+          <div className="ritual-card-body">
             {/* Mặt lưng: Nhung đen huyền bí, viền vàng đồng mảnh (Hiện khi buông tay) */}
-            <div className="ritual-card-face ritual-card-back">
+            <div className="ritual-card-face ritual-card-back" aria-hidden={isHolding}>
               <div className="ritual-back-pattern">
                 <span className="ritual-back-corner-top" aria-hidden="true">✦</span>
                 <div className="ritual-back-crest">
@@ -261,7 +263,10 @@ export default function RoleRevealScreen({}: Props) {
             </div>
 
             {/* Mặt trước: Lật mở hiển thị vai trò (Hiện khi nhấn giữ) */}
-            <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction} side-${roleDef.faction} ${roleImage ? 'has-art' : ''}`}>
+            <div
+              className={`ritual-card-face ritual-card-front faction-${roleDef.faction} side-${roleDef.faction} ${roleImage && !imgLoadError ? 'has-art' : ''}`}
+              aria-hidden={!isHolding}
+            >
               {/* 1. Vùng trên (15% chiều cao): Badge phe độc lập, thoáng đãng */}
               <header className="ritual-card-header">
                 <span className="ritual-faction-label">
@@ -279,8 +284,10 @@ export default function RoleRevealScreen({}: Props) {
                   <div className="ritual-portrait-frame">
                     <img
                       src={roleImage}
-                      alt={roleDef.nameVi}
+                      alt=""
                       className="ritual-portrait-img"
+                      decoding="async"
+                      draggable={false}
                       onError={() => setImgLoadError(true)}
                     />
                     <div className="ritual-portrait-fade" />
