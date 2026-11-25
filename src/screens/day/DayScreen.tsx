@@ -12,7 +12,7 @@ type DayScreenProps = {
 };
 
 export default function DayScreen({ onOpenRules }: DayScreenProps) {
-  const { state, actions, deviceMode } = useGameSession();
+  const { state, adapter, actions, deviceMode } = useGameSession();
 
   const publicView = state.publicView;
   const privateView = state.privateView;
@@ -21,8 +21,11 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
 
   const [mode, setMode] = useState<'shared' | 'player'>('player');
   const [selectedPlayerId, setSelectedPlayerId] = useState<PlayerId | null>(null);
+  const [handVotes, setHandVotes] = useState<Record<PlayerId, number>>({});
   const [voteSubmitted, setVoteSubmitted] = useState(false);
   const [isSubmittingSpecial, setIsSubmittingSpecial] = useState(false);
+  const [showConfirmFinalize, setShowConfirmFinalize] = useState(false);
+  const [isSubmittingFinalize, setIsSubmittingFinalize] = useState(false);
   const [notice, setNotice] = useState('');
   const [remainingTime, setRemainingTime] = useState(180);
 
@@ -79,8 +82,15 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     setVoteSubmitted(false);
     setSelectedPlayerId(null);
     setIsSubmittingSpecial(false);
+    setShowConfirmFinalize(false);
+    setIsSubmittingFinalize(false);
     setNotice('');
   }, [publicView?.roundNumber, publicView?.phase, state.playerId]);
+
+  // Reset bảng đếm phiếu giơ tay khi sang ngày mới hoặc đổi phase
+  useEffect(() => {
+    setHandVotes({});
+  }, [publicView?.roundNumber, publicView?.phase]);
 
   const effectiveVoteSubmitted =
     voteSubmitted ||
@@ -142,12 +152,33 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     }
   };
 
-  const handleFinalizeVote = async () => {
+  const handleAdjustHandVote = (playerId: PlayerId, delta: number) => {
+    if (effectiveVoteLocked || isSubmittingFinalize) return;
+    setHandVotes((prev) => {
+      const current = prev[playerId] ?? 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, [playerId]: next };
+    });
+    setNotice('');
+  };
+
+  const handleConfirmFinalizeVote = async () => {
+    if (isSubmittingFinalize) return;
+    setIsSubmittingFinalize(true);
+    setNotice('');
     try {
-      await actions.finalizePublicVote();
+      if (isSingleDevice && adapter.submitPublicHandVotes) {
+        await adapter.submitPublicHandVotes(handVotes);
+      } else {
+        await actions.finalizePublicVote();
+      }
+      setShowConfirmFinalize(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể chốt kết quả lúc này';
       setNotice(msg);
+      setShowConfirmFinalize(false);
+    } finally {
+      setIsSubmittingFinalize(false);
     }
   };
 
@@ -282,19 +313,26 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           )}
         </section>
 
-        {/* Cổ Thư / Log thông báo sáng */}
-        <section className="narration-card">
+        {/* Card Thông báo đầu ngày nổi bật tóm tắt sự kiện đêm qua */}
+        <section className="narration-card morning-briefing-card" aria-live="polite">
           <div className="narration-avatar" aria-hidden="true">
             <span className="narration-icon">📜</span>
           </div>
           <div className="narration-body">
             <div className="narration-title-bar">
-              <strong>THÔNG BÁO BUỔI SÁNG</strong>
+              <strong>THÔNG BÁO ĐẦU NGÀY · NGÀY {publicView?.roundNumber || 1}</strong>
             </div>
-            <p>
-              {publicView?.publicLogs?.[publicView.publicLogs.length - 1] ??
-                'Trời đã sáng, dân làng cùng nhau thảo luận để tìm ra Ma Sói.'}
-            </p>
+            {publicView?.publicLogs && publicView.publicLogs.length > 0 ? (
+              <ul className="morning-briefing-list">
+                {publicView.publicLogs.slice(-4).map((log, idx, arr) => (
+                  <li key={`${idx}-${log.slice(0, 16)}`} className={idx === arr.length - 1 ? 'is-latest-log' : ''}>
+                    {log}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>Trời đã sáng, dân làng cùng nhau thảo luận để tìm ra Ma Sói.</p>
+            )}
           </div>
         </section>
 
@@ -594,120 +632,211 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               </div>
             )}
 
-            {/* Single-device chọn người đang vote */}
-            {isSingleDevice && (
-              <div className="offline-voter-bar">
-                <span>Người đang cầm máy:</span>
-                <select
-                  value={state.playerId}
-                  onChange={(e) => actions.setLocalActivePlayer(e.target.value)}
-                  className="offline-select"
-                >
-                  {livingPlayers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      #{p.seatIndex} {p.name} {p.isMayor ? '(Trưởng làng - 2 phiếu)' : p.voteWeight === 0 ? '(Mất quyền vote)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {cannotVoteReason && (
-              <div className="cannot-vote-warning" role="status">
-                <span>⚠️ {cannotVoteReason}</span>
-              </div>
-            )}
-
             {(() => {
-              const runoffCandidateIds =
-                isRunoffPhase && privateView?.validTargets && privateView.validTargets.length > 0
-                  ? new Set(privateView.validTargets)
+              const rawRunoffIds =
+                isRunoffPhase && publicView?.runoffCandidates && publicView.runoffCandidates.length > 0
+                  ? publicView.runoffCandidates
+                  : isRunoffPhase && privateView?.validTargets && privateView.validTargets.length > 0
+                  ? privateView.validTargets
                   : null;
+              const runoffCandidateIds = rawRunoffIds ? new Set(rawRunoffIds) : null;
               const voteCandidates = runoffCandidateIds
                 ? players.filter((p) => runoffCandidateIds.has(p.id))
                 : players;
+
+              if (isSingleDevice) {
+                const livingCandidates = voteCandidates.filter((p) => p.isAlive);
+                const totalRecordedVotes = livingCandidates.reduce(
+                  (sum, p) => sum + (handVotes[p.id] ?? 0),
+                  0
+                );
+                const maxPossibleVotes = isMayorElectionPhase
+                  ? livingPlayers.length
+                  : livingPlayers
+                      .filter((p) => p.voteWeight > 0)
+                      .reduce((sum, p) => sum + p.voteWeight, 0);
+
+                const sortedLeaders = livingCandidates
+                  .map((p) => ({ player: p, count: handVotes[p.id] ?? 0 }))
+                  .filter((item) => item.count > 0)
+                  .sort((a, b) => b.count - a.count);
+                const topCount = sortedLeaders[0]?.count ?? 0;
+                const leaders = sortedLeaders.filter((item) => item.count === topCount);
+
+                const leaderSummary =
+                  leaders.length === 0
+                    ? 'Chưa có phiếu giơ tay nào'
+                    : leaders.length === 1
+                    ? `Đang dẫn đầu: #${leaders[0].player.seatIndex} ${leaders[0].player.name} (${leaders[0].count} phiếu)`
+                    : `Đang hòa phiếu (${leaders.length} người · ${topCount} phiếu)`;
+
+                return (
+                  <div className="public-hand-vote-board">
+                    <div className="hand-vote-summary-bar">
+                      <div className="hand-vote-stats">
+                        <span className="hand-vote-total">
+                          Tổng phiếu đã ghi: <b>{totalRecordedVotes}</b> / {maxPossibleVotes}
+                        </span>
+                        <span className="hand-vote-leader">{leaderSummary}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="hand-vote-reset-btn"
+                        disabled={totalRecordedVotes === 0 || effectiveVoteLocked || isSubmittingFinalize}
+                        onClick={() => setHandVotes({})}
+                      >
+                        Đặt lại 0
+                      </button>
+                    </div>
+
+                    <div className="hand-vote-list">
+                      {voteCandidates.map((player) =>
+                        player.isAlive ? (
+                          <div
+                            key={player.id}
+                            className={`hand-vote-row ${
+                              topCount > 0 && (handVotes[player.id] ?? 0) === topCount ? 'is-leading' : ''
+                            }`}
+                          >
+                            <div className="hand-vote-player-info">
+                              <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                              <div className="hand-vote-name-wrap">
+                                <span className="vote-name">{player.name}</span>
+                                <small className="vote-weight">
+                                  {player.isMayor ? '👑 Trưởng làng (x2 phiếu)' : 'Ứng viên'}
+                                </small>
+                              </div>
+                            </div>
+
+                            <div className="hand-vote-stepper">
+                              <button
+                                type="button"
+                                className="hand-vote-step-btn"
+                                aria-label={`Giảm phiếu cho ${player.name}`}
+                                disabled={(handVotes[player.id] ?? 0) <= 0 || effectiveVoteLocked || isSubmittingFinalize}
+                                onClick={() => handleAdjustHandVote(player.id, -1)}
+                              >
+                                −
+                              </button>
+                              <span className="hand-vote-count" aria-live="polite">
+                                {handVotes[player.id] ?? 0}
+                              </span>
+                              <button
+                                type="button"
+                                className="hand-vote-step-btn"
+                                aria-label={`Tăng phiếu cho ${player.name}`}
+                                disabled={effectiveVoteLocked || isSubmittingFinalize}
+                                onClick={() => handleAdjustHandVote(player.id, 1)}
+                              >
+                                ＋
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={player.id} className="hand-vote-row is-dead">
+                            <div className="hand-vote-player-info">
+                              <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                              <span className="vote-name crossed-out">{player.name}</span>
+                            </div>
+                            <small className="dead-tag">☠ Đã chết</small>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
               const isVoteDisabled = Boolean(cannotVoteReason) || effectiveVoteLocked || effectiveVoteSubmitted;
 
               return (
-                <div className="day-vote-grid">
-                  {/* Nút Bỏ phiếu trắng */}
-                  <button
-                    type="button"
-                    disabled={isVoteDisabled}
-                    aria-pressed={selectedPlayerId === null}
-                    onClick={() => setSelectedPlayerId(null)}
-                    className={`day-vote-card abstain-card ${selectedPlayerId === null ? 'vote-selected' : ''}`}
-                  >
-                    <div className="vote-card-header">
-                      <span className="vote-seat">⚪</span>
-                      <span className="vote-name">Bỏ phiếu trắng</span>
+                <>
+                  {cannotVoteReason && (
+                    <div className="cannot-vote-warning" role="status">
+                      <span>⚠️ {cannotVoteReason}</span>
                     </div>
-                    <small className="vote-weight">
-                      {isMayorElectionPhase ? 'Không bầu ai làm Trưởng làng' : 'Không muốn treo cổ ai hôm nay'}
-                    </small>
-                  </button>
-
-                  {voteCandidates.map((player) =>
-                    player.isAlive ? (
-                      <button
-                        key={player.id}
-                        type="button"
-                        disabled={isVoteDisabled}
-                        aria-pressed={selectedPlayerId === player.id}
-                        onClick={() => {
-                          setSelectedPlayerId(player.id);
-                          setNotice('');
-                        }}
-                        className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
-                      >
-                        <div className="vote-card-header">
-                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
-                          <span className="vote-name">{player.name}</span>
-                        </div>
-                        <small className="vote-weight">
-                          {isMayorElectionPhase
-                            ? 'Ứng viên Trưởng làng'
-                            : player.isMayor
-                            ? '👑 Trưởng làng (2 phiếu)'
-                            : player.voteWeight === 0
-                            ? '🃏 Đã mất quyền vote'
-                            : '1 phiếu'}
-                        </small>
-                      </button>
-                    ) : (
-                      <div key={player.id} className="day-vote-card dead-vote-card">
-                        <div className="vote-card-header">
-                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
-                          <span className="vote-name crossed-out">{player.name}</span>
-                        </div>
-                        <small className="dead-tag">☠ Đã chết</small>
-                      </div>
-                    )
                   )}
-                </div>
+
+                  <div className="day-vote-grid">
+                    {/* Nút Bỏ phiếu trắng */}
+                    <button
+                      type="button"
+                      disabled={isVoteDisabled}
+                      aria-pressed={selectedPlayerId === null}
+                      onClick={() => setSelectedPlayerId(null)}
+                      className={`day-vote-card abstain-card ${selectedPlayerId === null ? 'vote-selected' : ''}`}
+                    >
+                      <div className="vote-card-header">
+                        <span className="vote-seat">⚪</span>
+                        <span className="vote-name">Bỏ phiếu trắng</span>
+                      </div>
+                      <small className="vote-weight">
+                        {isMayorElectionPhase ? 'Không bầu ai làm Trưởng làng' : 'Không muốn treo cổ ai hôm nay'}
+                      </small>
+                    </button>
+
+                    {voteCandidates.map((player) =>
+                      player.isAlive ? (
+                        <button
+                          key={player.id}
+                          type="button"
+                          disabled={isVoteDisabled}
+                          aria-pressed={selectedPlayerId === player.id}
+                          onClick={() => {
+                            setSelectedPlayerId(player.id);
+                            setNotice('');
+                          }}
+                          className={`day-vote-card ${selectedPlayerId === player.id ? 'vote-selected' : ''}`}
+                        >
+                          <div className="vote-card-header">
+                            <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                            <span className="vote-name">{player.name}</span>
+                          </div>
+                          <small className="vote-weight">
+                            {isMayorElectionPhase
+                              ? 'Ứng viên Trưởng làng'
+                              : player.isMayor
+                              ? '👑 Trưởng làng (2 phiếu)'
+                              : player.voteWeight === 0
+                              ? '🃏 Đã mất quyền vote'
+                              : '1 phiếu'}
+                          </small>
+                        </button>
+                      ) : (
+                        <div key={player.id} className="day-vote-card dead-vote-card">
+                          <div className="vote-card-header">
+                            <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                            <span className="vote-name crossed-out">{player.name}</span>
+                          </div>
+                          <small className="dead-tag">☠ Đã chết</small>
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  {!effectiveVoteLocked && !cannotVoteReason && (
+                    <button
+                      type="button"
+                      disabled={effectiveVoteSubmitted}
+                      className={`cast-vote-button ${effectiveVoteSubmitted ? 'is-submitted' : ''}`}
+                      onClick={handleCastVote}
+                    >
+                      <span>
+                        {effectiveVoteSubmitted
+                          ? '✓ ĐÃ BỎ PHIẾU XONG'
+                          : isMayorElectionPhase
+                          ? selectedPlayerId
+                            ? `BẦU TRƯỞNG LÀNG: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                            : 'BỎ PHIẾU TRẮNG'
+                          : selectedPlayerId
+                          ? `BỎ PHIẾU TREO CỔ: ${players.find((p) => p.id === selectedPlayerId)?.name}`
+                          : 'BỎ PHIẾU TRẮNG'}
+                      </span>
+                    </button>
+                  )}
+                </>
               );
             })()}
-
-            {!effectiveVoteLocked && !cannotVoteReason && (
-              <button
-                type="button"
-                disabled={effectiveVoteSubmitted}
-                className={`cast-vote-button ${effectiveVoteSubmitted ? 'is-submitted' : ''}`}
-                onClick={handleCastVote}
-              >
-                <span>
-                  {effectiveVoteSubmitted
-                    ? '✓ ĐÃ BỎ PHIẾU XONG'
-                    : isMayorElectionPhase
-                    ? selectedPlayerId
-                      ? `BẦU TRƯỞNG LÀNG: ${players.find((p) => p.id === selectedPlayerId)?.name}`
-                      : 'BỎ PHIẾU TRẮNG'
-                    : selectedPlayerId
-                    ? `BỎ PHIẾU TREO CỔ: ${players.find((p) => p.id === selectedPlayerId)?.name}`
-                    : 'BỎ PHIẾU TRẮNG'}
-                </span>
-              </button>
-            )}
           </section>
         ) : (
           <section className="day-players-panel">
@@ -754,12 +883,14 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           <button
             type="button"
             className="finalize-button"
-            disabled={effectiveVoteLocked}
-            onClick={handleFinalizeVote}
+            disabled={effectiveVoteLocked || isSubmittingFinalize}
+            onClick={() => setShowConfirmFinalize(true)}
           >
             <span className="gavel-icon" aria-hidden="true">⚒</span>
             <span>
-              {!effectiveVoteLocked
+              {isSubmittingFinalize
+                ? 'ĐANG CHỐT KẾT QUẢ...'
+                : !effectiveVoteLocked
                 ? isMayorElectionPhase
                   ? 'CHỐT KẾT QUẢ BẦU TRƯỞNG LÀNG'
                   : isRunoffPhase
@@ -770,6 +901,43 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </button>
           {notice && <p role="status" className="vote-notice">{notice}</p>}
         </footer>
+      )}
+
+      {/* Hộp thoại xác nhận chốt kết quả bỏ phiếu */}
+      {showConfirmFinalize && (
+        <div
+          className="day-confirm-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-finalize-title"
+        >
+          <div className="day-confirm-dialog">
+            <h2 id="confirm-finalize-title">Xác nhận chốt kết quả bỏ phiếu?</h2>
+            <p className="day-confirm-desc">
+              {isSingleDevice
+                ? 'Hệ thống sẽ chốt kết quả theo số phiếu giơ tay đã ghi nhận trên bảng.'
+                : 'Hòm phiếu sẽ đóng ngay lập tức và công bố kết quả kiểm phiếu.'}
+            </p>
+            <div className="day-confirm-actions">
+              <button
+                type="button"
+                className="day-confirm-cancel"
+                disabled={isSubmittingFinalize}
+                onClick={() => setShowConfirmFinalize(false)}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="day-confirm-submit"
+                disabled={isSubmittingFinalize}
+                onClick={handleConfirmFinalizeVote}
+              >
+                {isSubmittingFinalize ? 'Đang chốt...' : 'Xác nhận chốt'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

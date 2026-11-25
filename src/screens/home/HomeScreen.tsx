@@ -4,6 +4,7 @@ import RulesAndRolesDrawer from '../../components/RulesAndRolesDrawer';
 import DayNightAtmosphereCanvas from './DayNightAtmosphereCanvas';
 import forestBg from '../../assets/dark-forest.jpg';
 import { useGameSession } from '../../adapters/useGameSession';
+import { audioController } from '../../audio/audioController';
 import './home.css';
 
 type Props = {
@@ -219,6 +220,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
 
   // Test Speaker button logic (SpeechSynthesis + Web Audio fallback)
   const handleTestSpeaker = () => {
+    void audioController.unlockAudio();
     triggerHaptic();
     if (isTestingSpeaker) {
       if ('speechSynthesis' in window) {
@@ -613,7 +615,6 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     className={`create-mode-btn ${deviceSelection === 'shared' ? 'is-active' : ''}`}
                     onClick={() => {
                       setDeviceSelection('shared');
-                      setHostRoleSelection('board');
                     }}
                   >
                     <span className="mode-btn-title">1 máy dùng chung</span>
@@ -630,25 +631,12 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     type="button"
                     role="radio"
                     aria-checked={hostRoleSelection === 'player'}
-                    disabled={deviceSelection === 'shared'}
-                    className={`create-mode-btn ${hostRoleSelection === 'player' ? 'is-active' : ''} ${
-                      deviceSelection === 'shared' ? 'is-disabled' : ''
-                    }`}
-                    onClick={() => {
-                      if (deviceSelection !== 'shared') {
-                        setHostRoleSelection('player');
-                      }
-                    }}
-                    title={
-                      deviceSelection === 'shared'
-                        ? 'Chế độ 1 máy dùng chung cố định thiết bị làm Bảng trung tâm cho cả làng'
-                        : 'Quản trò vừa chơi vừa điều phối qua thanh Control Bar'
-                    }
+                    className={`create-mode-btn ${hostRoleSelection === 'player' ? 'is-active' : ''}`}
+                    onClick={() => setHostRoleSelection('player')}
+                    title="Quản trò vừa chơi vừa điều phối qua thanh Control Bar"
                   >
                     <span className="mode-btn-title">Host kiêm Người chơi</span>
-                    <span className="mode-btn-sub">
-                      {deviceSelection === 'shared' ? 'Khóa ở chế độ 1 máy' : 'Có thanh Control Bar trên đầu'}
-                    </span>
+                    <span className="mode-btn-sub">Có thanh Control Bar trên đầu</span>
                   </button>
 
                   <button
@@ -660,9 +648,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     title="Đặt máy giữa bàn làm Bảng trung tâm điều khiển và phát loa"
                   >
                     <span className="mode-btn-title">Bảng trung tâm</span>
-                    <span className="mode-btn-sub">
-                      {deviceSelection === 'shared' ? 'Auto cho 1 máy dùng chung' : 'iPad / TV / Laptop 3 cột'}
-                    </span>
+                    <span className="mode-btn-sub">iPad / TV / Laptop 3 cột</span>
                   </button>
                 </div>
 
@@ -677,8 +663,8 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 </button>
               </div>
 
-              {/* Khu vực Tên hiển thị (chỉ cần khi Host kiêm người chơi ở chế độ nhiều máy) */}
-              {deviceSelection === 'multi' && hostRoleSelection === 'player' && (
+              {/* Khu vực Tên hiển thị (cần khi Host kiêm người chơi) */}
+              {hostRoleSelection === 'player' && (
                 <div className="join-name-section">
                   <label className="home-label" htmlFor="modal-host-name">Tên hiển thị của Host</label>
                   <input
@@ -700,7 +686,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                 className={`home-button home-button-primary create-submit-btn ${
                   (hostRoleSelection === 'board' || nickname.trim().length > 0) && !isLoading ? 'is-ready' : 'is-disabled'
                 }`}
-                disabled={(deviceSelection === 'multi' && hostRoleSelection === 'player' && !nickname.trim()) || isLoading}
+                disabled={(hostRoleSelection === 'player' && !nickname.trim()) || isLoading}
                 onClick={() => enterLobby('create')}
               >
                 <span>{isLoading ? 'Đang khởi tạo...' : 'Tạo bàn'}</span>

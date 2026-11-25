@@ -92,6 +92,11 @@
   outline-offset: 6px;
 }
 
+.ritual-card-stage.is-locked {
+  cursor: default;
+  opacity: 0.78;
+}
+
 /* Thẻ bài 3D xoay lật phản hồi mượt mà theo thao tác ngón tay */
 .ritual-card-body {
   width: 100%;
@@ -600,4 +605,34 @@
 .ritual-pass-btn.is-final {
   border-color: #e59d4c;
   background: linear-gradient(135deg, rgba(201, 134, 56, 0.3), rgba(142, 30, 36, 0.3));
+}
+
+.ritual-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ritual-undo-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #a99f8d;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.ritual-undo-btn:hover {
+  color: #ede7dc;
+  border-color: rgba(201, 134, 56, 0.45);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ritual-undo-btn:focus-visible {
+  outline: 2px solid #e59d4c;
+  outline-offset: 3px;
 }

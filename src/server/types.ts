@@ -161,6 +161,7 @@ export interface PublicRoomView {
   princeRevealed?: boolean;
   mutedPlayerId?: PlayerId | null;
   doubleVoteDay?: boolean;
+  runoffCandidates?: PlayerId[];
 }
 
 export interface HostBoardView {

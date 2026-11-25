@@ -36,9 +36,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [cupidTargets, setCupidTargets] = useState<PlayerId[]>([]);
   const [hoodlumTargets, setHoodlumTargets] = useState<PlayerId[]>([]);
   const [piedPiperTargets, setPiedPiperTargets] = useState<PlayerId[]>([]);
+  const [wolfTargets, setWolfTargets] = useState<PlayerId[]>([]);
   const [witchPoisonTargetId, setWitchPoisonTargetId] = useState<PlayerId | null>(null);
   const [isWitchHeal, setIsWitchHeal] = useState(false);
   const [notice, setNotice] = useState('');
+  const [sleepNotice, setSleepNotice] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showingResult, setShowingResult] = useState(false);
 
@@ -55,6 +57,14 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const currentTurnInfo = publicView?.currentTurnInfo;
 
   const currentTurnKey = privateView?.turnKey || privateView?.roleId || '';
+  const isWolfPack = currentTurnKey === 'wolf_pack';
+  const isWolfDoubleKill =
+    isWolfPack &&
+    Boolean(
+      (privateView?.skills as { wolfCubDoubleKillNextNight?: boolean } | undefined)
+        ?.wolfCubDoubleKillNextNight
+    ) &&
+    validTargets.length >= 2;
   const isCupid = currentTurnKey === 'cupid' || currentTurnKey === 'night_cupid';
   const isMason = currentTurnKey === 'mason' || currentTurnKey === 'night_mason';
   const isHoodlum = currentTurnKey === 'hoodlum' || currentTurnKey === 'night_hoodlum';
@@ -79,6 +89,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const submitSleepTimerRef = useRef<number | null>(null);
   const resultTimerRef = useRef<number | null>(null);
   const advancePopTimerRef = useRef<number | null>(null);
+  const autoAdvanceTimerRef = useRef<number | null>(null);
+  const sleepNoticeTimerRef = useRef<number | null>(null);
+  const isAdvancingRef = useRef(false);
 
   useEffect(() => {
     setAvatarError(false);
@@ -94,6 +107,12 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       }
       if (advancePopTimerRef.current !== null) {
         window.clearTimeout(advancePopTimerRef.current);
+      }
+      if (autoAdvanceTimerRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+      }
+      if (sleepNoticeTimerRef.current !== null) {
+        window.clearTimeout(sleepNoticeTimerRef.current);
       }
     };
   }, []);
@@ -119,11 +138,30 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setShowingResult(false);
   }, [privateView?.turnKey, privateView?.playerId]);
 
+  // Luôn reset hasSubmitted và showingResult mỗi khi sang lượt mới (kể cả lượt giả / vai đã chết)
+  useEffect(() => {
+    setHasSubmitted(false);
+    if (resultTimerRef.current !== null) {
+      window.clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    setShowingResult(false);
+  }, [currentTurnInfo?.turnIndex, privateView?.turnKey]);
+
   // Reset trạng thái thao tác khi sang lượt mới / đổi người chơi (hỗ trợ cả Multi-device nhiều lượt trong cùng đêm)
   useEffect(() => {
+    isAdvancingRef.current = false;
     if (submitSleepTimerRef.current !== null) {
       window.clearTimeout(submitSleepTimerRef.current);
       submitSleepTimerRef.current = null;
+    }
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    if (sleepNoticeTimerRef.current !== null) {
+      window.clearTimeout(sleepNoticeTimerRef.current);
+      sleepNoticeTimerRef.current = null;
     }
     if (privateView?.canActCurrentTurn) {
       setHasSubmitted(false);
@@ -137,16 +175,37 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setCupidTargets([]);
     setHoodlumTargets([]);
     setPiedPiperTargets([]);
+    setWolfTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
     setIsCurseAction(null);
     setIsTroublemakerActive(null);
     setIsFoxSkip(false);
     setNotice('');
-  }, [privateView?.turnKey, privateView?.playerId, privateView?.canActCurrentTurn]);
+    setSleepNotice('');
+    if (isSingleDevice) {
+      setMode('sleep');
+    }
+  }, [
+    isSingleDevice,
+    currentTurnInfo?.turnIndex,
+    privateView?.turnKey,
+    privateView?.playerId,
+    privateView?.canActCurrentTurn,
+  ]);
 
-  // Tự động chuyển giữa màn hình ngủ và màn hình hành động
+  // Multi-device: Tự động chuyển giữa màn hình ngủ và màn hình hành động
+  // Single-device: Luôn giữ Sleep Overlay cho đến khi người chơi chủ động chạm "Chạm để thực hiện lượt"
   useEffect(() => {
+    if (isSingleDevice) {
+      if (showingResult) {
+        setMode('action');
+      } else if (!canAct) {
+        setMode('sleep');
+      }
+      return;
+    }
+
     if (canAct || showingResult) {
       if (submitSleepTimerRef.current !== null) {
         window.clearTimeout(submitSleepTimerRef.current);
@@ -156,7 +215,45 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     } else {
       setMode('sleep');
     }
-  }, [canAct, showingResult]);
+  }, [isSingleDevice, canAct, showingResult]);
+
+  // Single-device Smart Fake Delay (5-14s): Tự động chuyển lượt khi ở Sleep Overlay
+  useEffect(() => {
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+
+    if (!isSingleDevice || mode !== 'sleep' || publicView?.phase !== 'NIGHT') {
+      return;
+    }
+
+    const introLeadMs = currentTurnInfo?.turnIndex === 1 && !hasSubmitted ? 4500 : 0;
+    const delayMs = hasSubmitted
+      ? 1400
+      : introLeadMs + 5000 + Math.floor(Math.random() * 9001);
+
+    autoAdvanceTimerRef.current = window.setTimeout(() => {
+      autoAdvanceTimerRef.current = null;
+      if (isAdvancingRef.current) return;
+      isAdvancingRef.current = true;
+      actions.advanceLocalTurn();
+    }, delayMs);
+
+    return () => {
+      if (autoAdvanceTimerRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+    };
+  }, [
+    isSingleDevice,
+    mode,
+    publicView?.phase,
+    currentTurnInfo?.turnIndex,
+    hasSubmitted,
+    actions,
+  ]);
 
   useEffect(() => {
     document.body.classList.toggle('night-sleep-active', mode === 'sleep');
@@ -294,6 +391,22 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         await actions.sendNightAction('cult_leader', {
           targetId: selectedTargetId,
         });
+      } else if (isWolfPack) {
+        if (isWolfDoubleKill) {
+          if (wolfTargets.length !== 2 || wolfTargets[0] === wolfTargets[1]) {
+            setNotice('Vui lòng chọn đủ 2 nạn nhân khác nhau (Sói Con đã hy sinh).');
+            return;
+          }
+          await actions.sendNightAction('wolf_pack', {
+            targetIds: wolfTargets,
+          });
+        } else {
+          await actions.sendNightAction('wolf_pack', {
+            targetId: selectedTargetId,
+            targetIds: selectedTargetId ? [selectedTargetId] : [],
+            isSkip: selectedTargetId === null,
+          });
+        }
       } else {
         await actions.sendNightAction(privateView.roleId, {
           targetId: selectedTargetId,
@@ -382,7 +495,39 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setNotice('');
   };
 
+  const handleTapToAct = () => {
+    if (!isSingleDevice) {
+      setMode('action');
+      return;
+    }
+
+    if (canAct) {
+      if (autoAdvanceTimerRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+      setSleepNotice('');
+      setMode('action');
+    } else {
+      if (sleepNoticeTimerRef.current !== null) {
+        window.clearTimeout(sleepNoticeTimerRef.current);
+      }
+      setSleepNotice('Chưa đến lượt của bạn');
+      sleepNoticeTimerRef.current = window.setTimeout(() => {
+        sleepNoticeTimerRef.current = null;
+        setSleepNotice('');
+      }, 2000);
+    }
+  };
+
   const handleAdvanceLocal = () => {
+    if (isAdvancingRef.current) return;
+    isAdvancingRef.current = true;
+
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
     if (submitSleepTimerRef.current !== null) {
       window.clearTimeout(submitSleepTimerRef.current);
       submitSleepTimerRef.current = null;
@@ -399,10 +544,12 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       advancePopTimerRef.current = null;
       setAdvancePressed(false);
     }, 250);
-    try {
-      navigator.vibrate?.(40);
-    } catch {
-      // ignore
+    if (!isSingleDevice) {
+      try {
+        navigator.vibrate?.(40);
+      } catch {
+        // ignore
+      }
     }
     actions.advanceLocalTurn();
     setAvatarError(false);
@@ -412,16 +559,28 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setCupidTargets([]);
     setHoodlumTargets([]);
     setPiedPiperTargets([]);
+    setWolfTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
     setIsCurseAction(null);
     setIsTroublemakerActive(null);
     setIsFoxSkip(false);
     setNotice('');
+    setSleepNotice('');
   };
 
   const handleSelectTarget = (tId: PlayerId) => {
-    if (isCupid) {
+    if (isWolfDoubleKill) {
+      setWolfTargets((prev) => {
+        if (prev.includes(tId)) {
+          return prev.filter((id) => id !== tId);
+        }
+        if (prev.length < 2) {
+          return [...prev, tId];
+        }
+        return [prev[0], tId];
+      });
+    } else if (isCupid) {
       setCupidTargets((prev) => {
         if (prev.includes(tId)) {
           return prev.filter((id) => id !== tId);
@@ -462,7 +621,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
 
   const isCupidValid = cupidTargets.length === 2 && cupidTargets[0] !== cupidTargets[1];
   const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
-  const canConfirm = isCupid
+  const isWolfDoubleValid = wolfTargets.length === 2 && wolfTargets[0] !== wolfTargets[1];
+  const canConfirm = isWolfDoubleKill
+    ? isWolfDoubleValid
+    : isCupid
     ? isCupidValid
     : isHoodlum
     ? isHoodlumValid
@@ -494,7 +656,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           </span>
         </div>
 
-        {canAct && (
+        {!isSingleDevice && canAct && (
           <nav aria-label="Chế độ ban đêm" className="segmented-control">
             <button
               type="button"
@@ -534,7 +696,9 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               {currentTurnInfo ? currentTurnInfo.titleVi : 'Đêm tĩnh lặng'}
             </h1>
             <p className="night-calling-hint">
-              {currentTurnInfo?.isFake
+              {isSingleDevice
+                ? 'Hãy nhắm mắt và lắng nghe lời quản trò.'
+                : currentTurnInfo?.isFake
                 ? '✦ Đêm vẫn đang tiếp diễn. Hãy giữ im lặng.'
                 : canAct
                 ? 'Đến lượt bạn thức giấc!'
@@ -542,33 +706,43 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             </p>
           </div>
 
-          {canAct && (
-            <button
-              type="button"
-              className="jump-to-action-btn"
-              onClick={() => setMode('action')}
-            >
-              ⚡ Thức giấc để hành động ➔
-            </button>
-          )}
-
-          {/* Nút điều phối chuyển lượt cho chế độ 1 máy offline */}
-          {isSingleDevice && (
-            <div className="night-offline-advance-bar">
+          {isSingleDevice ? (
+            <>
               <button
                 type="button"
-                className={`offline-advance-btn ${advancePressed ? 'btn-pop' : ''}`}
-                onClick={handleAdvanceLocal}
+                className="jump-to-action-btn neutral-tap-btn"
+                onClick={handleTapToAct}
               >
-                {currentTurnInfo?.nextTurnTitleVi ? (
-                  <span>
-                    Gọi lượt tiếp theo: <b>{currentTurnInfo.nextTurnTitleVi}</b>
-                  </span>
-                ) : (
-                  <span>Hết các lượt đêm ➔ Trời sáng ☀️</span>
-                )}
+                Chạm để thực hiện lượt
               </button>
-            </div>
+
+              {sleepNotice && (
+                <p className="sleep-turn-notice" role="status">
+                  {sleepNotice}
+                </p>
+              )}
+
+              <div className="night-offline-advance-bar">
+                <button
+                  type="button"
+                  disabled={advancePressed}
+                  className={`offline-quick-skip-btn ${advancePressed ? 'btn-pop' : ''}`}
+                  onClick={handleAdvanceLocal}
+                >
+                  Qua lượt nhanh
+                </button>
+              </div>
+            </>
+          ) : (
+            canAct && (
+              <button
+                type="button"
+                className="jump-to-action-btn"
+                onClick={() => setMode('action')}
+              >
+                ⚡ Thức giấc để hành động ➔
+              </button>
+            )
           )}
         </section>
       )}
@@ -592,7 +766,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 <span className="role-glyph" aria-hidden="true">✦</span>
               )}
               <div>
-                <h2>{roleDef.nameVi} THỨC GIẤC</h2>
+                <h2>{isWolfPack ? 'BẦY MA SÓI THỨC GIẤC' : `${roleDef.nameVi} THỨC GIẤC`}</h2>
                 <small>HÃY HÀNH ĐỘNG TRONG YÊN LẶNG</small>
               </div>
             </div>
@@ -886,7 +1060,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   <div className="target-heading">
                     <div>
                       <strong>
-                        {isCupid
+                        {isWolfDoubleKill
+                          ? 'CHỌN 2 NẠN NHÂN ĐỂ BẦY SÓI CẮN (SÓI CON ĐÃ HY SINH)'
+                          : isWolfPack
+                          ? 'CHỌN 1 NẠN NHÂN ĐỂ BẦY SÓI CẮN'
+                          : isCupid
                           ? 'CHỌN 2 NGƯỜI ĐỂ GHÉP ĐÔI'
                           : isHoodlum
                           ? 'CHỌN 2 KẺ THÙ CẦN LOẠI BỎ'
@@ -913,7 +1091,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                       : 'CHỌN MỤC TIÊU HÀNH ĐỘNG'}
                   </strong>
                   <small>
-                    {isCupid
+                    {isWolfDoubleKill
+                      ? 'Sói Con đã chết đêm/ngày trước: đêm nay bầy Sói được chọn 2 nạn nhân'
+                      : isWolfPack
+                      ? 'Bầy Sói thống nhất chọn 1 nạn nhân để cắn đêm nay'
+                      : isCupid
                       ? 'Hai người này sẽ trở thành Cặp đôi (nếu một người chết, người kia cũng chết theo)'
                       : isHoodlum
                       ? 'Bạn thắng khi cả 2 người này đều chết và bạn còn sống'
@@ -941,7 +1123,13 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   </small>
                 </div>
                 <span className="target-hint">
-                  {isCupid
+                  {isWolfDoubleKill
+                    ? wolfTargets.length === 0
+                      ? 'Chọn đủ 2 nạn nhân (0/2)'
+                      : wolfTargets.length === 1
+                      ? `Đã chọn 1/2: #${publicView?.players.find((p) => p.id === wolfTargets[0])?.seatIndex} ${publicView?.players.find((p) => p.id === wolfTargets[0])?.name}`
+                      : `Nạn nhân: #${publicView?.players.find((p) => p.id === wolfTargets[0])?.seatIndex} ${publicView?.players.find((p) => p.id === wolfTargets[0])?.name} & #${publicView?.players.find((p) => p.id === wolfTargets[1])?.seatIndex} ${publicView?.players.find((p) => p.id === wolfTargets[1])?.name}`
+                    : isCupid
                     ? cupidTargets.length === 0
                       ? 'Chọn đúng 2 người khác nhau (0/2)'
                       : cupidTargets.length === 1
@@ -999,54 +1187,96 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 </span>
               </div>
 
-              <div className="target-grid">
-                {validTargets.map((tId) => {
-                  const targetP = publicView?.players.find((p) => p.id === tId);
-                  if (!targetP) return null;
-                  const isSelected = isCupid
-                    ? cupidTargets.includes(tId)
-                    : isHoodlum
-                    ? hoodlumTargets.includes(tId)
-                    : isPiedPiper
-                    ? piedPiperTargets.includes(tId)
-                    : selectedTargetId === tId;
-                  const cupidIdx = cupidTargets.indexOf(tId);
-                  const hoodlumIdx = hoodlumTargets.indexOf(tId);
-                  const piedPiperIdx = piedPiperTargets.indexOf(tId);
+              {isSingleDevice ? (
+                <div className="circular-seat-map" role="group" aria-label="Sơ đồ ghế chọn mục tiêu">
+                  <div className="circular-seat-center" aria-hidden="true">
+                    <span>{isWolfPack ? '🐺' : '🎯'}</span>
+                    <small>{validTargets.length} mục tiêu</small>
+                  </div>
+                  {validTargets.map((tId, idx) => {
+                    const targetP = publicView?.players.find((p) => p.id === tId);
+                    if (!targetP) return null;
+                    const isSelected = isWolfDoubleKill
+                      ? wolfTargets.includes(tId)
+                      : isCupid
+                      ? cupidTargets.includes(tId)
+                      : isHoodlum
+                      ? hoodlumTargets.includes(tId)
+                      : isPiedPiper
+                      ? piedPiperTargets.includes(tId)
+                      : selectedTargetId === tId;
+                    const angle = (idx / Math.max(1, validTargets.length)) * 2 * Math.PI - Math.PI / 2;
+                    const radiusPct = validTargets.length > 10 ? 40 : 37;
+                    const leftPct = 50 + Math.cos(angle) * radiusPct;
+                    const topPct = 50 + Math.sin(angle) * radiusPct;
+                    return (
+                      <button
+                        type="button"
+                        key={tId}
+                        aria-pressed={isSelected}
+                        aria-label={`Ghế #${targetP.seatIndex} ${targetP.name}`}
+                        onClick={() => handleSelectTarget(tId)}
+                        style={{ left: `${leftPct.toFixed(2)}%`, top: `${topPct.toFixed(2)}%` }}
+                        className={`circular-seat-node ${isSelected ? 'selected' : ''}`}
+                      >
+                        <span className="circular-seat-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
+                        <span className="circular-seat-name">{targetP.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="target-grid">
+                  {validTargets.map((tId) => {
+                    const targetP = publicView?.players.find((p) => p.id === tId);
+                    if (!targetP) return null;
+                    const isSelected = isWolfDoubleKill
+                      ? wolfTargets.includes(tId)
+                      : isCupid
+                      ? cupidTargets.includes(tId)
+                      : isHoodlum
+                      ? hoodlumTargets.includes(tId)
+                      : isPiedPiper
+                      ? piedPiperTargets.includes(tId)
+                      : selectedTargetId === tId;
+                    const cupidIdx = cupidTargets.indexOf(tId);
+                    const hoodlumIdx = hoodlumTargets.indexOf(tId);
+                    const piedPiperIdx = piedPiperTargets.indexOf(tId);
 
-                  return (
-                    <button
-                      type="button"
-                      key={tId}
-                      aria-pressed={isSelected}
-                      onClick={() => handleSelectTarget(tId)}
-                      className={`target-card ${isSelected ? 'selected' : ''} ${(isCupid || isHoodlum) && isSelected ? 'hoodlum-selected' : ''} ${isPiedPiper && isSelected ? 'piedpiper-selected' : ''}`}
-                    >
-                      <div className="target-meta">
-                        <span className="target-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
-                        <span className="target-name">{targetP.name}</span>
-                      </div>
-                      <span className="target-crosshair" aria-hidden="true">
-                        {isCupid
-                          ? isSelected
-                            ? `💘 #${cupidIdx + 1}`
-                            : '○'
-                          : isHoodlum
-                          ? isSelected
-                            ? `🎯 #${hoodlumIdx + 1}`
-                            : '○'
-                          : isPiedPiper
-                          ? isSelected
-                            ? `🎵 #${piedPiperIdx + 1}`
-                            : '○'
-                          : isSelected
-                          ? '⦿'
-                          : '○'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                    return (
+                      <button
+                        type="button"
+                        key={tId}
+                        aria-pressed={isSelected}
+                        onClick={() => handleSelectTarget(tId)}
+                        className={`target-card ${isSelected ? 'selected' : ''} ${(isCupid || isHoodlum) && isSelected ? 'hoodlum-selected' : ''} ${isPiedPiper && isSelected ? 'piedpiper-selected' : ''}`}
+                      >
+                        <div className="target-meta">
+                          <span className="target-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
+                          <span className="target-name">{targetP.name}</span>
+                        </div>
+                        <span className="target-crosshair" aria-hidden="true">
+                          {isCupid
+                            ? isSelected
+                              ? `💘 #${cupidIdx + 1}`
+                              : '○'
+                            : isHoodlum
+                            ? isSelected
+                              ? `🎯 #${hoodlumIdx + 1}`
+                              : '○'
+                            : isPiedPiper
+                            ? isSelected
+                              ? `🎵 #${piedPiperIdx + 1}`
+                              : '○'
+                            : isSelected
+                            ? '⦿'
+                            : '○'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
                 </>
               )}
 
@@ -1120,7 +1350,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   onClick={handleConfirmAction}
                 >
                   <span>
-                    {isCupid
+                    {isWolfDoubleKill
+                      ? isWolfDoubleValid
+                        ? 'XÁC NHẬN CẮN 2 NẠN NHÂN'
+                        : `CHỌN ĐỦ 2 NẠN NHÂN (${wolfTargets.length}/2)`
+                      : isCupid
                       ? isCupidValid
                         ? 'XÁC NHẬN GHÉP ĐÔI'
                         : `CHỌN ĐỦ 2 NGƯỜI (${cupidTargets.length}/2)`
@@ -1160,10 +1394,29 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => {
+                    onClick={async () => {
                       setSelectedTargetId(null);
+                      setWolfTargets([]);
                       setIsWitchHeal(false);
                       setWitchPoisonTargetId(null);
+                      if (isWolfPack) {
+                        await actions.sendNightAction('werewolf', {
+                          targetId: null,
+                          targetIds: [],
+                          isSkip: true,
+                        });
+                        setHasSubmitted(true);
+                        setNotice('✓ Bầy Sói đã bỏ qua lượt cắn đêm nay.');
+                        if (submitSleepTimerRef.current !== null) {
+                          window.clearTimeout(submitSleepTimerRef.current);
+                        }
+                        submitSleepTimerRef.current = window.setTimeout(() => {
+                          submitSleepTimerRef.current = null;
+                          setMode('sleep');
+                          setNotice('');
+                        }, 1000);
+                        return;
+                      }
                       void handleConfirmAction();
                     }}
                   >

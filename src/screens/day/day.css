@@ -900,3 +900,227 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* Morning Briefing Card */
+.morning-briefing-card {
+  border-color: rgba(201, 134, 56, 0.42);
+  background: linear-gradient(135deg, rgba(201, 134, 56, 0.12), rgba(18, 22, 30, 0.92));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.morning-briefing-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--muted, #b5aea2);
+}
+
+.morning-briefing-list li.is-latest-log {
+  color: var(--parchment, #ede7dc);
+  font-weight: 600;
+}
+
+/* Public Hand Vote Board (Single-device) */
+.public-hand-vote-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hand-vote-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(201, 134, 56, 0.1);
+  border: 1px solid rgba(201, 134, 56, 0.28);
+}
+
+.hand-vote-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hand-vote-total {
+  font-size: 13px;
+  color: var(--parchment, #ede7dc);
+}
+
+.hand-vote-leader {
+  font-size: 12px;
+  color: var(--lantern, #c98638);
+  font-weight: 600;
+}
+
+.hand-vote-reset-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--parchment, #ede7dc);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hand-vote-reset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hand-vote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hand-vote-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface, #151821);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.hand-vote-row.is-leading {
+  border-color: rgba(234, 179, 8, 0.65);
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.hand-vote-row.is-dead {
+  opacity: 0.52;
+}
+
+.hand-vote-player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hand-vote-name-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hand-vote-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hand-vote-step-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 134, 56, 0.38);
+  background: rgba(201, 134, 56, 0.12);
+  color: var(--parchment, #ede7dc);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.hand-vote-step-btn:hover:not(:disabled) {
+  background: rgba(201, 134, 56, 0.25);
+}
+
+.hand-vote-step-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hand-vote-count {
+  min-width: 28px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--parchment, #ede7dc);
+}
+
+/* Confirmation Dialog */
+.day-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.day-confirm-dialog {
+  width: min(100%, 380px);
+  padding: 20px;
+  border-radius: 12px;
+  background: #141822;
+  border: 1px solid rgba(201, 134, 56, 0.45);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+}
+
+.day-confirm-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  color: var(--parchment, #ede7dc);
+}
+
+.day-confirm-desc {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted, #a39b8e);
+}
+
+.day-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.day-confirm-cancel,
+.day-confirm-submit {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.day-confirm-cancel {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: var(--muted, #a39b8e);
+}
+
+.day-confirm-submit {
+  border: 1px solid rgba(201, 134, 56, 0.55);
+  background: linear-gradient(135deg, #b8732a, #d69343);
+  color: #0d0f13;
+}
+
+.day-confirm-cancel:disabled,
+.day-confirm-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

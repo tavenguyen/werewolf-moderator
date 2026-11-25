@@ -808,4 +808,102 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(roomState.foxInvestigationResult).toBeUndefined();
     expect(roomState.nightActionsAccumulator.fox?.isSkip).toBe(true);
   });
+
+  it('submitPublicHandVotes xử lý bầu Trưởng làng, hòa phiếu Runoff và treo cổ theo phiếu giơ tay', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.updateSettings({ hasMayor: true, tieVoteMode: 'RUNOFF' });
+    await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    const [p1, p2, p3] = roomState.gameState.players;
+
+    // 1. Bầu Trưởng làng bằng phiếu giơ tay
+    roomState.gameState.phase = 'DAY_MAYOR_ELECTION';
+    await adapter.submitPublicHandVotes({ [p1.id]: 4, [p2.id]: 2 });
+    expect(roomState.gameState.phase).toBe('DAY_DISCUSS');
+    expect(roomState.gameState.mayorId).toBe(p1.id);
+    expect(roomState.gameState.players.find((p: any) => p.id === p1.id)?.voteWeight).toBe(2);
+
+    // 2. Hòa phiếu -> chuyển sang DAY_RUNOFF
+    await adapter.submitPublicHandVotes({ [p2.id]: 3, [p3.id]: 3 });
+    expect(roomState.gameState.phase).toBe('DAY_RUNOFF');
+    expect(roomState.gameState.dayState.runoffCandidates).toEqual([p2.id, p3.id]);
+
+    // 3. Chốt Runoff -> treo cổ p3
+    await adapter.submitPublicHandVotes({ [p2.id]: 1, [p3.id]: 4 });
+    expect(roomState.gameState.players.find((p: any) => p.id === p3.id)?.isAlive).toBe(false);
+    expect(roomState.lastVoteTally?.tallies[p3.id]).toBe(4);
+  });
+
+  it('submitPublicHandVotes hỗ trợ doubleVoteDay (treo cổ 2 người có phiếu giơ tay cao nhất)', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    const [p1, p2] = roomState.gameState.players;
+    roomState.gameState.phase = 'DAY_DISCUSS';
+    roomState.gameState.doubleVoteDay = true;
+
+    await adapter.submitPublicHandVotes({ [p1.id]: 4, [p2.id]: 2 });
+
+    expect(roomState.gameState.players.find((p: any) => p.id === p1.id)?.isAlive).toBe(false);
+    expect(roomState.gameState.players.find((p: any) => p.id === p2.id)?.isAlive).toBe(false);
+  });
+
+  it('finalizePublicVote xử lý DAY_MAYOR_ELECTION và chuyển sang DAY_DISCUSS', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.updateSettings({ hasMayor: true });
+    await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+    await adapter.advanceLocalTurn(); // Seer
+    await adapter.advanceLocalTurn(); // Sang Ngày 1 (DAY_MAYOR_ELECTION)
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    expect(roomState.gameState.phase).toBe('DAY_MAYOR_ELECTION');
+
+    const [p1, p2, p3] = roomState.gameState.players;
+    adapter.setLocalActivePlayer(p1.id);
+    await adapter.sendMayorElect(p2.id);
+    adapter.setLocalActivePlayer(p3.id);
+    await adapter.sendMayorElect(p2.id);
+
+    await adapter.finalizePublicVote();
+
+    expect(roomState.gameState.phase).toBe('DAY_DISCUSS');
+    expect(roomState.gameState.mayorId).toBe(p2.id);
+    expect(roomState.lastVoteTally?.tallies[p2.id]).toBe(2);
+  });
+
+  it('Con Cáo đã mất phép (foxLostPower) không thể nhận foxInvestigationResult', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.startGame(['fox', 'werewolf', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    const fox = roomState.gameState.players.find((p: any) => p.roleId === 'fox');
+    const wolf = roomState.gameState.players.find((p: any) => p.roleId === 'werewolf');
+    roomState.gameState.foxLostPower = true;
+    roomState.nightTurnPlan = [
+      {
+        roleId: 'fox',
+        turnKey: 'fox',
+        priority: 44,
+        titleVi: 'Con cáo',
+        titleEn: 'Fox',
+        activePlayerIds: [fox.id],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_fox',
+      },
+    ];
+    roomState.currentNightTurnIndex = 0;
+    adapter.setLocalActivePlayer(fox.id);
+
+    await adapter.sendNightAction('fox', { targetId: wolf.id, isSkip: false });
+
+    expect(roomState.foxInvestigationResult).toBeUndefined();
+    expect(roomState.nightActionsAccumulator.fox?.isSkip).toBe(true);
+  });
 });

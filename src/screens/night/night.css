@@ -1217,3 +1217,153 @@ body.night-sleep-active {
   font-size: 13px;
   text-align: center;
 }
+
+/* Single-device Center Board Night Controls */
+.neutral-tap-btn {
+  margin-top: 16px;
+  min-height: 48px;
+  padding: 12px 24px;
+  border-radius: 10px;
+  border: 1px solid rgba(201, 134, 56, 0.35);
+  background: rgba(20, 24, 34, 0.92);
+  color: var(--night-text, #ede7dc);
+  font: 700 14px var(--headline);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+}
+
+.neutral-tap-btn:hover {
+  border-color: rgba(201, 134, 56, 0.65);
+  background: rgba(30, 36, 50, 0.96);
+}
+
+.sleep-turn-notice {
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--night-muted, #a39b8e);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.night-offline-advance-bar {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 24px;
+}
+
+.offline-quick-skip-btn {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--night-muted, #a39b8e);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.offline-quick-skip-btn:hover:not(:disabled) {
+  color: var(--night-text, #ede7dc);
+  border-color: rgba(201, 134, 56, 0.45);
+  background: rgba(201, 134, 56, 0.12);
+}
+
+.offline-quick-skip-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Circular Seat Map for Single-device Night Target Selection */
+.circular-seat-map {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 1 / 1;
+  margin: 14px auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(201, 134, 56, 0.08) 0%, rgba(18, 21, 28, 0.65) 62%, transparent 72%);
+  border: 1px dashed rgba(201, 134, 56, 0.22);
+}
+
+.circular-seat-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: rgba(13, 15, 20, 0.9);
+  border: 1px solid rgba(201, 134, 56, 0.25);
+  color: var(--night-muted, #a39b8e);
+  pointer-events: none;
+  text-align: center;
+}
+
+.circular-seat-center span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.circular-seat-center small {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.circular-seat-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 56px;
+  max-width: 76px;
+  min-height: 44px;
+  padding: 5px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #141821;
+  color: var(--night-text, #ede7dc);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.circular-seat-node:hover {
+  border-color: rgba(201, 134, 56, 0.55);
+  background: #1c222e;
+}
+
+.circular-seat-node.selected {
+  border-color: #eab308;
+  background: rgba(201, 134, 56, 0.22);
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.35);
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.circular-seat-num {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--lantern, #c98638);
+}
+
+.circular-seat-name {
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 66px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

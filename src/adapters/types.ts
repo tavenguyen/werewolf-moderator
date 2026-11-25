@@ -80,4 +80,5 @@ export interface GameSessionAdapter {
   advanceLocalTurn?(): void;
   addOfflinePlayer?(name: string): void;
   removeOfflinePlayer?(playerId: PlayerId): void;
+  submitPublicHandVotes?(tallies: Record<PlayerId, number>): Promise<void>;
 }

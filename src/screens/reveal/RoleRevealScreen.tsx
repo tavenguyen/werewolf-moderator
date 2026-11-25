@@ -26,6 +26,12 @@ export default function RoleRevealScreen({}: Props) {
   // Trạng thái nhấn giữ lá bài để xem vai (Press & Hold)
   const [isHolding, setIsHolding] = useState(false);
 
+  // Bước đệm xác nhận danh tính trước khi mở khóa vùng nhấn giữ
+  const [isConfirmedReady, setIsConfirmedReady] = useState(false);
+
+  // Cho phép người vừa bấm "Đã nhớ" lùi lại nếu người kế tiếp chưa xác nhận
+  const [canUndoPass, setCanUndoPass] = useState(false);
+
   // Đã xem vai ít nhất 1 lần trong lượt này -> mở khóa nút chuyền máy
   const [hasViewed, setHasViewed] = useState(false);
 
@@ -55,36 +61,46 @@ export default function RoleRevealScreen({}: Props) {
   // Timers tham chiếu để dọn dẹp khi unmount
   const timerSealingRef = useRef<number | null>(null);
   const timerEmergingRef = useRef<number | null>(null);
+  const holdDelayTimerRef = useRef<number | null>(null);
+
+  const clearHoldDelayTimer = () => {
+    if (holdDelayTimerRef.current !== null) {
+      window.clearTimeout(holdDelayTimerRef.current);
+      holdDelayTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     return () => {
+      clearHoldDelayTimer();
       if (timerSealingRef.current) window.clearTimeout(timerSealingRef.current);
       if (timerEmergingRef.current) window.clearTimeout(timerEmergingRef.current);
     };
   }, []);
 
-  // Thông tin vai trò của người chơi đang cầm máy
-  // Khi ở màn hình xem vai độc lập (demo/HUD test), mặc định ưu tiên role 'werewolf' để tester/user kiểm tra ngay
-  const myRoleId = (privateView?.roleId && privateView.roleId.trim() !== '')
-    ? privateView.roleId
-    : 'werewolf';
-  const roleImage = getRoleImage(myRoleId);
+  // Thông tin vai trò của người chơi đang cầm máy (không fallback sang vai khác khi chưa tải xong)
+  const rawRoleId = privateView?.roleId?.trim() ?? '';
+  const isRoleReady = rawRoleId.length > 0;
+  const myRoleId = isRoleReady ? rawRoleId : null;
+  const roleImage = myRoleId ? getRoleImage(myRoleId) : undefined;
 
   useEffect(() => {
     setImgLoadError(false);
   }, [myRoleId, currentIndex]);
-  const roleDef = ROLES_BY_ID[myRoleId] ?? {
-    id: myRoleId,
-    nameVi: myRoleId === 'werewolf' ? 'Ma sói' : 'Dân làng',
-    nameEn: myRoleId === 'werewolf' ? 'Werewolf' : 'Villager',
-    faction: myRoleId === 'werewolf' ? ('WEREWOLF' as const) : ('VILLAGER' as const),
-    shortDesc: myRoleId === 'werewolf'
-      ? 'Ban ngày ẩn mình giữa dân làng, ban đêm thức dậy cùng đồng đội để chọn một người cắn chết.'
-      : 'Bạn không có kỹ năng ban đêm. Hãy dùng suy luận để tìm ra Ma Sói.',
-  };
+
+  const roleDef = myRoleId
+    ? (ROLES_BY_ID[myRoleId] ?? {
+        id: myRoleId,
+        nameVi: myRoleId,
+        nameEn: myRoleId,
+        faction: 'VILLAGER' as const,
+        shortDesc: 'Vai trò bí mật.',
+      })
+    : null;
 
   // Lấy câu mô tả kỹ năng ngắn gọn (1 dòng)
-  const conciseDesc = roleDef.shortDesc.split('.')[0] + '.';
+  const conciseDesc = roleDef ? roleDef.shortDesc.split('.')[0] + '.' : '';
+  const isCardLocked = handoffStage !== 'idle' || !isConfirmedReady || !isRoleReady;
 
   // Icon nghệ thuật theo vai
   const getRoleIcon = (roleId: string, faction: string) => {
@@ -128,33 +144,52 @@ export default function RoleRevealScreen({}: Props) {
   };
 
   // =========================================================================
-  // THAO TÁC NHẤN GIỮ (PRESS & HOLD TO REVEAL)
-  // Bấm giữ -> Lật lên xem vai; Thả tay -> Tự động úp bài lại
+  // THAO TÁC NHẤN GIỮ (PRESS & HOLD TO REVEAL — TỐI THIỂU 250ms)
+  // Giữ >= 250ms -> Lật lên xem vai; Thả tay -> Tự động úp bài lại
   // =========================================================================
+  const startHoldWithDelay = () => {
+    if (isCardLocked) return;
+    clearHoldDelayTimer();
+    holdDelayTimerRef.current = window.setTimeout(() => {
+      holdDelayTimerRef.current = null;
+      setIsHolding(true);
+      setHasViewed(true);
+    }, 250);
+  };
+
+  const stopHold = () => {
+    clearHoldDelayTimer();
+    setIsHolding(false);
+  };
+
   const handleHoldStart = (e: React.PointerEvent) => {
     // Chỉ nhận chuột trái hoặc cảm ứng
     if (e.button !== undefined && e.button !== 0) return;
-    if (handoffStage !== 'idle') return;
-
-    setIsHolding(true);
-    setHasViewed(true);
-
-    try {
-      navigator.vibrate?.(25);
-    } catch {
-      // ignore
-    }
+    startHoldWithDelay();
   };
 
   const handleHoldEnd = () => {
-    if (!isHolding) return;
-    setIsHolding(false);
+    stopHold();
+  };
 
-    try {
-      navigator.vibrate?.(15);
-    } catch {
-      // ignore
+  const handleConfirmReady = () => {
+    if (handoffStage !== 'idle') return;
+    setIsConfirmedReady(true);
+    setCanUndoPass(false);
+  };
+
+  const handleUndoPass = () => {
+    if (!canUndoPass || currentIndex <= 0 || handoffStage !== 'idle') return;
+    stopHold();
+    const prevIdx = currentIndex - 1;
+    const prevP = players[prevIdx];
+    if (prevP && actions.setLocalActivePlayer) {
+      actions.setLocalActivePlayer(prevP.id);
     }
+    setCurrentIndex(prevIdx);
+    setIsConfirmedReady(true);
+    setHasViewed(true);
+    setCanUndoPass(false);
   };
 
   // =========================================================================
@@ -163,14 +198,8 @@ export default function RoleRevealScreen({}: Props) {
   const handlePassOrStartNight = () => {
     if (handoffStage !== 'idle') return;
 
-    try {
-      navigator.vibrate?.(35);
-    } catch {
-      // ignore
-    }
-
     // Úp bài và chìm mờ vào bóng tối (350ms)
-    setIsHolding(false);
+    stopHold();
     setHandoffStage('sealing');
 
     timerSealingRef.current = window.setTimeout(async () => {
@@ -187,7 +216,9 @@ export default function RoleRevealScreen({}: Props) {
           actions.setLocalActivePlayer(nextP.id);
         }
         setCurrentIndex(nextIdx);
-        setHasViewed(false); // Reset để người tiếp theo bắt buộc phải nhấn giữ xem vai trước khi chuyền
+        setIsConfirmedReady(false);
+        setHasViewed(false); // Reset để người tiếp theo bắt buộc phải xác nhận & nhấn giữ xem vai
+        setCanUndoPass(true);
         setHandoffStage('emerging');
 
         timerEmergingRef.current = window.setTimeout(() => {
@@ -218,37 +249,43 @@ export default function RoleRevealScreen({}: Props) {
         </div>
 
         <div
-          className={`ritual-card-stage ${isHolding ? 'is-holding' : ''} handoff-${handoffStage}`}
+          className={`ritual-card-stage ${isHolding ? 'is-holding' : ''} ${isCardLocked ? 'is-locked' : ''} handoff-${handoffStage}`}
           onPointerDown={handleHoldStart}
           onPointerUp={handleHoldEnd}
           onPointerLeave={handleHoldEnd}
           onPointerCancel={handleHoldEnd}
           onBlur={handleHoldEnd}
           onKeyDown={(e) => {
-            if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && handoffStage === 'idle') {
+            if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && !isCardLocked) {
               e.preventDefault();
-              setIsHolding(true);
-              setHasViewed(true);
+              startHoldWithDelay();
             }
           }}
           onKeyUp={(e) => {
             if (e.key === ' ' || e.key === 'Enter') {
               e.preventDefault();
-              setIsHolding(false);
+              stopHold();
             }
           }}
           onContextMenu={(e) => e.preventDefault()}
           role="button"
-          tabIndex={0}
+          tabIndex={isCardLocked ? -1 : 0}
+          aria-disabled={isCardLocked}
           aria-pressed={isHolding}
           aria-label={
-            isHolding
+            !isConfirmedReady
+              ? `Vui lòng xác nhận bạn là ${currentPlayer.name} trước khi xem vai`
+              : !isRoleReady
+              ? 'Đang chia lá bài'
+              : isHolding
               ? `Đang xem vai của ${currentPlayer.name}. Thả tay để úp bài lại.`
-              : `Chạm và giữ để xem vai của ${currentPlayer.name}`
+              : `Nhấn và giữ ít nhất 250ms để xem vai của ${currentPlayer.name}`
           }
         >
           {/* Sương mỏng & bụi sáng bùng lên phía sau thẻ khi đang giữ mở bài */}
-          <div className={`ritual-mist-burst faction-${roleDef.faction} side-${roleDef.faction}`} aria-hidden="true" />
+          {roleDef && (
+            <div className={`ritual-mist-burst faction-${roleDef.faction} side-${roleDef.faction}`} aria-hidden="true" />
+          )}
 
           <div className="ritual-card-body">
             {/* Mặt lưng: Nhung đen huyền bí, viền vàng đồng mảnh (Hiện khi buông tay) */}
@@ -262,62 +299,87 @@ export default function RoleRevealScreen({}: Props) {
               </div>
             </div>
 
-            {/* Mặt trước: Lật mở hiển thị vai trò (Hiện khi nhấn giữ) */}
-            <div
-              className={`ritual-card-face ritual-card-front faction-${roleDef.faction} side-${roleDef.faction} ${roleImage && !imgLoadError ? 'has-art' : ''}`}
-              aria-hidden={!isHolding}
-            >
-              {/* 1. Vùng trên (15% chiều cao): Badge phe độc lập, thoáng đãng */}
-              <header className="ritual-card-header">
-                <span className="ritual-faction-label">
-                  {roleDef.faction === 'WEREWOLF'
-                    ? 'PHE MA SÓI'
-                    : roleDef.faction === 'THIRD_PARTY'
-                    ? 'PHE THỨ BA'
-                    : 'PHE DÂN LÀNG'}
-                </span>
-              </header>
+            {/* Mặt trước: Lật mở hiển thị vai trò (Chỉ render khi đã có roleId thực) */}
+            {roleDef && myRoleId && (
+              <div
+                className={`ritual-card-face ritual-card-front faction-${roleDef.faction} side-${roleDef.faction} ${roleImage && !imgLoadError ? 'has-art' : ''}`}
+                aria-hidden={!isHolding}
+              >
+                {/* 1. Vùng trên (15% chiều cao): Badge phe độc lập, thoáng đãng */}
+                <header className="ritual-card-header">
+                  <span className="ritual-faction-label">
+                    {roleDef.faction === 'WEREWOLF'
+                      ? 'PHE MA SÓI'
+                      : roleDef.faction === 'THIRD_PARTY'
+                      ? 'PHE THỨ BA'
+                      : 'PHE DÂN LÀNG'}
+                  </span>
+                </header>
 
-              {/* 2. Vùng giữa (50%–55% chiều cao): Chân dung nhân vật 75%–80% chiều rộng, đáy mờ dần */}
-              <div className="ritual-card-art-zone" aria-hidden="true">
-                {roleImage && !imgLoadError ? (
-                  <div className="ritual-portrait-frame">
-                    <img
-                      src={roleImage}
-                      alt=""
-                      className="ritual-portrait-img"
-                      decoding="async"
-                      draggable={false}
-                      onError={() => setImgLoadError(true)}
-                    />
-                    <div className="ritual-portrait-fade" />
-                  </div>
-                ) : (
-                  <div className="ritual-role-icon">
-                    <span>{getRoleIcon(myRoleId, roleDef.faction)}</span>
-                  </div>
-                )}
+                {/* 2. Vùng giữa (50%–55% chiều cao): Chân dung nhân vật 75%–80% chiều rộng, đáy mờ dần */}
+                <div className="ritual-card-art-zone" aria-hidden="true">
+                  {roleImage && !imgLoadError ? (
+                    <div className="ritual-portrait-frame">
+                      <img
+                        src={roleImage}
+                        alt=""
+                        className="ritual-portrait-img"
+                        decoding="async"
+                        draggable={false}
+                        onError={() => setImgLoadError(true)}
+                      />
+                      <div className="ritual-portrait-fade" />
+                    </div>
+                  ) : (
+                    <div className="ritual-role-icon">
+                      <span>{getRoleIcon(myRoleId, roleDef.faction)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Vùng dưới (30% chiều cao): Tên vai và mô tả trên nền tối sạch sẽ */}
+                <footer className="ritual-role-info">
+                  <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
+                  <p className="ritual-role-desc">{conciseDesc}</p>
+                </footer>
               </div>
-
-              {/* 3. Vùng dưới (30% chiều cao): Tên vai và mô tả trên nền tối sạch sẽ */}
-              <footer className="ritual-role-info">
-                <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
-                <p className="ritual-role-desc">{conciseDesc}</p>
-              </footer>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 3. Mép dưới: Gợi ý khi chưa xem HOẶC Nút duy nhất chuyền máy sau khi đã xem */}
+      {/* 3. Mép dưới: Bước xác nhận / Gợi ý giữ bài / Nút chuyền máy */}
       <div className="ritual-bottom-area">
-        {!hasViewed && (
-          <div className="ritual-bottom-hint">
-            {isHolding ? 'Thả tay để úp bài lại' : 'Chạm và giữ để xem vai'}
-          </div>
-        )}
+        {!isConfirmedReady ? (
+          <div className="ritual-confirm-actions">
+            <button
+              type="button"
+              className="ritual-pass-btn"
+              onClick={handleConfirmReady}
+              disabled={handoffStage !== 'idle'}
+            >
+              Tôi là {currentPlayer.name} · Sẵn sàng xem vai
+            </button>
 
-        {hasViewed && (
+            {canUndoPass && currentIndex > 0 && handoffStage === 'idle' && (
+              <button
+                type="button"
+                className="ritual-undo-btn"
+                onClick={handleUndoPass}
+              >
+                Xem lại vai vừa rồi
+              </button>
+            )}
+          </div>
+        ) : !isRoleReady ? (
+          <div className="ritual-bottom-hint" role="status">
+            Đang chia lá bài...
+          </div>
+        ) : !hasViewed ? (
+          <div className="ritual-bottom-hint">
+            {isHolding ? 'Thả tay để úp bài lại' : 'Nhấn giữ lá bài để xem vai'}
+          </div>
+        ) : (
           <button
             type="button"
             className={`ritual-pass-btn ${isLastPlayer ? 'is-final' : ''}`}

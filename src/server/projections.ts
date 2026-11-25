@@ -79,6 +79,8 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     princeRevealed: gameState?.princeRevealed,
     mutedPlayerId: gameState?.mutedPlayerId ?? null,
     doubleVoteDay: Boolean(gameState?.doubleVoteDay),
+    runoffCandidates:
+      gameState?.phase === 'DAY_RUNOFF' ? (gameState.dayState?.runoffCandidates ?? []) : undefined,
   };
 }
 

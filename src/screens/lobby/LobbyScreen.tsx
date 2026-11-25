@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES, ROLES_BY_ID } from '../../engine/roles';
 import { searchRoles } from '../../engine/roleSearch';
@@ -62,6 +62,13 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const addPlayerInputRef = useRef<HTMLInputElement>(null);
+  const advSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const sortedPlayers = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
 
   // Settings
   const currentSettings = state.publicView?.settings ?? {
@@ -92,13 +99,30 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     }
   }, [isHost, currentSettings.customDeck]);
 
-  // Lock body scroll when Advanced Sheet / Modal is open
+  // Lock body scroll when Advanced Sheet / Modal is open & focus search only on non-touch desktop
   useEffect(() => {
     if (advancedModalOpen) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+
+      const isCoarsePointer =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches;
+      const isNarrow = typeof window !== 'undefined' && window.innerWidth < 768;
+
+      let rafId: number | undefined;
+      if (!isCoarsePointer && !isNarrow) {
+        rafId = window.requestAnimationFrame(() => {
+          advSearchInputRef.current?.focus();
+        });
+      }
+
       return () => {
         document.body.style.overflow = originalOverflow;
+        if (rafId !== undefined) {
+          window.cancelAnimationFrame(rafId);
+        }
       };
     }
   }, [advancedModalOpen]);
@@ -204,22 +228,126 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
     void actions.updateSettings({ customDeck: DEFAULT_INITIAL_ROLES });
   };
 
+  const replaceOfflinePlayers = (nextNames: string[]) => {
+    if (!actions.removeOfflinePlayer || !actions.addOfflinePlayer) return;
+    for (const p of sortedPlayers) {
+      actions.removeOfflinePlayer(p.id);
+    }
+    for (const name of nextNames) {
+      actions.addOfflinePlayer(name);
+    }
+    setEditingPlayerId(null);
+    setConfirmDeleteId(null);
+  };
+
   const handleAddOfflinePlayer = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const trimmed = newPlayerName.trim();
-    if (!trimmed) return;
-    if (players.some((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase())) {
-      setNotice(`Tên "${trimmed}" đã có trong bàn.`);
-      return;
-    }
+    const candidates = newPlayerName
+      .split(/[,\n\r]+/)
+      .map((part) => part.trim().slice(0, 20))
+      .filter((part) => part.length > 0);
+
+    if (candidates.length === 0) return;
+
+    const existingNormalized = new Set(
+      sortedPlayers.map((p) => p.name.trim().toLowerCase())
+    );
+    let remainingSlots = 16 - sortedPlayers.length;
+    let addedCount = 0;
+    const duplicateNames: string[] = [];
+    let overflowCount = 0;
+
     try {
-      actions.addOfflinePlayer(trimmed);
-      setNewPlayerName('');
-      setNotice('');
+      for (const candidate of candidates) {
+        const norm = candidate.toLowerCase();
+        if (existingNormalized.has(norm)) {
+          duplicateNames.push(candidate);
+          continue;
+        }
+        if (remainingSlots <= 0) {
+          overflowCount++;
+          continue;
+        }
+        actions.addOfflinePlayer?.(candidate);
+        existingNormalized.add(norm);
+        remainingSlots--;
+        addedCount++;
+      }
+
+      if (addedCount > 0) {
+        setNewPlayerName('');
+        window.requestAnimationFrame(() => {
+          addPlayerInputRef.current?.focus();
+        });
+      }
+
+      if (addedCount === 0 && duplicateNames.length === 1 && candidates.length === 1) {
+        setNotice(`Tên "${duplicateNames[0]}" đã có trong bàn.`);
+      } else if (duplicateNames.length > 0 || overflowCount > 0) {
+        const skippedCount = duplicateNames.length + overflowCount;
+        setNotice(
+          addedCount > 0
+            ? `Đã thêm ${addedCount} người (bỏ qua ${skippedCount} tên trùng hoặc vượt 16 ghế).`
+            : `Không thể thêm (${skippedCount} tên trùng hoặc đã đủ 16 ghế).`
+        );
+      } else {
+        setNotice('');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể thêm người chơi';
       setNotice(msg);
     }
+  };
+
+  const handleStartEditPlayer = (playerId: string, currentName: string) => {
+    setConfirmDeleteId(null);
+    setEditingPlayerId(playerId);
+    setEditingName(currentName);
+    setNotice('');
+  };
+
+  const handleSaveEditPlayer = (playerId: string) => {
+    const trimmed = editingName.trim().slice(0, 20);
+    if (!trimmed) {
+      setNotice('Tên người chơi không được để trống.');
+      return;
+    }
+    const duplicate = sortedPlayers.some(
+      (p) => p.id !== playerId && p.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      setNotice(`Tên "${trimmed}" đã có trong bàn.`);
+      return;
+    }
+    const target = sortedPlayers.find((p) => p.id === playerId);
+    if (target && target.name === trimmed) {
+      setEditingPlayerId(null);
+      setNotice('');
+      return;
+    }
+    const nextNames = sortedPlayers.map((p) => (p.id === playerId ? trimmed : p.name));
+    replaceOfflinePlayers(nextNames);
+    setNotice('');
+  };
+
+  const handleMoveOfflinePlayer = (index: number, delta: -1 | 1) => {
+    const targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= sortedPlayers.length) return;
+    const nextNames = sortedPlayers.map((p) => p.name);
+    const temp = nextNames[index];
+    nextNames[index] = nextNames[targetIndex];
+    nextNames[targetIndex] = temp;
+    replaceOfflinePlayers(nextNames);
+    setNotice('');
+  };
+
+  const handleConfirmDeletePlayer = (playerId: string) => {
+    if (isSingleDevice) {
+      actions.removeOfflinePlayer?.(playerId);
+    } else {
+      void actions.hostEmergencyEliminate(playerId);
+    }
+    setConfirmDeleteId(null);
   };
 
   const handleStartGame = async () => {
@@ -377,10 +505,11 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
             {isSingleDevice && (
               <form className="compact-add-player-row" onSubmit={handleAddOfflinePlayer}>
                 <input
+                  ref={addPlayerInputRef}
                   type="text"
-                  placeholder="Tên người chơi mới..."
+                  placeholder="Tên mới (hoặc An, Bình, Chi)..."
                   value={newPlayerName}
-                  maxLength={20}
+                  maxLength={200}
                   disabled={metrics.realPlayersCount >= 16}
                   onChange={(e) => setNewPlayerName(e.target.value)}
                   className="compact-input-name"
@@ -397,7 +526,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
 
             {/* Danh sách người chơi gọn gàng */}
             <div className="compact-players-list">
-              {players.length === 0 ? (
+              {sortedPlayers.length === 0 ? (
                 <div className="compact-empty-state">
                   <p>
                     {isSingleDevice
@@ -406,11 +535,13 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                   </p>
                 </div>
               ) : (
-                players.map((player) => {
+                sortedPlayers.map((player, index) => {
                   const isThisPlayerHost =
                     !isSingleDevice &&
                     isHostPlayer &&
                     (player.seatIndex === 0 || player.id === hostPlayerId);
+                  const isEditing = isSingleDevice && editingPlayerId === player.id;
+                  const isConfirmingDelete = confirmDeleteId === player.id;
 
                   return (
                     <div className="compact-player-item" key={player.id}>
@@ -422,28 +553,125 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                             title={player.isConnected ? 'Online' : 'Offline'}
                           />
                         )}
-                        <span className="player-name-text">{player.name}</span>
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            className="player-inline-edit-input"
+                            value={editingName}
+                            maxLength={20}
+                            autoFocus
+                            aria-label={`Sửa tên ${player.name}`}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveEditPlayer(player.id);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setEditingPlayerId(null);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="player-name-text">{player.name}</span>
+                        )}
                         {isThisPlayerHost && (
                           <span className="host-pill">HOST</span>
                         )}
                       </div>
 
                       {isHost && !isThisPlayerHost && (
-                        <button
-                          type="button"
-                          className="player-del-btn"
-                          onClick={() => {
-                            if (isSingleDevice) {
-                              actions.removeOfflinePlayer(player.id);
-                            } else {
-                              void actions.hostEmergencyEliminate(player.id);
-                            }
-                          }}
-                          title={`Bớt ${player.name}`}
-                          aria-label={`Bớt ${player.name}`}
-                        >
-                          ×
-                        </button>
+                        <div className="player-row-actions">
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                className="player-action-btn confirm"
+                                onClick={() => handleSaveEditPlayer(player.id)}
+                                title="Lưu tên"
+                                aria-label={`Lưu tên ${player.name}`}
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                className="player-action-btn"
+                                onClick={() => setEditingPlayerId(null)}
+                                title="Hủy sửa"
+                                aria-label="Hủy sửa tên"
+                              >
+                                ✕
+                              </button>
+                            </>
+                          ) : isConfirmingDelete ? (
+                            <div className="player-confirm-delete-group">
+                              <button
+                                type="button"
+                                className="player-confirm-del-btn"
+                                onClick={() => handleConfirmDeletePlayer(player.id)}
+                                aria-label={`Xác nhận xóa ${player.name}`}
+                              >
+                                Xóa?
+                              </button>
+                              <button
+                                type="button"
+                                className="player-cancel-del-btn"
+                                onClick={() => setConfirmDeleteId(null)}
+                                aria-label={`Hủy xóa ${player.name}`}
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {isSingleDevice && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="player-action-btn"
+                                    disabled={index === 0}
+                                    onClick={() => handleMoveOfflinePlayer(index, -1)}
+                                    title="Đổi lên ghế trên"
+                                    aria-label={`Đưa ${player.name} lên ghế trên`}
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="player-action-btn"
+                                    disabled={index === sortedPlayers.length - 1}
+                                    onClick={() => handleMoveOfflinePlayer(index, 1)}
+                                    title="Đổi xuống ghế dưới"
+                                    aria-label={`Đưa ${player.name} xuống ghế dưới`}
+                                  >
+                                    ↓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="player-action-btn"
+                                    onClick={() => handleStartEditPlayer(player.id, player.name)}
+                                    title={`Sửa tên ${player.name}`}
+                                    aria-label={`Sửa tên ${player.name}`}
+                                  >
+                                    ✎
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                className="player-del-btn"
+                                onClick={() => {
+                                  setEditingPlayerId(null);
+                                  setConfirmDeleteId(player.id);
+                                }}
+                                title={`Bớt ${player.name}`}
+                                aria-label={`Bớt ${player.name}`}
+                              >
+                                ×
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -696,13 +924,13 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
               {/* Thanh tìm kiếm nhanh (Instant Search không dấu) */}
               <div className="sheet-search-wrap">
                 <input
+                  ref={advSearchInputRef}
                   type="text"
                   placeholder="Tìm kiếm vai trò nâng cao (VD: soi, pt, witch, ban)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={(e) => e.target.select()}
                   className="sheet-search-input"
-                  autoFocus
                 />
                 {searchQuery && (
                   <button
