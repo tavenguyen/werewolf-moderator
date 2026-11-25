@@ -57,6 +57,11 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [isCurseAction, setIsCurseAction] = useState<boolean | null>(null);
   const [isTroublemakerActive, setIsTroublemakerActive] = useState<boolean | null>(null);
   const [isFoxSkip, setIsFoxSkip] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [myRoleId]);
 
   // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy
   const victimPlayerId = privateView?.skills?.witchVictimId;
@@ -432,14 +437,12 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         <section className="night-content role-content" aria-live="polite">
           <div className="role-heading">
             <div className="role-caller">
-              {myRoleImage ? (
+              {myRoleImage && !avatarError ? (
                 <img
                   src={myRoleImage}
                   alt={roleDef.nameVi}
                   className="night-role-avatar"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
+                  onError={() => setAvatarError(true)}
                 />
               ) : (
                 <span className="role-glyph" aria-hidden="true">✦</span>

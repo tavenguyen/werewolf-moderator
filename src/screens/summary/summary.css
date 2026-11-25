@@ -325,6 +325,11 @@
   border: 1px solid rgba(142, 30, 36, 0.8);
 }
 
+.summary-card-back.side-third {
+  background: linear-gradient(135deg, #3d1b4d, #250f2e);
+  border: 1px solid rgba(168, 85, 247, 0.8);
+}
+
 .summary-card-back.side-seer {
   background: linear-gradient(135deg, #2a2542, #1a172c);
   border: 1px solid rgba(77, 71, 111, 0.8);
@@ -385,7 +390,7 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 12px rgba(168, 85, 247, 0.35);
 }
 
-.summary-card-open:hover .summary-role-img {
+.summary-card.is-open:hover .summary-role-img {
   transform: scale(1.06);
 }
 

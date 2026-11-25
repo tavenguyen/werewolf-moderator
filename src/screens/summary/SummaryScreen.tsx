@@ -34,6 +34,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<'cards' | 'timeline'>('cards');
   const [notice, setNotice] = useState('');
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   // Chuẩn bị danh sách vai trò người chơi
   const rolesList: RoleDisplayItem[] = (() => {
@@ -45,7 +46,21 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
           p.faction === 'WEREWOLF' ? 'wolf' : p.faction === 'THIRD_PARTY' ? 'third' : 'village';
         const sideName = side === 'wolf' ? 'Phe Ma Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân làng';
         const symbol =
-          side === 'wolf' ? '🐺' : p.finalRoleId === 'seer' ? '🔮' : p.finalRoleId === 'witch' ? '🧪' : p.finalRoleId === 'hunter' ? '🎯' : '🛡️';
+          side === 'wolf'
+            ? '🐺'
+            : side === 'third'
+            ? p.finalRoleId === 'white_wolf'
+              ? '🐺❄️'
+              : p.finalRoleId === 'tanner'
+              ? '🎭'
+              : '🕯️'
+            : p.finalRoleId === 'seer'
+            ? '🔮'
+            : p.finalRoleId === 'witch'
+            ? '🧪'
+            : p.finalRoleId === 'hunter'
+            ? '🎯'
+            : '🛡️';
         return {
           id: p.id,
           name: p.name,
@@ -213,17 +228,12 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                       <div className="role-revealed-wrap">
                         <span className="role-side-tag">{player.sideName}</span>
                         <div className="role-symbol-display" aria-hidden="true">
-                          {player.finalRoleId && getRoleImage(player.finalRoleId) ? (
+                          {player.finalRoleId && getRoleImage(player.finalRoleId) && !failedImages[player.id] ? (
                             <img
                               src={getRoleImage(player.finalRoleId)}
                               alt={player.finalRoleName}
                               className="summary-role-img"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                if (e.currentTarget.parentElement) {
-                                  e.currentTarget.parentElement.innerText = player.symbol;
-                                }
-                              }}
+                              onError={() => setFailedImages((prev) => ({ ...prev, [player.id]: true }))}
                             />
                           ) : (
                             player.symbol

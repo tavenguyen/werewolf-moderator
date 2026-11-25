@@ -13,6 +13,7 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
   const [filterSide, setFilterSide] = useState<RoleSide | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<GameRole | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const detailPanelRef = useRef<HTMLElement>(null);
 
@@ -208,17 +209,12 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                   <header className="masa-detail-hero">
                     <div className="masa-hero-identity">
                       <div className={`masa-role-avatar-seal side-${selectedRole.side}`} aria-hidden="true">
-                        {selectedRole.image ? (
+                        {selectedRole.image && !failedImages[selectedRole.id] ? (
                           <img
                             src={selectedRole.image}
                             alt={selectedRole.name}
                             className="masa-avatar-seal-img"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              if (e.currentTarget.parentElement) {
-                                e.currentTarget.parentElement.innerText = selectedRole.symbol;
-                              }
-                            }}
+                            onError={() => setFailedImages((prev) => ({ ...prev, [selectedRole.id]: true }))}
                           />
                         ) : (
                           <span>{selectedRole.symbol}</span>
@@ -234,16 +230,14 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                   </header>
 
                   {/* Card Art Showcase for Illustrated Roles */}
-                  {selectedRole.image && (
+                  {selectedRole.image && !failedImages[selectedRole.id] && (
                     <div className="masa-emblem-showcase" aria-hidden="true">
                       <div className={`masa-emblem-card-frame side-${selectedRole.side}`}>
                         <img
                           src={selectedRole.image}
                           alt={selectedRole.name}
                           className="masa-emblem-card-art masa-emblem-full-img"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
+                          onError={() => setFailedImages((prev) => ({ ...prev, [selectedRole.id]: true }))}
                         />
                         <div className="masa-emblem-card-glow" />
                       </div>
@@ -427,17 +421,12 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                             <div className="masa-item-left">
                               <span className="masa-item-num">{roleNum}</span>
                               <span className={`masa-item-seal side-${role.side}`} aria-hidden="true">
-                                {role.image ? (
+                                {role.image && !failedImages[role.id] ? (
                                   <img
                                     src={role.image}
                                     alt=""
                                     className="masa-item-seal-img"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                      if (e.currentTarget.parentElement) {
-                                        e.currentTarget.parentElement.innerText = role.symbol;
-                                      }
-                                    }}
+                                    onError={() => setFailedImages((prev) => ({ ...prev, [role.id]: true }))}
                                   />
                                 ) : (
                                   role.symbol
