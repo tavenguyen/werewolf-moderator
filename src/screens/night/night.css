@@ -172,6 +172,17 @@ body.night-sleep-active {
   gap: 10px;
 }
 
+.night-role-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1.5px solid rgba(201, 134, 56, 0.55);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(201, 134, 56, 0.2);
+  background: #0b0e14;
+  flex: none;
+}
+
 .role-glyph {
   width: 40px;
   height: 40px;

@@ -352,6 +352,41 @@
 .role-symbol-display {
   font-size: 36px;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+}
+
+.summary-role-img {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1.5px solid rgba(201, 134, 56, 0.55);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 10px rgba(201, 134, 56, 0.25);
+  background: #0b0e14;
+  display: block;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-card-back.side-wolf .summary-role-img {
+  border-color: rgba(220, 38, 38, 0.65);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 12px rgba(220, 38, 38, 0.35);
+}
+
+.summary-card-back.side-village .summary-role-img {
+  border-color: rgba(201, 134, 56, 0.65);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 12px rgba(201, 134, 56, 0.3);
+}
+
+.summary-card-back.side-third .summary-role-img {
+  border-color: rgba(168, 85, 247, 0.65);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 12px rgba(168, 85, 247, 0.35);
+}
+
+.summary-card-open:hover .summary-role-img {
+  transform: scale(1.06);
 }
 
 .role-title-display {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
+import { getRoleImage } from '../../assets/roles';
 import './summary.css';
 
 type SummaryScreenProps = {
@@ -15,6 +16,7 @@ interface RoleDisplayItem {
   seatIndex: number;
   initialRoleName: string;
   finalRoleName: string;
+  finalRoleId: string;
   symbol: string;
   status: string;
   side: 'wolf' | 'village' | 'third';
@@ -50,6 +52,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
           seatIndex: p.seatIndex,
           initialRoleName: initDef?.nameVi ?? p.initialRoleId,
           finalRoleName: finalDef?.nameVi ?? p.finalRoleId,
+          finalRoleId: p.finalRoleId,
           symbol,
           status: p.isAlive ? 'Còn sống' : 'Đã chết',
           side,
@@ -67,6 +70,7 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
       seatIndex: p.seatIndex,
       initialRoleName: 'Chưa công bố',
       finalRoleName: 'Chưa công bố',
+      finalRoleId: '',
       symbol: '❓',
       status: p.isAlive ? 'Còn sống' : 'Đã chết',
       side: 'village' as const,
@@ -209,7 +213,21 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
                       <div className="role-revealed-wrap">
                         <span className="role-side-tag">{player.sideName}</span>
                         <div className="role-symbol-display" aria-hidden="true">
-                          {player.symbol}
+                          {player.finalRoleId && getRoleImage(player.finalRoleId) ? (
+                            <img
+                              src={getRoleImage(player.finalRoleId)}
+                              alt={player.finalRoleName}
+                              className="summary-role-img"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                if (e.currentTarget.parentElement) {
+                                  e.currentTarget.parentElement.innerText = player.symbol;
+                                }
+                              }}
+                            />
+                          ) : (
+                            player.symbol
+                          )}
                         </div>
                         <b className="role-title-display">{player.finalRoleName}</b>
                         {player.initialRoleName !== player.finalRoleName && (

@@ -29,6 +29,9 @@ export default function RoleRevealScreen({}: Props) {
   // Đã xem vai ít nhất 1 lần trong lượt này -> mở khóa nút chuyền máy
   const [hasViewed, setHasViewed] = useState(false);
 
+  // Fallback hiển thị icon nếu ảnh bị lỗi tải
+  const [imgLoadError, setImgLoadError] = useState(false);
+
   // Trạng thái chuyển giao khi bấm nút "Đã nhớ · Chuyền cho..."
   const [handoffStage, setHandoffStage] = useState<HandoffStage>('idle');
 
@@ -66,6 +69,10 @@ export default function RoleRevealScreen({}: Props) {
     ? privateView.roleId
     : 'werewolf';
   const roleImage = getRoleImage(myRoleId);
+
+  useEffect(() => {
+    setImgLoadError(false);
+  }, [myRoleId]);
   const roleDef = ROLES_BY_ID[myRoleId] ?? {
     id: myRoleId,
     nameVi: myRoleId === 'werewolf' ? 'Ma sói' : 'Dân làng',
@@ -247,7 +254,7 @@ export default function RoleRevealScreen({}: Props) {
         >
           <div className="ritual-card-body">
             {/* Sương mỏng & bụi sáng bùng lên khi đang giữ mở bài */}
-            <div className={`ritual-mist-burst faction-${roleDef.faction}`} aria-hidden="true" />
+            <div className={`ritual-mist-burst faction-${roleDef.faction} side-${roleDef.faction}`} aria-hidden="true" />
 
             {/* Mặt lưng: Nhung đen huyền bí, viền vàng đồng mảnh (Hiện khi buông tay) */}
             <div className="ritual-card-face ritual-card-back">
@@ -261,7 +268,7 @@ export default function RoleRevealScreen({}: Props) {
             </div>
 
             {/* Mặt trước: Lật mở hiển thị vai trò (Hiện khi nhấn giữ) */}
-            <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction} ${roleImage ? 'has-art' : ''}`}>
+            <div className={`ritual-card-face ritual-card-front faction-${roleDef.faction} side-${roleDef.faction} ${roleImage ? 'has-art' : ''}`}>
               {/* 1. Vùng trên (15% chiều cao): Badge phe độc lập, thoáng đãng */}
               <header className="ritual-card-header">
                 <span className="ritual-faction-label">
@@ -275,12 +282,13 @@ export default function RoleRevealScreen({}: Props) {
 
               {/* 2. Vùng giữa (50%–55% chiều cao): Chân dung nhân vật 75%–80% chiều rộng, đáy mờ dần */}
               <div className="ritual-card-art-zone" aria-hidden="true">
-                {roleImage ? (
+                {roleImage && !imgLoadError ? (
                   <div className="ritual-portrait-frame">
                     <img
                       src={roleImage}
                       alt={roleDef.nameVi}
                       className="ritual-portrait-img"
+                      onError={() => setImgLoadError(true)}
                     />
                     <div className="ritual-portrait-fade" />
                   </div>

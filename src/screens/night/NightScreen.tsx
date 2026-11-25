@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
+import { getRoleImage } from '../../assets/roles';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
 import type { PlayerId } from '../../engine/types';
 import './night.css';
@@ -31,6 +32,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
 
   const myRoleId = privateView?.roleId || 'villager';
   const roleDef = ROLES_BY_ID[myRoleId] ?? ROLES_BY_ID.villager;
+  const myRoleImage = getRoleImage(myRoleId);
   const canAct = Boolean(privateView?.canActCurrentTurn && !hasSubmitted);
   const validTargets = privateView?.validTargets ?? [];
   const currentTurnInfo = publicView?.currentTurnInfo;
@@ -430,7 +432,18 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         <section className="night-content role-content" aria-live="polite">
           <div className="role-heading">
             <div className="role-caller">
-              <span className="role-glyph" aria-hidden="true">✦</span>
+              {myRoleImage ? (
+                <img
+                  src={myRoleImage}
+                  alt={roleDef.nameVi}
+                  className="night-role-avatar"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <span className="role-glyph" aria-hidden="true">✦</span>
+              )}
               <div>
                 <h2>{roleDef.nameVi} THỨC GIẤC</h2>
                 <small>HÃY HÀNH ĐỘNG TRONG YÊN LẶNG</small>

@@ -225,25 +225,30 @@
   opacity: 0.95;
 }
 
-.ritual-card-front.faction-VILLAGER::before {
+.ritual-card-front.faction-VILLAGER::before,
+.ritual-card-front.side-VILLAGER::before {
   background: radial-gradient(circle at 50% 40%, rgba(201, 134, 56, 0.22) 0%, rgba(11, 14, 20, 0) 65%);
 }
 
-.ritual-card-front.faction-WEREWOLF {
+.ritual-card-front.faction-WEREWOLF,
+.ritual-card-front.side-WEREWOLF {
   border-color: rgba(239, 68, 68, 0.55);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 22px rgba(239, 68, 68, 0.22), inset 0 0 0 1px rgba(245, 158, 11, 0.25);
 }
 
-.ritual-card-front.faction-WEREWOLF::before {
+.ritual-card-front.faction-WEREWOLF::before,
+.ritual-card-front.side-WEREWOLF::before {
   background: radial-gradient(circle at 50% 38%, rgba(200, 36, 44, 0.32) 0%, rgba(11, 14, 20, 0) 68%);
 }
 
-.ritual-card-front.faction-THIRD_PARTY {
+.ritual-card-front.faction-THIRD_PARTY,
+.ritual-card-front.side-THIRD_PARTY {
   border-color: rgba(168, 85, 247, 0.55);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 22px rgba(168, 85, 247, 0.22), inset 0 0 0 1px rgba(245, 158, 11, 0.25);
 }
 
-.ritual-card-front.faction-THIRD_PARTY::before {
+.ritual-card-front.faction-THIRD_PARTY::before,
+.ritual-card-front.side-THIRD_PARTY::before {
   background: radial-gradient(circle at 50% 38%, rgba(168, 85, 247, 0.3) 0%, rgba(11, 14, 20, 0) 68%);
 }
 
@@ -275,19 +280,22 @@
   user-select: none;
 }
 
-.faction-VILLAGER .ritual-faction-label {
+.faction-VILLAGER .ritual-faction-label,
+.side-VILLAGER .ritual-faction-label {
   color: #cca45e;
   border-color: rgba(201, 134, 56, 0.4);
   background: rgba(201, 134, 56, 0.15);
 }
 
-.faction-WEREWOLF .ritual-faction-label {
+.faction-WEREWOLF .ritual-faction-label,
+.side-WEREWOLF .ritual-faction-label {
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.45);
   background: rgba(239, 68, 68, 0.16);
 }
 
-.faction-THIRD_PARTY .ritual-faction-label {
+.faction-THIRD_PARTY .ritual-faction-label,
+.side-THIRD_PARTY .ritual-faction-label {
   color: #c084fc;
   border-color: rgba(168, 85, 247, 0.45);
   background: rgba(168, 85, 247, 0.16);
@@ -327,13 +335,52 @@
   /* Mask làm mềm nhẹ 4 góc để hòa tuyệt đối vào quầng sáng thẻ bài */
   -webkit-mask-image: radial-gradient(circle at 50% 50%, black 60%, rgba(0, 0, 0, 0.85) 78%, transparent 100%);
   mask-image: radial-gradient(circle at 50% 50%, black 60%, rgba(0, 0, 0, 0.85) 78%, transparent 100%);
-  filter: drop-shadow(0 0 18px rgba(239, 68, 68, 0.35));
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
 }
 
-.is-holding .ritual-portrait-img {
+/* Lớp chuyển tiếp mờ dần đáy chân dung */
+.ritual-portrait-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28%;
+  background: linear-gradient(to bottom, transparent, rgba(11, 14, 20, 0.85));
+  pointer-events: none;
+}
+
+/* Hào quang & viền bóng theo phe (side-VILLAGER: Vàng/Ngọc, side-WEREWOLF: Đỏ thẫm, side-THIRD_PARTY: Tím) */
+.faction-VILLAGER .ritual-portrait-img,
+.side-VILLAGER .ritual-portrait-img {
+  filter: drop-shadow(0 0 16px rgba(236, 201, 75, 0.45)) drop-shadow(0 0 8px rgba(56, 178, 172, 0.35));
+}
+
+.is-holding .faction-VILLAGER .ritual-portrait-img,
+.is-holding .side-VILLAGER .ritual-portrait-img {
   transform: scale(1.04);
-  filter: drop-shadow(0 0 26px rgba(239, 68, 68, 0.6)) drop-shadow(0 0 10px rgba(245, 158, 11, 0.4));
+  filter: drop-shadow(0 0 26px rgba(236, 201, 75, 0.7)) drop-shadow(0 0 12px rgba(56, 178, 172, 0.5));
+}
+
+.faction-WEREWOLF .ritual-portrait-img,
+.side-WEREWOLF .ritual-portrait-img {
+  filter: drop-shadow(0 0 18px rgba(220, 38, 38, 0.5)) drop-shadow(0 0 8px rgba(153, 27, 27, 0.4));
+}
+
+.is-holding .faction-WEREWOLF .ritual-portrait-img,
+.is-holding .side-WEREWOLF .ritual-portrait-img {
+  transform: scale(1.04);
+  filter: drop-shadow(0 0 28px rgba(239, 68, 68, 0.75)) drop-shadow(0 0 12px rgba(185, 28, 28, 0.55));
+}
+
+.faction-THIRD_PARTY .ritual-portrait-img,
+.side-THIRD_PARTY .ritual-portrait-img {
+  filter: drop-shadow(0 0 18px rgba(168, 85, 247, 0.5)) drop-shadow(0 0 8px rgba(126, 34, 206, 0.4));
+}
+
+.is-holding .faction-THIRD_PARTY .ritual-portrait-img,
+.is-holding .side-THIRD_PARTY .ritual-portrait-img {
+  transform: scale(1.04);
+  filter: drop-shadow(0 0 28px rgba(168, 85, 247, 0.75)) drop-shadow(0 0 12px rgba(147, 51, 234, 0.55));
 }
 
 /* Fallback icon khi role chưa có ảnh minh họa */
@@ -453,17 +500,20 @@
   opacity: 0.85;
 }
 
-.faction-VILLAGER .ritual-mist-burst {
+.faction-VILLAGER .ritual-mist-burst,
+.side-VILLAGER .ritual-mist-burst {
   border: 2px solid rgba(236, 201, 75, 0.5);
   box-shadow: 0 0 25px rgba(236, 201, 75, 0.4);
 }
 
-.faction-WEREWOLF .ritual-mist-burst {
+.faction-WEREWOLF .ritual-mist-burst,
+.side-WEREWOLF .ritual-mist-burst {
   border: 2px solid rgba(229, 62, 62, 0.6);
   box-shadow: 0 0 25px rgba(229, 62, 62, 0.5);
 }
 
-.faction-THIRD_PARTY .ritual-mist-burst {
+.faction-THIRD_PARTY .ritual-mist-burst,
+.side-THIRD_PARTY .ritual-mist-burst {
   border: 2px solid rgba(183, 148, 244, 0.6);
   box-shadow: 0 0 25px rgba(183, 148, 244, 0.5);
 }

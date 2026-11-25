@@ -213,6 +213,12 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                             src={selectedRole.image}
                             alt={selectedRole.name}
                             className="masa-avatar-seal-img"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              if (e.currentTarget.parentElement) {
+                                e.currentTarget.parentElement.innerText = selectedRole.symbol;
+                              }
+                            }}
                           />
                         ) : (
                           <span>{selectedRole.symbol}</span>
@@ -234,7 +240,10 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                         <img
                           src={selectedRole.image}
                           alt={selectedRole.name}
-                          className="masa-emblem-card-art"
+                          className="masa-emblem-card-art masa-emblem-full-img"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
                         />
                         <div className="masa-emblem-card-glow" />
                       </div>
@@ -419,7 +428,17 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                               <span className="masa-item-num">{roleNum}</span>
                               <span className={`masa-item-seal side-${role.side}`} aria-hidden="true">
                                 {role.image ? (
-                                  <img src={role.image} alt="" className="masa-item-seal-img" />
+                                  <img
+                                    src={role.image}
+                                    alt=""
+                                    className="masa-item-seal-img"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      if (e.currentTarget.parentElement) {
+                                        e.currentTarget.parentElement.innerText = role.symbol;
+                                      }
+                                    }}
+                                  />
                                 ) : (
                                   role.symbol
                                 )}

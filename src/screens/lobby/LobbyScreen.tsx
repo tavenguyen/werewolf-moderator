@@ -527,7 +527,14 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                           title="Bấm để xem nhanh kỹ năng"
                         >
                           {getRoleImage(role.id) && (
-                            <img src={getRoleImage(role.id)} alt="" className="role-mini-avatar" />
+                            <img
+                              src={getRoleImage(role.id)}
+                              alt=""
+                              className="role-mini-avatar"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
                           )}
                           <span className="role-title">{role.nameVi}</span>
                           <span className="role-weight-gray">{weightFormatted}</span>
@@ -755,7 +762,14 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                             title="Bấm để xem nhanh kỹ năng"
                           >
                             {getRoleImage(role.id) && (
-                              <img src={getRoleImage(role.id)} alt="" className="role-mini-avatar" />
+                              <img
+                                src={getRoleImage(role.id)}
+                                alt=""
+                                className="role-mini-avatar"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
                             )}
                             <span className="role-title">{role.nameVi}</span>
                             {role.multiDeviceOnly && (
