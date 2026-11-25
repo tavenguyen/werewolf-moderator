@@ -74,9 +74,14 @@ def get_session_snapshot(page: Page) -> dict:
         return {"srcs": [], "turnCount": 0}
 
 
+class RateLimitError(Exception):
+    """Raised when Google AI Studio displays a rate limit banner or message."""
+
+
 def extract_new_image_base64(page: Page, snapshot: dict, timeout_sec: int = 90) -> str | None:
     """Wait for a newly generated image in Google AI Studio and extract its base64 data.
     Never falls back to existing/old images in the session.
+    Raises RateLimitError immediately if rate limit text is detected.
     Returns None if generation finishes with 'No image generated' or no new image.
     """
     start_time = time.time()
@@ -85,6 +90,14 @@ def extract_new_image_base64(page: Page, snapshot: dict, timeout_sec: int = 90) 
 
     js_check_and_extract = """
     ({ initialList, initialTurnCount }) => {
+        const bodyText = (document.body.innerText || '').toLowerCase();
+        if (
+            bodyText.includes("you've reached your rate limit") ||
+            bodyText.includes("reached your rate limit. please try again later")
+        ) {
+            return { status: 'rate_limit' };
+        }
+
         const initialSet = new Set(initialList || []);
         const turns = Array.from(document.querySelectorAll('ms-chat-turn'));
 
@@ -149,6 +162,8 @@ def extract_new_image_base64(page: Page, snapshot: dict, timeout_sec: int = 90) 
             has_started = True
             break
         res = page.evaluate(js_check_and_extract, payload)
+        if res and res.get("status") == "rate_limit":
+            raise RateLimitError("You've reached your rate limit. Please try again later.")
         if res and res.get("status") == "no_image_generated":
             return None
         if res and res.get("status") == "ok":
@@ -161,6 +176,9 @@ def extract_new_image_base64(page: Page, snapshot: dict, timeout_sec: int = 90) 
         is_generating = page.locator('button:has-text("Stop"), [aria-label*="Stop" i]').count() > 0
         res = page.evaluate(js_check_and_extract, payload)
         status = res.get("status") if res else "pending"
+
+        if status == "rate_limit":
+            raise RateLimitError("You've reached your rate limit. Please try again later.")
 
         if status == "no_image_generated" and not is_generating:
             return None
@@ -446,6 +464,10 @@ def main():
                     generated_ok = True
                     break
 
+                except RateLimitError as rle:
+                    print(f"\n⛔ DỪNG KHẨN CẤP tại '{role_id}': {rle}", file=sys.stderr)
+                    print("Google AI Studio đã chạm giới hạn lượt dùng (rate limit). Hãy thử lại sau!", file=sys.stderr)
+                    sys.exit(2)
                 except Exception as e:
                     print(f"[{role_id}] ✗ Error generating (attempt {attempt}/{max_attempts}): {e}", file=sys.stderr)
 
