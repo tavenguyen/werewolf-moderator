@@ -227,7 +227,7 @@ def main():
     )
     parser.add_argument("--test", action="store_true", help="Only run 3 representative roles (1 Werewolf, 1 Villager, 1 Third Party)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing icons")
-    parser.add_argument("--id", type=str, default=None, help="Generate for a specific role ID only")
+    parser.add_argument("--id", nargs="+", default=None, help="Generate for one or more specific role IDs (comma or space separated)")
     parser.add_argument("--url", type=str, default=DEFAULT_AI_STUDIO_URL, help=f"Google AI Studio prompt URL (default: {DEFAULT_AI_STUDIO_URL})")
     parser.add_argument("--include-system-instruction", action="store_true", help="Prepend SYSTEM_INSTRUCTION (omit if prompt session already has it)")
     parser.add_argument("--cdp", type=str, default=None, help="Connect over Chrome DevTools Protocol (e.g. http://localhost:9222)")
@@ -250,9 +250,15 @@ def main():
 
     # Filter roles
     if args.id:
-        targets = [r for r in all_roles if r["id"] == args.id]
-        if not targets:
-            print(f"Error: Role with ID '{args.id}' not found in {prompts_path}", file=sys.stderr)
+        requested_ids = []
+        for token in args.id:
+            requested_ids.extend([part.strip() for part in token.split(",") if part.strip()])
+        requested_set = set(requested_ids)
+        targets = [r for r in all_roles if r["id"] in requested_set]
+        found_ids = {r["id"] for r in targets}
+        missing = [rid for rid in requested_ids if rid not in found_ids]
+        if missing:
+            print(f"Error: Role ID(s) not found in {prompts_path}: {missing}", file=sys.stderr)
             sys.exit(1)
     elif args.test:
         wolf_pick = next((r for r in all_roles if r["faction"] == "WEREWOLF" and (args.force or not (output_dir / f"{r['id']}.webp").exists())), None)
