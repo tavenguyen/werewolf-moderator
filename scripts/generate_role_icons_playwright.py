@@ -55,33 +55,61 @@ def post_process_and_save(img: Image.Image, output_path: Path):
     resized_img.save(output_path, "WEBP", quality=82, method=6)
 
 
-def get_existing_image_srcs(page: Page) -> list:
-    """Return list of existing large image src URLs in current page."""
+def get_session_snapshot(page: Page) -> dict:
+    """Return existing large image srcs and chat turn count after SPA has settled."""
     try:
         return page.evaluate("""
-            () => Array.from(document.querySelectorAll('img'))
-                .filter(img => {
-                    const rect = img.getBoundingClientRect();
-                    return rect.width > 80 && rect.height > 80 && !img.src.includes('googleusercontent.com/a/');
-                })
-                .map(img => img.src)
+            () => {
+                const srcs = Array.from(document.querySelectorAll('img'))
+                    .filter(img => {
+                        const rect = img.getBoundingClientRect();
+                        return rect.width > 80 && rect.height > 80 && !img.src.includes('googleusercontent.com/a/');
+                    })
+                    .map(img => img.src);
+                const turnCount = document.querySelectorAll('ms-chat-turn').length;
+                return { srcs, turnCount };
+            }
         """)
     except Exception:
-        return []
+        return {"srcs": [], "turnCount": 0}
 
 
-def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 90) -> str | None:
+def extract_new_image_base64(page: Page, snapshot: dict, timeout_sec: int = 90) -> str | None:
     """Wait for a newly generated image in Google AI Studio and extract its base64 data.
     Never falls back to existing/old images in the session.
-    Returns None if generation finishes without producing any new image.
+    Returns None if generation finishes with 'No image generated' or no new image.
     """
     start_time = time.time()
-    initial_set = set(initial_srcs)
+    initial_srcs = snapshot.get("srcs", [])
+    initial_turn_count = snapshot.get("turnCount", 0)
 
-    js_extract = """
-    (initialList) => {
+    js_check_and_extract = """
+    ({ initialList, initialTurnCount }) => {
         const initialSet = new Set(initialList || []);
-        const imgs = Array.from(document.querySelectorAll('img')).filter(img => {
+        const turns = Array.from(document.querySelectorAll('ms-chat-turn'));
+
+        // Check if any newly added turn reported 'No image generated'
+        if (turns.length > initialTurnCount) {
+            const newTurns = turns.slice(initialTurnCount);
+            for (const t of newTurns) {
+                const txt = (t.innerText || '').toLowerCase();
+                if (txt.includes('no image generated')) {
+                    return { status: 'no_image_generated' };
+                }
+            }
+        }
+
+        // Scope search to newly added turns if ms-chat-turn is present; otherwise document
+        let candidateImgs = [];
+        if (turns.length > initialTurnCount) {
+            for (const t of turns.slice(initialTurnCount)) {
+                candidateImgs.push(...Array.from(t.querySelectorAll('img')));
+            }
+        } else {
+            candidateImgs = Array.from(document.querySelectorAll('img'));
+        }
+
+        const imgs = candidateImgs.filter(img => {
             const src = img.src || '';
             const rect = img.getBoundingClientRect();
             return (
@@ -95,7 +123,7 @@ def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 
 
         // Strictly select only NEW images that did not exist before submission
         const newImgs = imgs.filter(img => !initialSet.has(img.src));
-        if (newImgs.length === 0) return null;
+        if (newImgs.length === 0) return { status: 'pending' };
 
         const targetImg = newImgs[newImgs.length - 1];
 
@@ -104,21 +132,26 @@ def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 
                 .then(r => r.blob())
                 .then(blob => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
+                    reader.onloadend = () => resolve({ status: 'ok', dataUrl: reader.result });
                     reader.readAsDataURL(blob);
                 })
-                .catch(() => resolve(null));
+                .catch(() => resolve({ status: 'pending' }));
         });
     }
     """
 
-    # Wait briefly for generation to start (Stop button appears or new image arrives)
+    payload = {"initialList": initial_srcs, "initialTurnCount": initial_turn_count}
+
+    # Wait briefly for generation to start (Stop button appears or new image/error arrives)
     has_started = False
     for _ in range(10):
         if page.locator('button:has-text("Stop"), [aria-label*="Stop" i]').count() > 0:
             has_started = True
             break
-        if page.evaluate(js_extract, list(initial_set)):
+        res = page.evaluate(js_check_and_extract, payload)
+        if res and res.get("status") == "no_image_generated":
+            return None
+        if res and res.get("status") == "ok":
             has_started = True
             break
         time.sleep(0.5)
@@ -126,16 +159,22 @@ def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 
     idle_checks_after_finish = 0
     while time.time() - start_time < timeout_sec:
         is_generating = page.locator('button:has-text("Stop"), [aria-label*="Stop" i]').count() > 0
+        res = page.evaluate(js_check_and_extract, payload)
+        status = res.get("status") if res else "pending"
+
+        if status == "no_image_generated" and not is_generating:
+            return None
+
         if is_generating:
             has_started = True
             idle_checks_after_finish = 0
         else:
-            data_url = page.evaluate(js_extract, list(initial_set))
-            if data_url and isinstance(data_url, str) and data_url.startswith("data:image"):
-                return data_url
+            if status == "ok":
+                data_url = res.get("dataUrl")
+                if data_url and isinstance(data_url, str) and data_url.startswith("data:image"):
+                    return data_url
             if has_started:
                 idle_checks_after_finish += 1
-                # Wait a couple of polls after Stop disappears in case image blob is still rendering
                 if idle_checks_after_finish >= 3:
                     return None
 
@@ -191,9 +230,10 @@ def find_prompt_input(page: Page, timeout_sec: int = 30):
     raise RuntimeError(f"Could not find prompt input textarea in Google AI Studio after {timeout_sec}s. Diagnostics: {diag}")
 
 
-def submit_prompt_in_ai_studio(page: Page, prompt: str):
+def submit_prompt_in_ai_studio(page: Page, prompt: str, input_elem=None):
     """Find prompt textarea in AI Studio, input prompt, and trigger Run."""
-    input_elem = find_prompt_input(page, timeout_sec=30)
+    if input_elem is None:
+        input_elem = find_prompt_input(page, timeout_sec=30)
 
     # Focus and clear
     input_elem.click()
@@ -207,6 +247,26 @@ def submit_prompt_in_ai_studio(page: Page, prompt: str):
     # Press Ctrl+Enter to Run
     page.keyboard.press("Control+Enter")
     print("  Prompt submitted (Ctrl+Enter). Waiting for generation...")
+
+
+def compute_fingerprint(img: Image.Image) -> np.ndarray:
+    """Compute a 32x32 grayscale fingerprint for fast duplicate detection."""
+    return np.array(img.convert("L").resize((32, 32), Image.Resampling.BILINEAR), dtype=np.float32)
+
+
+def find_duplicate_role(img: Image.Image, output_dir: Path, current_role_id: str) -> str | None:
+    """Return the role_id of an existing icon if img is visually identical (MAE < 2.0)."""
+    fp = compute_fingerprint(img)
+    for existing_file in output_dir.glob("*.webp"):
+        if existing_file.stem == current_role_id:
+            continue
+        try:
+            other_fp = compute_fingerprint(Image.open(existing_file))
+            if float(np.mean(np.abs(fp - other_fp))) < 2.0:
+                return existing_file.stem
+        except Exception:
+            continue
+    return None
 
 
 def check_and_handle_login(page: Page):
@@ -359,17 +419,26 @@ def main():
                         time.sleep(3)
                     is_first_prompt = False
 
-                    initial_images = get_existing_image_srcs(page)
-                    submit_prompt_in_ai_studio(page, prompt_to_send)
-                    data_url = extract_new_image_base64(page, initial_images, timeout_sec=90)
+                    # Wait until Angular SPA has rendered the prompt input AND existing session images
+                    input_elem = find_prompt_input(page, timeout_sec=30)
+                    time.sleep(1.5)
+                    snapshot = get_session_snapshot(page)
+
+                    submit_prompt_in_ai_studio(page, prompt_to_send, input_elem=input_elem)
+                    data_url = extract_new_image_base64(page, snapshot, timeout_sec=90)
 
                     if not data_url:
                         print(f"[{role_id}] ⚠ Không thấy ảnh mới được tạo ra (lần {attempt}/{max_attempts}). Xóa prompt và chạy lại...")
                         continue
 
-                    # Decode base64 and save
+                    # Decode base64 and verify it is NOT a duplicate of another role's image
                     header, b64_str = data_url.split(",", 1)
                     img = Image.open(io.BytesIO(base64.b64decode(b64_str)))
+                    dup_of = find_duplicate_role(img, output_dir, role_id)
+                    if dup_of:
+                        print(f"[{role_id}] ⚠ Ảnh thu được bị trùng với '{dup_of}' (lần {attempt}/{max_attempts}). Đang xóa prompt và tạo lại...")
+                        continue
+
                     post_process_and_save(img, out_file)
                     size_kb = out_file.stat().st_size / 1024
                     print(f"[{role_id}] ✓ Saved to {out_file} ({size_kb:.1f} KB)")
