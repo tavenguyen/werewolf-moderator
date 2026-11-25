@@ -220,7 +220,23 @@ def main():
     with sync_playwright() as p:
         if args.cdp:
             print(f"Connecting to existing Chrome via CDP at {args.cdp}...")
-            browser = p.chromium.connect_over_cdp(args.cdp)
+            try:
+                browser = p.chromium.connect_over_cdp(args.cdp)
+            except Exception as e:
+                print(
+                    f"\n✗ Không thể kết nối tới Chrome CDP tại {args.cdp} ({e}).\n"
+                    "Nguyên nhân thường gặp:\n"
+                    "  1. Chrome chưa được mở với --remote-debugging-port=9222, hoặc đã có tiến trình Chrome khác chạy ngầm từ trước.\n"
+                    "  2. Chrome phiên bản mới (136+) yêu cầu truyền thêm --user-data-dir khác thư mục mặc định khi bật remote debugging.\n\n"
+                    "Cách khắc phục nhanh:\n"
+                    "  - Cách A (Đơn giản nhất): Bỏ cờ --cdp, chạy trực tiếp:\n"
+                    "      python scripts/generate_role_icons_playwright.py --test\n"
+                    "    (Playwright sẽ tự mở Chrome riêng lưu đăng nhập vào .chrome-profile)\n"
+                    "  - Cách B (Dùng CDP): Mở Chrome bằng lệnh:\n"
+                    '      & "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\\chrome-ai-studio"\n',
+                    file=sys.stderr,
+                )
+                sys.exit(1)
             context = browser.contexts[0] if browser.contexts else browser.new_context()
             page = context.pages[0] if context.pages else context.new_page()
         else:
