@@ -120,25 +120,56 @@ def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 
     raise TimeoutError(f"Timed out waiting for generated image after {timeout_sec}s")
 
 
-def submit_prompt_in_ai_studio(page: Page, prompt: str):
-    """Find prompt textarea in AI Studio, input prompt, and trigger Run."""
+def find_prompt_input(page: Page, timeout_sec: int = 30):
+    """Wait for and return the main prompt input element in Google AI Studio."""
     selectors = [
-        'textarea[placeholder*="Type" i]',
+        'ms-prompt-input-wrapper textarea',
+        'ms-chunk-input textarea',
+        'footer textarea',
+        'textarea[aria-label*="Type something" i]',
+        'textarea[placeholder*="Type something" i]',
+        'textarea[placeholder*="Start typing" i]',
         'textarea[aria-label*="prompt" i]',
-        'textarea[aria-label*="Type" i]',
-        'div[contenteditable="true"]',
-        'textarea',
+        'div[contenteditable="true"][role="textbox"]',
+        'textarea:not([aria-label*="System" i])',
     ]
 
-    input_elem = None
-    for sel in selectors:
-        loc = page.locator(sel).last
-        if loc.count() > 0 and loc.is_visible():
-            input_elem = loc
-            break
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        for sel in selectors:
+            loc = page.locator(sel)
+            count = loc.count()
+            # Iterate from last to first (chat input is typically at the bottom)
+            for i in range(count - 1, -1, -1):
+                candidate = loc.nth(i)
+                try:
+                    if candidate.is_visible() and candidate.is_enabled():
+                        return candidate
+                except Exception:
+                    continue
+        time.sleep(1.0)
 
-    if not input_elem:
-        raise RuntimeError("Could not find prompt input textarea in Google AI Studio")
+    # Diagnostic info if not found
+    try:
+        diag = page.evaluate("""
+            () => ({
+                url: window.location.href,
+                textareas: Array.from(document.querySelectorAll('textarea')).map(t => ({
+                    aria: t.getAttribute('aria-label'),
+                    placeholder: t.getAttribute('placeholder'),
+                    visible: t.offsetParent !== null
+                })),
+                editables: Array.from(document.querySelectorAll('[contenteditable="true"]')).length
+            })
+        """)
+    except Exception:
+        diag = {}
+    raise RuntimeError(f"Could not find prompt input textarea in Google AI Studio after {timeout_sec}s. Diagnostics: {diag}")
+
+
+def submit_prompt_in_ai_studio(page: Page, prompt: str):
+    """Find prompt textarea in AI Studio, input prompt, and trigger Run."""
+    input_elem = find_prompt_input(page, timeout_sec=30)
 
     # Focus and clear
     input_elem.click()
@@ -238,7 +269,13 @@ def main():
                 )
                 sys.exit(1)
             context = browser.contexts[0] if browser.contexts else browser.new_context()
-            page = context.pages[0] if context.pages else context.new_page()
+            # Prefer an existing tab that is already on aistudio.google.com
+            ai_tab = next((pg for pg in context.pages if "aistudio.google.com" in (pg.url or "")), None)
+            page = ai_tab if ai_tab else (context.pages[0] if context.pages else context.new_page())
+            try:
+                page.bring_to_front()
+            except Exception:
+                pass
         else:
             profile_dir = Path(args.profile).resolve()
             profile_dir.mkdir(parents=True, exist_ok=True)
@@ -252,14 +289,18 @@ def main():
             )
             page = context.pages[0] if context.pages else context.new_page()
 
-        # Open AI Studio configured session
-        print("Opening your Google AI Studio prompt session...")
-        page.goto(args.url, wait_until="domcontentloaded")
-        time.sleep(4)
+        # Open AI Studio configured session only if not already there
+        if args.url not in (page.url or ""):
+            print("Opening your Google AI Studio prompt session...")
+            page.goto(args.url, wait_until="domcontentloaded")
+            time.sleep(3)
+        else:
+            print("Already on target Google AI Studio session tab.")
         check_and_handle_login(page)
 
         total = len(targets)
         success_count = 0
+        is_first_prompt = True
 
         for idx, item in enumerate(targets, 1):
             role_id = item["id"]
@@ -278,9 +319,11 @@ def main():
                 prompt_to_send = item["prompt"]
 
             try:
-                # Reload prompt baseline URL to keep clean state
-                page.goto(args.url, wait_until="domcontentloaded")
-                time.sleep(3)
+                # For subsequent items, reload prompt baseline URL to keep clean state
+                if not is_first_prompt:
+                    page.goto(args.url, wait_until="domcontentloaded")
+                    time.sleep(3)
+                is_first_prompt = False
 
                 initial_images = get_existing_image_srcs(page)
                 submit_prompt_in_ai_studio(page, prompt_to_send)
