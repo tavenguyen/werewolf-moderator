@@ -60,14 +60,22 @@ def inspect_turns(page: Page) -> list[dict]:
 
 
 def delete_turn_at_index(page: Page, idx: int) -> bool:
-    """Hover over ms-chat-turn[idx], open its options menu, and click Delete."""
+    """Scroll turn into center, open its options menu, and click Delete."""
     turn = page.locator("ms-chat-turn").nth(idx)
-    turn.scroll_into_view_if_needed()
-    turn.hover()
-    time.sleep(0.3)
+    try:
+        turn.evaluate("el => el.scrollIntoView({ block: 'center', behavior: 'instant' })")
+    except Exception:
+        turn.scroll_into_view_if_needed()
+    time.sleep(0.2)
+    try:
+        turn.hover(force=True)
+    except Exception:
+        pass
+    time.sleep(0.25)
 
-    # Try direct delete button first if present, otherwise open the three-dots menu
+    # Open the three-dots options menu
     menu_selectors = [
+        'button[aria-label*="Open options" i]',
         'button[aria-label*="more" i]',
         'button[aria-label*="options" i]',
         'button[aria-label*="menu" i]',
@@ -79,18 +87,16 @@ def delete_turn_at_index(page: Page, idx: int) -> bool:
     for sel in menu_selectors:
         loc = turn.locator(sel)
         if loc.count() > 0:
-            for i in range(loc.count()):
-                cand = loc.nth(i)
-                if cand.is_visible():
-                    menu_btn = cand
-                    break
-        if menu_btn:
+            menu_btn = loc.first
             break
 
     if not menu_btn:
         return False
 
-    menu_btn.click()
+    try:
+        menu_btn.click(force=True, timeout=5000)
+    except Exception:
+        menu_btn.evaluate("el => el.click()")
     time.sleep(0.35)
 
     # Click Delete in the Angular CDK overlay menu
@@ -103,8 +109,11 @@ def delete_turn_at_index(page: Page, idx: int) -> bool:
 
     for dsel in delete_selectors:
         del_loc = page.locator(dsel)
-        if del_loc.count() > 0 and del_loc.first.is_visible():
-            del_loc.first.click()
+        if del_loc.count() > 0:
+            try:
+                del_loc.first.click(force=True, timeout=5000)
+            except Exception:
+                del_loc.first.evaluate("el => el.click()")
             time.sleep(0.4)
             return True
 
