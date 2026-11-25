@@ -67,6 +67,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
   const [notice, setNotice] = useState('');
   const [deviceSelection, setDeviceSelection] = useState<'multi' | 'shared'>('multi');
   const [hostRoleSelection, setHostRoleSelection] = useState<'player' | 'board'>('player');
+  const hasRecoverable = actions.hasRecoverableSession();
 
   // Background Wake-Up Ping: Đánh thức server miễn phí (Render cold-start) ngay khi mở HomeScreen
   useEffect(() => {
@@ -391,6 +392,33 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
 
           {/* Central Hero Actions */}
           <div className="home-hero-actions-container">
+            {hasRecoverable && (
+              <div className="home-resume-banner" role="region" aria-label="Tiếp tục ván đang chơi">
+                <div className="home-resume-info">
+                  <span className="home-resume-dot" aria-hidden="true" />
+                  <div className="home-resume-text">
+                    <strong>Tiếp tục ván đang chơi</strong>
+                    <span>Quay lại bàn đấu trước khi rời đi</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="home-resume-btn"
+                  disabled={isLoading}
+                  onClick={handleReconnect}
+                >
+                  {isLoading ? 'Đang khôi phục...' : 'Khôi phục ván đấu'}
+                </button>
+              </div>
+            )}
+
+            {notice && !activeModal && (
+              <div className="home-modal-alert home-hero-alert" role="alert">
+                <span className="home-alert-icon">⚠️</span>
+                <span>{notice}</span>
+              </div>
+            )}
+
             <div className="home-hero-actions-primary">
               <button
                 type="button"

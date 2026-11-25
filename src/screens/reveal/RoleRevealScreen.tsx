@@ -19,9 +19,69 @@ export default function RoleRevealScreen({}: Props) {
   const privateView = state.privateView;
   const players = [...(publicView?.players ?? [])].sort((a, b) => a.seatIndex - b.seatIndex);
   const totalCount = Math.max(1, players.length);
+  const revealStorageKey = publicView?.roomCode
+    ? `werewolf_reveal_idx_${publicView.roomCode}_${publicView.gameGeneration ?? 0}`
+    : null;
 
   // Tiến trình chuyền máy một chiều (0 .. totalCount - 1)
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState<number>(() => {
+    if (!revealStorageKey || players.length === 0) return 0;
+    try {
+      const saved = localStorage.getItem(revealStorageKey);
+      if (saved !== null) {
+        const idx = Number.parseInt(saved, 10);
+        if (Number.isInteger(idx) && idx >= 0 && idx < players.length) {
+          return idx;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return 0;
+  });
+  const [restoredKey, setRestoredKey] = useState<string | null>(() =>
+    revealStorageKey && players.length > 0 ? revealStorageKey : null
+  );
+
+  // Khôi phục currentIndex nếu publicView / players tải sau khi mount
+  useEffect(() => {
+    if (!revealStorageKey || players.length === 0) return;
+    if (restoredKey === revealStorageKey) return;
+    try {
+      const saved = localStorage.getItem(revealStorageKey);
+      if (saved !== null) {
+        const idx = Number.parseInt(saved, 10);
+        if (Number.isInteger(idx) && idx >= 0 && idx < players.length) {
+          setCurrentIndex(idx);
+        } else {
+          setCurrentIndex(0);
+          setIsConfirmedReady(false);
+          setHasViewed(false);
+          setCanUndoPass(false);
+          setIsHolding(false);
+        }
+      } else {
+        setCurrentIndex(0);
+        setIsConfirmedReady(false);
+        setHasViewed(false);
+        setCanUndoPass(false);
+        setIsHolding(false);
+      }
+    } catch {
+      // ignore storage errors
+    }
+    setRestoredKey(revealStorageKey);
+  }, [revealStorageKey, players.length, restoredKey]);
+
+  // Lưu currentIndex vào localStorage khi thay đổi
+  useEffect(() => {
+    if (!revealStorageKey || restoredKey !== revealStorageKey) return;
+    try {
+      localStorage.setItem(revealStorageKey, String(currentIndex));
+    } catch {
+      // ignore storage errors
+    }
+  }, [revealStorageKey, currentIndex, restoredKey]);
 
   // Trạng thái nhấn giữ lá bài để xem vai (Press & Hold)
   const [isHolding, setIsHolding] = useState(false);
@@ -207,6 +267,13 @@ export default function RoleRevealScreen({}: Props) {
         // Tất cả đã xem xong -> Bắt đầu Đêm 1
         if (actions.startFirstNight) {
           await actions.startFirstNight();
+        }
+        if (revealStorageKey) {
+          try {
+            localStorage.removeItem(revealStorageKey);
+          } catch {
+            // ignore storage errors
+          }
         }
       } else {
         // Chuyển sang người tiếp theo một chiều

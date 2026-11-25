@@ -1931,3 +1931,106 @@
     font-size: 10px;
   }
 }
+
+/* ==========================================================================
+   F5 RESUME BANNER (Tiếp tục ván đang chơi)
+   ========================================================================== */
+.home-resume-banner {
+  width: min(100%, 460px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(16, 34, 28, 0.92), rgba(14, 20, 28, 0.95));
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(52, 211, 153, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  text-align: left;
+}
+
+.home-resume-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.home-resume-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.85);
+  animation: livePulse 2s infinite ease-in-out;
+}
+
+.home-resume-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-resume-text strong {
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 700;
+  color: #ecfdf5;
+  letter-spacing: 0.03em;
+}
+
+.home-resume-text span {
+  font-size: 11px;
+  color: rgba(209, 250, 229, 0.78);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-resume-btn {
+  flex: none;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(52, 211, 153, 0.6);
+  background: rgba(52, 211, 153, 0.2);
+  color: #ecfdf5;
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.home-resume-btn:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.32);
+  border-color: #6ee7b7;
+  transform: translateY(-1px);
+}
+
+.home-resume-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.home-hero-alert {
+  width: min(100%, 460px);
+}
+
+@media (max-width: 520px) {
+  .home-resume-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .home-resume-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+}

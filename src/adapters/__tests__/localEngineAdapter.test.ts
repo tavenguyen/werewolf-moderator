@@ -906,4 +906,243 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(roomState.foxInvestigationResult).toBeUndefined();
     expect(roomState.nightActionsAccumulator.fox?.isSkip).toBe(true);
   });
+
+  it('addOfflinePlayer dùng nextPlayerIdSeq tăng dần, không trùng ID sau khi xóa người chơi', () => {
+    const adapter = new LocalEngineAdapter();
+    adapter.addOfflinePlayer('An');
+    adapter.addOfflinePlayer('Bình');
+    adapter.addOfflinePlayer('Chi');
+
+    let players = adapter.getState().publicView?.players ?? [];
+    expect(players.map((p) => p.id)).toEqual(['player_1', 'player_2', 'player_3']);
+
+    // Xóa người chơi ở giữa (player_2)
+    adapter.removeOfflinePlayer('player_2');
+    adapter.addOfflinePlayer('Dũng');
+
+    players = adapter.getState().publicView?.players ?? [];
+    expect(players.map((p) => p.id)).toEqual(['player_1', 'player_3', 'player_4']);
+    expect(new Set(players.map((p) => p.id)).size).toBe(3);
+  });
+
+  it('hostExtendTime cộng +30s vào remainingBeforePause khi đang pause và không kéo dài khóa vote 60s', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.updateSettings({ dayDiscussionSeconds: 180, dayVoteLockSeconds: 60 });
+    await adapter.startGame(['seer', 'werewolf', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    // Kết thúc đêm để sang DAY_DISCUSS
+    for (let i = 0; i < 10; i++) {
+      if (adapter.getState().publicView?.phase !== 'NIGHT') break;
+      adapter.advanceLocalTurn();
+    }
+
+    if (adapter.getState().publicView?.phase === 'DAY_DISCUSS') {
+      const roomState = (adapter as unknown as { roomState: any }).roomState;
+      const initialLock = adapter.getState().publicView?.voteLockRemainingSeconds;
+      expect(initialLock).toBe(60);
+
+      // Pause -> Extend -> Resume
+      await adapter.hostPause();
+      const pausedRemaining = roomState.timers.remainingBeforePause as number;
+      await adapter.hostExtendTime();
+
+      expect(roomState.timers.remainingBeforePause).toBe(pausedRemaining + 30 * 1000);
+      expect(adapter.getState().publicView?.voteLockRemainingSeconds).toBe(60);
+
+      await adapter.hostResume();
+      const resumedRemaining = (roomState.timers.deadlineAt as number) - Date.now();
+      expect(resumedRemaining).toBeGreaterThan(pausedRemaining + 25 * 1000);
+      expect(adapter.getState().publicView?.voteLockRemainingSeconds).toBe(60);
+
+      await adapter.leaveRoom();
+    }
+  });
+
+  it('hostRematch giữ lại settings.customDeck (fallback getSmartPreset nếu rỗng) và dọn sạch timer/state ván trước', async () => {
+    const adapter = createPopulatedAdapter(6);
+    const customDeck = { werewolf: 1, seer: 1, witch: 1, villager: 3 };
+    await adapter.updateSettings({ customDeck });
+    await adapter.startGame(['werewolf', 'seer', 'witch', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    roomState.seerInvestigationResult = { targetId: 'player_1', result: 'WEREWOLF' };
+    roomState.nightActionAcks.add('player_2');
+    roomState.lastVoteTally = { tallies: { player_1: 2 }, abstainCount: 0 };
+
+    await adapter.hostRematch();
+
+    expect(adapter.getState().publicView?.phase).toBe('FIRST_NIGHT_SETUP');
+    expect(adapter.getState().publicView?.gameGeneration).toBe(2);
+    expect(roomState.seerInvestigationResult).toBeUndefined();
+    expect(roomState.nightActionAcks.size).toBe(0);
+    expect(roomState.nightTurnPlan.length).toBe(0);
+    expect(roomState.lastVoteTally).toBeUndefined();
+    expect((adapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).toBeNull();
+
+    const roleCounts: Record<string, number> = {};
+    for (const p of roomState.gameState.players) {
+      roleCounts[p.roleId] = (roleCounts[p.roleId] ?? 0) + 1;
+    }
+    expect(roleCounts).toEqual(customDeck);
+
+    // Fallback getSmartPreset nếu customDeck rỗng
+    await adapter.updateSettings({ customDeck: {} });
+    await adapter.hostRematch();
+    expect(roomState.gameState.players.length).toBe(6);
+  });
+
+  it('hostEmergencyEliminate chuyển HUNTER_SHOT / MAYOR_SUCCESSION, cập nhật activeLocalPlayerId ban đêm và dừng timer khi GAME_OVER', async () => {
+    // 1. Loại trúng Thợ săn -> chuyển HUNTER_SHOT
+    const hunterAdapter = createPopulatedAdapter(6);
+    await hunterAdapter.startGame([
+      'hunter',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    await hunterAdapter.startFirstNight();
+    const hunterRoom = (hunterAdapter as unknown as { roomState: any }).roomState;
+    const hunter = hunterRoom.gameState.players.find((p: any) => p.roleId === 'hunter');
+
+    await hunterAdapter.hostEmergencyEliminate(hunter.id);
+    expect(hunterAdapter.getState().publicView?.phase).toBe('HUNTER_SHOT');
+
+    // 2. Loại trúng Trưởng làng -> chuyển MAYOR_SUCCESSION
+    const mayorAdapter = createPopulatedAdapter(6);
+    await mayorAdapter.startGame([
+      'villager',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    await mayorAdapter.startFirstNight();
+    const mayorRoom = (mayorAdapter as unknown as { roomState: any }).roomState;
+    const villagerMayor = mayorRoom.gameState.players.find((p: any) => p.roleId === 'villager');
+    mayorRoom.gameState.mayorId = villagerMayor.id;
+    await mayorAdapter.hostEmergencyEliminate(villagerMayor.id);
+    expect(mayorAdapter.getState().publicView?.phase).toBe('MAYOR_SUCCESSION');
+
+    // 3. Loại activeLocalPlayerId ban đêm -> tự cập nhật sang người sống khác
+    const nightAdapter = createPopulatedAdapter(6);
+    await nightAdapter.startGame([
+      'seer',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    await nightAdapter.startFirstNight();
+    const activeId = nightAdapter.getState().playerId!;
+    const activeRole = nightAdapter.getState().privateView?.roleId;
+    if (activeRole !== 'werewolf') {
+      await nightAdapter.hostEmergencyEliminate(activeId);
+      if (nightAdapter.getState().publicView?.phase === 'NIGHT') {
+        expect(nightAdapter.getState().playerId).not.toBe(activeId);
+      }
+    }
+
+    // 4. Loại Sói duy nhất -> GAME_OVER và dừng dayTimerInterval
+    const endAdapter = createPopulatedAdapter(6);
+    await endAdapter.startGame([
+      'werewolf',
+      'seer',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    await endAdapter.startFirstNight();
+    for (let i = 0; i < 10; i++) {
+      if (endAdapter.getState().publicView?.phase !== 'NIGHT') break;
+      endAdapter.advanceLocalTurn();
+    }
+    const endRoom = (endAdapter as unknown as { roomState: any }).roomState;
+    const wolf = endRoom.gameState.players.find((p: any) => p.roleId === 'werewolf');
+    if (wolf && wolf.isAlive) {
+      await endAdapter.hostEmergencyEliminate(wolf.id);
+      expect(endAdapter.getState().publicView?.phase).toBe('GAME_OVER');
+      expect((endAdapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).toBeNull();
+    }
+  });
+
+  it('F5 Recovery: persistState và resumeSession lưu/khôi phục timers, nightActionAcks, *InvestigationResult, nextPlayerIdSeq và chạy lại timer ngày', async () => {
+    const store = new Map<string, string>();
+    const originalStorage = (globalThis as Record<string, unknown>).localStorage;
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+    };
+
+    try {
+      const adapter1 = createPopulatedAdapter(6);
+      adapter1.removeOfflinePlayer('player_2');
+      adapter1.addOfflinePlayer('Người chơi mới'); // player_7
+
+      await adapter1.startGame(['seer', 'werewolf', 'villager', 'villager', 'villager', 'villager']);
+      await adapter1.startFirstNight();
+
+      const room1 = (adapter1 as unknown as { roomState: any }).roomState;
+      room1.nightActionAcks.add('player_1');
+      room1.seerInvestigationResult = { targetId: 'player_3', result: 'VILLAGER' };
+      room1.foxInvestigationResult = {
+        targetId: 'player_3',
+        hasWerewolf: false,
+        inspectedPlayerIds: ['player_3'],
+      };
+
+      // Ép sang DAY_DISCUSS với timer còn 120s
+      room1.gameState.phase = 'DAY_DISCUSS';
+      room1.gameState.dayState = {
+        discussionSecondsRemaining: 120,
+        voteLockRemainingSeconds: 45,
+        voteLocked: true,
+        isPaused: false,
+        extensionsUsed: 0,
+        ballots: {},
+      };
+      const expectedDeadline = Date.now() + 120 * 1000;
+      room1.timers.deadlineAt = expectedDeadline;
+      room1.timers.isPaused = false;
+      (adapter1 as unknown as { emitState: () => void }).emitState();
+
+      // Khởi tạo adapter mới mô phỏng F5
+      const adapter2 = new LocalEngineAdapter();
+      expect(adapter2.hasRecoverableSession()).toBe(true);
+      const resumed = await adapter2.resumeSession();
+      expect(resumed).toBe(true);
+
+      const room2 = (adapter2 as unknown as { roomState: any }).roomState;
+      expect(room2.nightActionAcks.has('player_1')).toBe(true);
+      expect(room2.seerInvestigationResult).toEqual({ targetId: 'player_3', result: 'VILLAGER' });
+      expect(room2.foxInvestigationResult).toEqual({
+        targetId: 'player_3',
+        hasWerewolf: false,
+        inspectedPlayerIds: ['player_3'],
+      });
+      expect((adapter2 as unknown as { nextPlayerIdSeq: number }).nextPlayerIdSeq).toBe(8);
+      expect(room2.timers.deadlineAt).toBe(expectedDeadline);
+      expect(room2.gameState.dayState.voteLockRemainingSeconds).toBe(45);
+      expect((adapter2 as unknown as { dayTimerInterval: number | null }).dayTimerInterval).not.toBeNull();
+
+      await adapter2.leaveRoom();
+    } finally {
+      if (originalStorage === undefined) {
+        delete (globalThis as Record<string, unknown>).localStorage;
+      } else {
+        (globalThis as Record<string, unknown>).localStorage = originalStorage;
+      }
+    }
+  });
 });

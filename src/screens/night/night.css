@@ -1367,3 +1367,32 @@ body.night-sleep-active {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.sleep-audio-unlock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 134, 56, 0.65);
+  background: rgba(201, 134, 56, 0.16);
+  color: #f6d59c;
+  font: 700 13px var(--headline);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(201, 134, 56, 0.2);
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.sleep-audio-unlock-btn:hover {
+  background: rgba(201, 134, 56, 0.26);
+  border-color: rgba(245, 175, 75, 0.9);
+  transform: translateY(-1px);
+}
+
+.sleep-audio-unlock-btn:active {
+  transform: scale(0.97);
+}

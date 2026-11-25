@@ -121,8 +121,13 @@ export function GameSessionProvider({
   ]);
 
   const setDeviceMode = (mode: DeviceMode) => {
+    audioController.setDeviceMode(mode);
     setDeviceModeState(mode);
   };
+
+  useEffect(() => {
+    audioController.setDeviceMode(deviceMode);
+  }, [deviceMode]);
 
   const actions = useMemo(() => {
     return {
@@ -131,10 +136,28 @@ export function GameSessionProvider({
         if (mode !== deviceMode) {
           setDeviceMode(mode);
         }
+        if (typeof localStorage !== 'undefined') {
+          try {
+            if (mode === 'SINGLE_DEVICE') {
+              localStorage.removeItem('werewolf_socket_session');
+            } else {
+              localStorage.removeItem('werewolf_local_game_session');
+            }
+          } catch {
+            // ignore storage errors
+          }
+        }
         const targetAdapter = mode === 'SINGLE_DEVICE' ? localEngineAdapter : socketAdapter;
         return targetAdapter.createRoom(options);
       },
       joinRoom: async (roomCode: string, username: string) => {
+        if (typeof localStorage !== 'undefined') {
+          try {
+            localStorage.removeItem('werewolf_local_game_session');
+          } catch {
+            // ignore storage errors
+          }
+        }
         return activeAdapter.joinRoom(roomCode, username);
       },
       resumeSession: async () => {

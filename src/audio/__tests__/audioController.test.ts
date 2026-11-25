@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { audioController, NARRATION_PROMPTS } from '../audioController';
+import { audioController, NARRATION_PROMPTS, NARRATION_VARIATIONS } from '../audioController';
 import { requestWakeLock, releaseWakeLock } from '../../utils/wakeLock';
 
 describe('AudioController & Fallbacks', () => {
@@ -172,7 +172,11 @@ describe('AudioController & Fallbacks', () => {
     });
 
     audioController.playTurnNarration('seer');
-    expect(captured).toBe(NARRATION_PROMPTS.seer.subtitle);
+    const validSubtitles = [
+      NARRATION_PROMPTS.seer.subtitle,
+      ...(NARRATION_VARIATIONS.seer ?? []).map((v) => v.subtitle),
+    ];
+    expect(validSubtitles).toContain(captured);
 
     unsub();
   });
@@ -238,6 +242,107 @@ describe('AudioController & Fallbacks', () => {
     audioController.stopAll();
 
     expect(audioController.getCurrentSubtitle()).toBe('');
+  });
+
+  it('NARRATION_VARIATIONS có đủ biến thể tự nhiên với audioKey chuẩn và không lặp lại biến thể liền kề', () => {
+    const requiredKeys = [
+      'night_start',
+      'wolf_pack',
+      'seer',
+      'witch',
+      'bodyguard',
+      'night_end',
+      'day_discuss',
+    ];
+
+    for (const key of requiredKeys) {
+      const list = NARRATION_VARIATIONS[key];
+      expect(Array.isArray(list)).toBe(true);
+      expect(list.length).toBeGreaterThanOrEqual(2);
+      list.forEach((item, idx) => {
+        expect(item.audioKey).toBe(`${key}_${idx + 1}`);
+        expect(item.subtitle.length).toBeGreaterThan(0);
+      });
+    }
+
+    const nightStartSubtitles = NARRATION_VARIATIONS.night_start.map((v) => v.subtitle);
+    expect(nightStartSubtitles).toContain(
+      'Mọi người ngủ đi, tui chuẩn bị gọi role đầu tiên nha.'
+    );
+    expect(nightStartSubtitles).toContain(
+      'Cả làng nhắm mắt lại nào, đêm xuống rồi, chuẩn bị gọi vai đầu tiên nhé.'
+    );
+    expect(nightStartSubtitles).toContain(
+      'Tối rồi tối rồi, mọi người ngủ say đi để tui bắt đầu gọi vai đây.'
+    );
+
+    // Kiểm tra chọn biến thể khác lần gần nhất
+    audioController.resetLastPlayedTurn();
+    audioController.playTurnNarration('night_start', undefined, true);
+    const firstSub = audioController.getCurrentSubtitle();
+    expect(nightStartSubtitles).toContain(firstSub);
+
+    audioController.playTurnNarration('night_start', undefined, true);
+    const secondSub = audioController.getCurrentSubtitle();
+    expect(nightStartSubtitles).toContain(secondSub);
+    expect(secondSub).not.toBe(firstSub);
+  });
+
+  it('setDeviceMode: SINGLE_DEVICE tắt hoàn toàn chime & confirm SFX, MULTI_DEVICE phát đầy đủ', () => {
+    const originalWindow = (globalThis as Record<string, unknown>).window;
+    let oscillatorCount = 0;
+
+    class MockAudioContext {
+      public currentTime = 0;
+      public destination = {};
+      public createOscillator() {
+        oscillatorCount += 1;
+        return {
+          type: 'sine',
+          frequency: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+          connect: () => {},
+          start: () => {},
+          stop: () => {},
+        };
+      }
+      public createGain() {
+        return {
+          gain: {
+            setValueAtTime: () => {},
+            linearRampToValueAtTime: () => {},
+            exponentialRampToValueAtTime: () => {},
+          },
+          connect: () => {},
+        };
+      }
+      public close() {
+        return Promise.resolve();
+      }
+    }
+
+    (globalThis as Record<string, unknown>).window = {
+      AudioContext: MockAudioContext,
+    };
+
+    try {
+      audioController.setDeviceMode('SINGLE_DEVICE');
+      expect(audioController.getDeviceMode()).toBe('SINGLE_DEVICE');
+      audioController.playTransitionChime();
+      audioController.playConfirmSfx();
+      expect(oscillatorCount).toBe(0);
+
+      audioController.setDeviceMode('MULTI_DEVICE');
+      expect(audioController.getDeviceMode()).toBe('MULTI_DEVICE');
+      audioController.playTransitionChime();
+      audioController.playConfirmSfx();
+      expect(oscillatorCount).toBe(2);
+    } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as Record<string, unknown>).window;
+      } else {
+        (globalThis as Record<string, unknown>).window = originalWindow;
+      }
+    }
   });
 });
 

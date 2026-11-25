@@ -1,6 +1,7 @@
 import { Howl, Howler } from 'howler';
 
 export type AudioStatus = 'unlocked' | 'blocked' | 'interrupted';
+export type AudioDeviceMode = 'SINGLE_DEVICE' | 'MULTI_DEVICE';
 
 export interface NarrationPrompt {
   audioKey: string;
@@ -261,17 +262,148 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
   },
 };
 
+export const NARRATION_VARIATIONS: Record<string, NarrationPrompt[]> = {
+  night_start: [
+    {
+      audioKey: 'night_start_1',
+      subtitle: 'Mọi người ngủ đi, tui chuẩn bị gọi role đầu tiên nha.',
+      durationMs: 4500,
+    },
+    {
+      audioKey: 'night_start_2',
+      subtitle: 'Cả làng nhắm mắt lại nào, đêm xuống rồi, chuẩn bị gọi vai đầu tiên nhé.',
+      durationMs: 5000,
+    },
+    {
+      audioKey: 'night_start_3',
+      subtitle: 'Tối rồi tối rồi, mọi người ngủ say đi để tui bắt đầu gọi vai đây.',
+      durationMs: 4500,
+    },
+    {
+      audioKey: 'night_start_4',
+      subtitle: 'Màn đêm buông xuống rồi, cả làng nhắm mắt ngủ kỹ nha, đừng có he hé đó!',
+      durationMs: 5000,
+    },
+  ],
+  wolf_pack: [
+    {
+      audioKey: 'wolf_pack_1',
+      subtitle: 'Bầy Sói ơi, mở mắt ra nhìn nhau rồi chọn một người xấu số đêm nay đi nào.',
+      durationMs: 7500,
+    },
+    {
+      audioKey: 'wolf_pack_2',
+      subtitle: 'Tới lượt bầy Ma Sói rồi, nhẹ nhàng mở mắt và thống nhất mục tiêu cắn nhé.',
+      durationMs: 7500,
+    },
+    {
+      audioKey: 'wolf_pack_3',
+      subtitle: 'Ma Sói thức dậy đi, nhìn mặt đồng đội rồi chỉ cho tui biết đêm nay cắn ai nha.',
+      durationMs: 7500,
+    },
+  ],
+  seer: [
+    {
+      audioKey: 'seer_1',
+      subtitle: 'Tiên tri mở mắt ra nào, đêm nay bạn muốn soi xem ai là người tốt hay Sói đây?',
+      durationMs: 6000,
+    },
+    {
+      audioKey: 'seer_2',
+      subtitle: 'Tới lượt Tiên tri rồi, chọn một người để tui cho bạn biết phe của họ nhé.',
+      durationMs: 6000,
+    },
+    {
+      audioKey: 'seer_3',
+      subtitle: 'Tiên tri dậy đi, nhanh tay chỉ một người bạn đang nghi ngờ nhất nào.',
+      durationMs: 6000,
+    },
+  ],
+  witch: [
+    {
+      audioKey: 'witch_1',
+      subtitle: 'Phù thủy ơi thức dậy đi, đêm nay có muốn xài bình cứu hay bình độc không nào?',
+      durationMs: 7000,
+    },
+    {
+      audioKey: 'witch_2',
+      subtitle: 'Tới lượt Phù thủy rồi, mở mắt xem tình hình và quyết định dùng thuốc nhé.',
+      durationMs: 7000,
+    },
+    {
+      audioKey: 'witch_3',
+      subtitle: 'Phù thủy dậy thôi, bạn có muốn cứu người bị cắn hay tiễn ai đó đi luôn không?',
+      durationMs: 7000,
+    },
+  ],
+  bodyguard: [
+    {
+      audioKey: 'bodyguard_1',
+      subtitle: 'Bảo vệ mở mắt ra nào, đêm nay bạn muốn che chở cho ai?',
+      durationMs: 6000,
+    },
+    {
+      audioKey: 'bodyguard_2',
+      subtitle: 'Tới lượt Bảo vệ rồi, chọn một người để đứng ra bảo vệ đêm nay nhé.',
+      durationMs: 6000,
+    },
+    {
+      audioKey: 'bodyguard_3',
+      subtitle: 'Bảo vệ dậy đi, nhanh tay chọn một người để giữ an toàn qua đêm nay nha.',
+      durationMs: 6000,
+    },
+  ],
+  night_end: [
+    {
+      audioKey: 'night_end_1',
+      subtitle: 'Trời sáng rồi, cả làng mở mắt ra nào! Để xem đêm qua có chuyện gì xảy ra nhé.',
+      durationMs: 5500,
+    },
+    {
+      audioKey: 'night_end_2',
+      subtitle: 'Bình minh lên rồi, mọi người thức dậy hết đi!',
+      durationMs: 4500,
+    },
+    {
+      audioKey: 'night_end_3',
+      subtitle: 'Hết đêm rồi cả nhà ơi, mở mắt ra đón ngày mới nào.',
+      durationMs: 4500,
+    },
+  ],
+  day_discuss: [
+    {
+      audioKey: 'day_discuss_1',
+      subtitle: 'Cả làng bắt đầu thảo luận đi nào, hết giờ mình sẽ mở hòm phiếu nhé.',
+      durationMs: 5000,
+    },
+    {
+      audioKey: 'day_discuss_2',
+      subtitle: 'Thời gian tranh luận bắt đầu! Mọi người suy luận thật kỹ trước khi bỏ phiếu nha.',
+      durationMs: 5500,
+    },
+    {
+      audioKey: 'day_discuss_3',
+      subtitle: 'Giờ thảo luận tới rồi, ai có thông tin gì thì lên tiếng đi nào!',
+      durationMs: 5000,
+    },
+  ],
+};
+
 export class AudioController {
   private bgmHowl: Howl | null = null;
   private currentVoiceHowl: Howl | null = null;
   private audioStatus: AudioStatus = 'unlocked';
+  private deviceMode: AudioDeviceMode = 'MULTI_DEVICE';
   private isMuted: boolean = false;
   private bgmVolume: number = 0.2;
   private voiceVolume: number = 0.9;
   private isDucked: boolean = false;
   private currentSubtitle: string = '';
   private lastPlayedTurnKey: string | null = null;
+  private lastVariationIndexByKey: Map<string, number> = new Map();
   private voiceSafetyTimer: ReturnType<typeof setTimeout> | null = null;
+  private ttsTimer: ReturnType<typeof setTimeout> | null = null;
+  private narrationSeq: number = 0;
   private subtitleListeners: Set<(sub: string) => void> = new Set();
   private statusListeners: Set<(status: AudioStatus) => void> = new Set();
 
@@ -420,11 +552,16 @@ export class AudioController {
     return this.isMuted;
   }
 
-  /**
-   * Phát tiếng chuông transition chime chuyển lượt bằng Web Audio oscillator (không cần file mp3).
-   */
-  public playTransitionChime(): void {
-    if (this.isMuted || typeof window === 'undefined') return;
+  public setDeviceMode(mode: AudioDeviceMode): void {
+    this.deviceMode = mode;
+  }
+
+  public getDeviceMode(): AudioDeviceMode {
+    return this.deviceMode;
+  }
+
+  private playSynthChime(startFreq: number, endFreq: number, rampSec: number, durationSec: number): void {
+    if (this.deviceMode === 'SINGLE_DEVICE' || this.isMuted || typeof window === 'undefined') return;
 
     try {
       const isReused = Boolean(Howler.ctx);
@@ -438,23 +575,23 @@ export class AudioController {
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.25); // A5
+      osc.frequency.setValueAtTime(startFreq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + rampSec);
 
       gain.gain.setValueAtTime(0.001, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationSec);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start();
-      osc.stop(ctx.currentTime + 0.5);
+      osc.stop(ctx.currentTime + durationSec);
 
       if (!isReused) {
         setTimeout(() => {
           void ctx.close();
-        }, 600);
+        }, Math.ceil(durationSec * 1000) + 100);
       }
     } catch {
       // ignore web audio errors
@@ -462,32 +599,54 @@ export class AudioController {
   }
 
   /**
+   * Phát tiếng chuông transition chime chuyển lượt bằng Web Audio oscillator (không cần file mp3).
+   * Ở chế độ SINGLE_DEVICE sẽ im lặng hoàn toàn.
+   */
+  public playTransitionChime(): void {
+    this.playSynthChime(587.33, 880, 0.25, 0.5);
+  }
+
+  /**
+   * Phát hiệu ứng âm thanh xác nhận thao tác (SFX) ở chế độ MULTI_DEVICE.
+   * Ở chế độ SINGLE_DEVICE sẽ im lặng hoàn toàn để tránh gây nhiễu khi chuyền máy.
+   */
+  public playConfirmSfx(): void {
+    this.playSynthChime(659.25, 1046.5, 0.12, 0.24);
+  }
+
+  /**
    * Đọc câu lệnh bằng Web Speech API TTS tiếng Việt (fallback khi thiếu mp3).
    * Đi kèm Safety Fallback Timer để tránh treo nếu browser nuốt onend/onerror.
    */
   public speakTTS(text: string, onEnd?: () => void, durationMs?: number): void {
+    if (this.ttsTimer) {
+      clearTimeout(this.ttsTimer);
+      this.ttsTimer = null;
+    }
+
     if (this.isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
       onEnd?.();
       return;
     }
 
+    const seq = this.narrationSeq;
     let settled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const finish = () => {
       if (settled) return;
       settled = true;
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
+      if (this.ttsTimer) {
+        clearTimeout(this.ttsTimer);
+        this.ttsTimer = null;
       }
+      if (seq !== this.narrationSeq) return;
       onEnd?.();
     };
 
     // Safety fallback: Mobile browser WebKit hay nuốt mất sự kiện onend.
     // Đảm bảo luôn hoàn tất trong khoảng durationMs hoặc tối đa 6s.
     const maxWaitMs = Math.max(3000, (durationMs ?? 6000));
-    timer = setTimeout(finish, maxWaitMs);
+    this.ttsTimer = setTimeout(finish, maxWaitMs);
 
     try {
       window.speechSynthesis.cancel();
@@ -576,41 +735,73 @@ export class AudioController {
     this.lastPlayedTurnKey = null;
   }
 
+  private selectPromptForTurn(turnKey: string): NarrationPrompt | undefined {
+    const variations = NARRATION_VARIATIONS[turnKey];
+    if (variations && variations.length > 0) {
+      if (variations.length === 1) {
+        this.lastVariationIndexByKey.set(turnKey, 0);
+        return variations[0];
+      }
+      const lastIdx = this.lastVariationIndexByKey.get(turnKey);
+      const candidates: number[] = [];
+      for (let i = 0; i < variations.length; i++) {
+        if (i !== lastIdx) candidates.push(i);
+      }
+      const pickedIdx = candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
+      this.lastVariationIndexByKey.set(turnKey, pickedIdx);
+      return variations[pickedIdx];
+    }
+    return NARRATION_PROMPTS[turnKey];
+  }
+
   /**
    * Điều phối phát câu lệnh âm thanh theo turnKey:
-   * 1. Cập nhật phụ đề câu lệnh hiển thị trên màn hình.
-   * 2. Chống phát đúp sau khi Host reconnect hoặc socket gửi snapshot lặp.
-   * 3. Phát transition chime báo hiệu đổi lượt.
-   * 4. Thử tải file MP3 `/audio/<audioKey>.mp3` qua Howler.
-   * 5. Nếu file MP3 load lỗi (404/thiếu file) -> Fallback sang Web Speech API (TTS).
-   * 6. Luôn có Safety Fallback Timer để bảo đảm duckBGM(false) và onComplete được gọi.
+   * 1. Chống phát đúp sau khi Host reconnect hoặc socket gửi snapshot lặp.
+   * 2. Chọn biến thể lời dẫn khác lần gần nhất (nếu có trong NARRATION_VARIATIONS).
+   * 3. Cập nhật phụ đề câu lệnh hiển thị trên màn hình.
+   * 4. Phát transition chime báo hiệu đổi lượt (im lặng ở chế độ SINGLE_DEVICE).
+   * 5. Thử tải file MP3 `/audio/<audioKey>.mp3`, nếu thiếu biến thể thì fallback về `NARRATION_PROMPTS[turnKey]`.
+   * 6. Nếu file MP3 load lỗi (404/thiếu file) -> Fallback sang Web Speech API (TTS).
+   * 7. Luôn có Safety Fallback Timer để bảo đảm duckBGM(false) và onComplete được gọi.
    */
   public playTurnNarration(turnKey: string, onComplete?: () => void, force = false): void {
     void this.unlockAudio();
 
-    const prompt = NARRATION_PROMPTS[turnKey];
-    if (!prompt) {
+    const fallbackPrompt = NARRATION_PROMPTS[turnKey];
+    const hasVariations = Boolean(NARRATION_VARIATIONS[turnKey]?.length);
+    if (!hasVariations && !fallbackPrompt) {
       onComplete?.();
       return;
     }
 
-    // 1. Phụ đề trực quan
-    this.setSubtitle(prompt.subtitle);
-
-    // 2. Chống đọc đúp nếu cùng 1 lượt và không phải thao tác bấm ép 'Phát lại' (force)
+    // 1. Chống đọc đúp nếu cùng 1 lượt và không phải thao tác bấm ép 'Phát lại' (force)
     if (!force && this.lastPlayedTurnKey === turnKey) {
+      onComplete?.();
+      return;
+    }
+
+    const prompt = this.selectPromptForTurn(turnKey);
+    if (!prompt) {
       onComplete?.();
       return;
     }
     this.lastPlayedTurnKey = turnKey;
 
+    // 2. Phụ đề trực quan
+    this.setSubtitle(prompt.subtitle);
+
     // 3. Chime báo hiệu
     this.playTransitionChime();
 
     // Dừng voice trước đó và timer nếu có
+    const seq = ++this.narrationSeq;
     if (this.voiceSafetyTimer) {
       clearTimeout(this.voiceSafetyTimer);
       this.voiceSafetyTimer = null;
+    }
+    if (this.ttsTimer) {
+      clearTimeout(this.ttsTimer);
+      this.ttsTimer = null;
     }
 
     if (this.currentVoiceHowl) {
@@ -655,6 +846,7 @@ export class AudioController {
         clearTimeout(this.voiceSafetyTimer);
         this.voiceSafetyTimer = null;
       }
+      if (seq !== this.narrationSeq) return;
       this.duckBGM(false);
       onComplete?.();
     };
@@ -663,14 +855,11 @@ export class AudioController {
     const maxSafetyMs = Math.max(4000, (prompt.durationMs ?? 6000) + 2000);
     this.voiceSafetyTimer = setTimeout(finishVoice, maxSafetyMs);
 
-    try {
-      // 4. Thử tải MP3
+    const playHowlFile = (audioKey: string, onLoadFail: () => void) => {
       const sound = new Howl({
-        src: [`/audio/${prompt.audioKey}.mp3`],
+        src: [`/audio/${audioKey}.mp3`],
         volume: this.voiceVolume,
-        onloaderror: () => {
-          this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
-        },
+        onloaderror: onLoadFail,
         onplayerror: () => {
           this.setAudioStatus('blocked');
           this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
@@ -682,6 +871,23 @@ export class AudioController {
 
       this.currentVoiceHowl = sound;
       sound.play();
+    };
+
+    try {
+      // 4. Thử tải MP3 biến thể; nếu thiếu file biến thể thì fallback về NARRATION_PROMPTS[turnKey]
+      playHowlFile(prompt.audioKey, () => {
+        if (fallbackPrompt && fallbackPrompt.audioKey !== prompt.audioKey) {
+          try {
+            playHowlFile(fallbackPrompt.audioKey, () => {
+              this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
+            });
+          } catch {
+            this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
+          }
+        } else {
+          this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
+        }
+      });
     } catch {
       this.speakTTS(prompt.subtitle, finishVoice, prompt.durationMs);
     }
@@ -691,9 +897,14 @@ export class AudioController {
    * Dọn sạch toàn bộ âm thanh và giải phóng tài nguyên (dùng khi Rời phòng hoặc Rematch).
    */
   public stopAll(): void {
+    this.narrationSeq += 1;
     if (this.voiceSafetyTimer) {
       clearTimeout(this.voiceSafetyTimer);
       this.voiceSafetyTimer = null;
+    }
+    if (this.ttsTimer) {
+      clearTimeout(this.ttsTimer);
+      this.ttsTimer = null;
     }
     if (this.currentVoiceHowl) {
       try {

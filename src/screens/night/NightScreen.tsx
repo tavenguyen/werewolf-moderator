@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
+import { audioController, type AudioStatus } from '../../audio/audioController';
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
@@ -43,6 +44,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [sleepNotice, setSleepNotice] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showingResult, setShowingResult] = useState(false);
+  const [audioStatus, setAudioStatus] = useState<AudioStatus>(() => audioController.getAudioStatus());
 
   const privateView = state.privateView;
   const publicView = state.publicView;
@@ -96,6 +98,12 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   useEffect(() => {
     setAvatarError(false);
   }, [myRoleId, privateView?.turnKey, privateView?.playerId]);
+
+  useEffect(() => {
+    return audioController.subscribeAudioStatus((status) => {
+      setAudioStatus(status);
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -263,6 +271,19 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const maxPiedPiperTargets = Math.min(2, validTargets.length);
   const isPiedPiperValid = piedPiperTargets.length === maxPiedPiperTargets && maxPiedPiperTargets > 0;
 
+  const playMultiDeviceConfirmSfx = () => {
+    if (isSingleDevice) return;
+    const ctrl = audioController as unknown as {
+      playConfirmSfx?: () => void;
+      playTransitionChime?: () => void;
+    };
+    if (typeof ctrl.playConfirmSfx === 'function') {
+      ctrl.playConfirmSfx();
+    } else {
+      ctrl.playTransitionChime?.();
+    }
+  };
+
   const handleConfirmAction = async () => {
     if (!privateView) return;
 
@@ -415,6 +436,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       }
 
       setHasSubmitted(true);
+      playMultiDeviceConfirmSfx();
       const successMsg = isMason
         ? '✓ Đã nhận diện anh em Hội Tam Điểm.'
         : isCupid
@@ -708,6 +730,18 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
 
           {isSingleDevice ? (
             <>
+              {audioStatus !== 'unlocked' && (
+                <button
+                  type="button"
+                  className="sleep-audio-unlock-btn"
+                  onClick={() => {
+                    void audioController.unlockAudio();
+                  }}
+                >
+                  🔊 Bật loa Quản trò
+                </button>
+              )}
+
               <button
                 type="button"
                 className="jump-to-action-btn neutral-tap-btn"
@@ -1406,6 +1440,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                           isSkip: true,
                         });
                         setHasSubmitted(true);
+      playMultiDeviceConfirmSfx();
                         setNotice('✓ Bầy Sói đã bỏ qua lượt cắn đêm nay.');
                         if (submitSleepTimerRef.current !== null) {
                           window.clearTimeout(submitSleepTimerRef.current);
