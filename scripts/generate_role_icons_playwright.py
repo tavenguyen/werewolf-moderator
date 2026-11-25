@@ -70,8 +70,11 @@ def get_existing_image_srcs(page: Page) -> list:
         return []
 
 
-def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 75) -> str:
-    """Wait for a newly generated image in Google AI Studio and extract its base64 data."""
+def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 90) -> str | None:
+    """Wait for a newly generated image in Google AI Studio and extract its base64 data.
+    Never falls back to existing/old images in the session.
+    Returns None if generation finishes without producing any new image.
+    """
     start_time = time.time()
     initial_set = set(initial_srcs)
 
@@ -81,18 +84,21 @@ def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 
         const imgs = Array.from(document.querySelectorAll('img')).filter(img => {
             const src = img.src || '';
             const rect = img.getBoundingClientRect();
-            return rect.width > 100 && rect.height > 100 && !src.includes('googleusercontent.com/a/');
+            return (
+                rect.width > 100 &&
+                rect.height > 100 &&
+                !src.includes('googleusercontent.com/a/') &&
+                img.complete &&
+                img.naturalWidth > 0
+            );
         });
-        
-        if (imgs.length === 0) return null;
-        
-        // Prefer newly added image
-        let targetImg = imgs.find(img => !initialSet.has(img.src));
-        if (!targetImg) {
-            // Fallback to the very last image
-            targetImg = imgs[imgs.length - 1];
-        }
-        
+
+        // Strictly select only NEW images that did not exist before submission
+        const newImgs = imgs.filter(img => !initialSet.has(img.src));
+        if (newImgs.length === 0) return null;
+
+        const targetImg = newImgs[newImgs.length - 1];
+
         return new Promise((resolve) => {
             fetch(targetImg.src)
                 .then(r => r.blob())
@@ -106,18 +112,36 @@ def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 
     }
     """
 
+    # Wait briefly for generation to start (Stop button appears or new image arrives)
+    has_started = False
+    for _ in range(10):
+        if page.locator('button:has-text("Stop"), [aria-label*="Stop" i]').count() > 0:
+            has_started = True
+            break
+        if page.evaluate(js_extract, list(initial_set)):
+            has_started = True
+            break
+        time.sleep(0.5)
+
+    idle_checks_after_finish = 0
     while time.time() - start_time < timeout_sec:
-        # Check if model is still streaming / generating
         is_generating = page.locator('button:has-text("Stop"), [aria-label*="Stop" i]').count() > 0
-        
-        if not is_generating:
+        if is_generating:
+            has_started = True
+            idle_checks_after_finish = 0
+        else:
             data_url = page.evaluate(js_extract, list(initial_set))
             if data_url and isinstance(data_url, str) and data_url.startswith("data:image"):
                 return data_url
+            if has_started:
+                idle_checks_after_finish += 1
+                # Wait a couple of polls after Stop disappears in case image blob is still rendering
+                if idle_checks_after_finish >= 3:
+                    return None
 
         time.sleep(1.5)
 
-    raise TimeoutError(f"Timed out waiting for generated image after {timeout_sec}s")
+    return None
 
 
 def find_prompt_input(page: Page, timeout_sec: int = 30):
@@ -318,27 +342,40 @@ def main():
             else:
                 prompt_to_send = item["prompt"]
 
-            try:
-                # For subsequent items, reload prompt baseline URL to keep clean state
-                if not is_first_prompt:
-                    page.goto(args.url, wait_until="domcontentloaded")
-                    time.sleep(3)
-                is_first_prompt = False
+            max_attempts = 3
+            generated_ok = False
 
-                initial_images = get_existing_image_srcs(page)
-                submit_prompt_in_ai_studio(page, prompt_to_send)
-                data_url = extract_new_image_base64(page, initial_images, timeout_sec=90)
-                
-                # Decode base64 and save
-                header, b64_str = data_url.split(",", 1)
-                img = Image.open(io.BytesIO(base64.b64decode(b64_str)))
-                post_process_and_save(img, out_file)
-                size_kb = out_file.stat().st_size / 1024
-                print(f"[{role_id}] ✓ Saved to {out_file} ({size_kb:.1f} KB)")
-                success_count += 1
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    # For subsequent items or retries, reload prompt baseline URL to clear failed turn and keep clean state
+                    if not is_first_prompt or attempt > 1:
+                        page.goto(args.url, wait_until="domcontentloaded")
+                        time.sleep(3)
+                    is_first_prompt = False
 
-            except Exception as e:
-                print(f"[{role_id}] ✗ Error generating: {e}", file=sys.stderr)
+                    initial_images = get_existing_image_srcs(page)
+                    submit_prompt_in_ai_studio(page, prompt_to_send)
+                    data_url = extract_new_image_base64(page, initial_images, timeout_sec=90)
+
+                    if not data_url:
+                        print(f"[{role_id}] ⚠ Không thấy ảnh mới được tạo ra (lần {attempt}/{max_attempts}). Xóa prompt và chạy lại...")
+                        continue
+
+                    # Decode base64 and save
+                    header, b64_str = data_url.split(",", 1)
+                    img = Image.open(io.BytesIO(base64.b64decode(b64_str)))
+                    post_process_and_save(img, out_file)
+                    size_kb = out_file.stat().st_size / 1024
+                    print(f"[{role_id}] ✓ Saved to {out_file} ({size_kb:.1f} KB)")
+                    success_count += 1
+                    generated_ok = True
+                    break
+
+                except Exception as e:
+                    print(f"[{role_id}] ✗ Error generating (attempt {attempt}/{max_attempts}): {e}", file=sys.stderr)
+
+            if not generated_ok:
+                print(f"[{role_id}] ✗ Bỏ qua sau {max_attempts} lần thử không có ảnh mới.", file=sys.stderr)
 
             time.sleep(2)
 
