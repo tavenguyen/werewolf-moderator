@@ -2,10 +2,8 @@
 """
 scripts/generate_role_icons_playwright.py
 
-Automates Google AI Studio via Playwright to batch generate Werewolf role icons.
-Supports both:
-1. Connecting to an existing Chrome browser via CDP (--cdp http://localhost:9222)
-2. Launching Chrome with a persistent profile (--profile ./.chrome-profile)
+Automates Google AI Studio via Playwright to batch generate Werewolf role icons
+using your configured Google AI Studio prompt session.
 """
 
 import os
@@ -25,7 +23,9 @@ except ImportError:
     print("Error: 'playwright' is not installed. Please run: pip install playwright", file=sys.stderr)
     sys.exit(1)
 
-# System Instructions and Style Locking
+DEFAULT_AI_STUDIO_URL = "https://aistudio.google.com/prompts/1vX_GzpsFRu1QqqozfKCOyOUXzk4fByml"
+
+# System Instructions and Style Locking fallback
 SYSTEM_INSTRUCTION = (
     "You are a Lead UI Icon Illustrator designing a cohesive character icon set for a modern dark-themed mobile web game.\n\n"
     "STRICT VISUAL RULES:\n"
@@ -55,27 +55,46 @@ def post_process_and_save(img: Image.Image, output_path: Path):
     resized_img.save(output_path, "WEBP", quality=82, method=6)
 
 
-def extract_latest_image_base64(page: Page, timeout_sec: int = 60) -> str:
-    """Wait for the generated image in Google AI Studio and extract its base64 data."""
+def get_existing_image_srcs(page: Page) -> list:
+    """Return list of existing large image src URLs in current page."""
+    try:
+        return page.evaluate("""
+            () => Array.from(document.querySelectorAll('img'))
+                .filter(img => {
+                    const rect = img.getBoundingClientRect();
+                    return rect.width > 80 && rect.height > 80 && !img.src.includes('googleusercontent.com/a/');
+                })
+                .map(img => img.src)
+        """)
+    except Exception:
+        return []
+
+
+def extract_new_image_base64(page: Page, initial_srcs: list, timeout_sec: int = 75) -> str:
+    """Wait for a newly generated image in Google AI Studio and extract its base64 data."""
     start_time = time.time()
-    
-    # JavaScript helper to fetch any image (blob:, http:, data:) and convert to base64 DataURL
+    initial_set = set(initial_srcs)
+
     js_extract = """
-    () => {
-        // Look for model response images
+    (initialList) => {
+        const initialSet = new Set(initialList || []);
         const imgs = Array.from(document.querySelectorAll('img')).filter(img => {
             const src = img.src || '';
             const rect = img.getBoundingClientRect();
-            // Filter out small avatars / icons (thumbnails are usually < 100px)
-            return rect.width > 120 && rect.height > 120 && !src.includes('googleusercontent.com/a/');
+            return rect.width > 100 && rect.height > 100 && !src.includes('googleusercontent.com/a/');
         });
         
         if (imgs.length === 0) return null;
         
-        const lastImg = imgs[imgs.length - 1];
+        // Prefer newly added image
+        let targetImg = imgs.find(img => !initialSet.has(img.src));
+        if (!targetImg) {
+            // Fallback to the very last image
+            targetImg = imgs[imgs.length - 1];
+        }
         
         return new Promise((resolve) => {
-            fetch(lastImg.src)
+            fetch(targetImg.src)
                 .then(r => r.blob())
                 .then(blob => {
                     const reader = new FileReader();
@@ -88,13 +107,14 @@ def extract_latest_image_base64(page: Page, timeout_sec: int = 60) -> str:
     """
 
     while time.time() - start_time < timeout_sec:
-        # Check if Run button is still active/generating or if a Stop button exists
-        is_generating = page.locator('button:has-text("Stop"), [aria-label*="Stop"]').count() > 0
+        # Check if model is still streaming / generating
+        is_generating = page.locator('button:has-text("Stop"), [aria-label*="Stop" i]').count() > 0
         
-        data_url = page.evaluate(js_extract)
-        if data_url and not is_generating:
-            return data_url
-        
+        if not is_generating:
+            data_url = page.evaluate(js_extract, list(initial_set))
+            if data_url and isinstance(data_url, str) and data_url.startswith("data:image"):
+                return data_url
+
         time.sleep(1.5)
 
     raise TimeoutError(f"Timed out waiting for generated image after {timeout_sec}s")
@@ -102,9 +122,8 @@ def extract_latest_image_base64(page: Page, timeout_sec: int = 60) -> str:
 
 def submit_prompt_in_ai_studio(page: Page, prompt: str):
     """Find prompt textarea in AI Studio, input prompt, and trigger Run."""
-    # Possible selectors for the AI Studio input box
     selectors = [
-        'textarea[placeholder*="Type"]',
+        'textarea[placeholder*="Type" i]',
         'textarea[aria-label*="prompt" i]',
         'textarea[aria-label*="Type" i]',
         'div[contenteditable="true"]',
@@ -126,7 +145,7 @@ def submit_prompt_in_ai_studio(page: Page, prompt: str):
     page.keyboard.press("Control+A")
     page.keyboard.press("Backspace")
 
-    # Type or paste prompt (use evaluate/clipboard for instant input of long prompt)
+    # Paste prompt
     input_elem.fill(prompt)
     time.sleep(0.5)
 
@@ -154,6 +173,8 @@ def main():
     parser.add_argument("--test", action="store_true", help="Only run 3 representative roles (1 Werewolf, 1 Villager, 1 Third Party)")
     parser.add_argument("--force", action="store_true", help="Overwrite existing icons")
     parser.add_argument("--id", type=str, default=None, help="Generate for a specific role ID only")
+    parser.add_argument("--url", type=str, default=DEFAULT_AI_STUDIO_URL, help=f"Google AI Studio prompt URL (default: {DEFAULT_AI_STUDIO_URL})")
+    parser.add_argument("--include-system-instruction", action="store_true", help="Prepend SYSTEM_INSTRUCTION (omit if prompt session already has it)")
     parser.add_argument("--cdp", type=str, default=None, help="Connect over Chrome DevTools Protocol (e.g. http://localhost:9222)")
     parser.add_argument("--profile", type=str, default=".chrome-profile", help="Path to persistent Chrome profile folder")
     parser.add_argument("--prompts", type=str, default="scripts/roles_prompts.json", help="Path to prompts JSON file")
@@ -194,6 +215,7 @@ def main():
         targets = all_roles
 
     print(f"Target count: {len(targets)} roles.")
+    print(f"Using Google AI Studio URL: {args.url}")
 
     with sync_playwright() as p:
         if args.cdp:
@@ -214,10 +236,10 @@ def main():
             )
             page = context.pages[0] if context.pages else context.new_page()
 
-        # Open AI Studio
-        print("Navigating to Google AI Studio...")
-        page.goto("https://aistudio.google.com/prompts/new_chat", wait_until="domcontentloaded")
-        time.sleep(3)
+        # Open AI Studio configured session
+        print("Opening your Google AI Studio prompt session...")
+        page.goto(args.url, wait_until="domcontentloaded")
+        time.sleep(4)
         check_and_handle_login(page)
 
         total = len(targets)
@@ -233,19 +255,20 @@ def main():
 
             print(f"\n[{idx}/{total}] Generating icon for '{role_id}' ({item.get('faction')})...")
             
-            # Combine System Instructions and Role Prompt
-            full_prompt = (
-                f"{SYSTEM_INSTRUCTION}\n\n"
-                f"CHARACTER SPECIFICATION:\n{item['prompt']}"
-            )
+            # Decide prompt content
+            if args.include_system_instruction:
+                prompt_to_send = f"{SYSTEM_INSTRUCTION}\n\nCHARACTER SPECIFICATION:\n{item['prompt']}"
+            else:
+                prompt_to_send = item["prompt"]
 
             try:
-                # Open a clean chat for each role to avoid context bleeding
-                page.goto("https://aistudio.google.com/prompts/new_chat", wait_until="domcontentloaded")
-                time.sleep(2)
+                # Reload prompt baseline URL to keep clean state
+                page.goto(args.url, wait_until="domcontentloaded")
+                time.sleep(3)
 
-                submit_prompt_in_ai_studio(page, full_prompt)
-                data_url = extract_latest_image_base64(page, timeout_sec=60)
+                initial_images = get_existing_image_srcs(page)
+                submit_prompt_in_ai_studio(page, prompt_to_send)
+                data_url = extract_new_image_base64(page, initial_images, timeout_sec=90)
                 
                 # Decode base64 and save
                 header, b64_str = data_url.split(",", 1)
