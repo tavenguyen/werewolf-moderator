@@ -86,13 +86,6 @@ export default function RoleRevealScreen({}: Props) {
   // Lấy câu mô tả kỹ năng ngắn gọn (1 dòng)
   const conciseDesc = roleDef.shortDesc.split('.')[0] + '.';
 
-  // Danh sách đồng đội nếu là Ma Sói hoặc Hội Tam Điểm
-  const isWerewolf = roleDef.faction === 'WEREWOLF';
-  const isMason = myRoleId === 'mason';
-  const teammates = (privateView?.teammates ?? []).map((t) => t.name);
-  const wolfPartners = isWerewolf ? teammates : [];
-  const masonPartners = isMason ? teammates : [];
-
   // Icon nghệ thuật theo vai
   const getRoleIcon = (roleId: string, faction: string) => {
     if (faction === 'WEREWOLF') return '🐺';
@@ -303,25 +296,6 @@ export default function RoleRevealScreen({}: Props) {
               <footer className="ritual-role-info">
                 <h2 className="ritual-role-name">{roleDef.nameVi}</h2>
                 <p className="ritual-role-desc">{conciseDesc}</p>
-
-                {isWerewolf && wolfPartners.length > 0 && (
-                  <div className="ritual-wolf-pack">
-                    Đồng đội Sói: <b>{wolfPartners.join(', ')}</b>
-                  </div>
-                )}
-
-                {isMason && masonPartners.length > 0 && (
-                  <div
-                    className="ritual-wolf-pack"
-                    style={{
-                      borderColor: 'rgba(201, 134, 56, 0.45)',
-                      background: 'rgba(201, 134, 56, 0.15)',
-                      color: '#ecc94b',
-                    }}
-                  >
-                    Anh em Tam Điểm: <b>{masonPartners.join(', ')}</b>
-                  </div>
-                )}
               </footer>
             </div>
           </div>
