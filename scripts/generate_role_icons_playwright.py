@@ -90,25 +90,46 @@ def extract_new_image_base64(page: Page, snapshot: dict, timeout_sec: int = 90) 
 
     js_check_and_extract = """
     ({ initialList, initialTurnCount }) => {
-        const bodyText = (document.body.innerText || '').toLowerCase();
-        if (
-            bodyText.includes("you've reached your rate limit") ||
-            bodyText.includes("reached your rate limit. please try again later")
-        ) {
-            return { status: 'rate_limit' };
-        }
-
         const initialSet = new Set(initialList || []);
         const turns = Array.from(document.querySelectorAll('ms-chat-turn'));
 
-        // Check if any newly added turn reported 'No image generated'
+        // Check ONLY newly added turns or the very last turn for rate limit and 'no image generated'
+        // Do NOT scan full document.body because old turns or past sessions may contain old rate limit text.
         if (turns.length > initialTurnCount) {
             const newTurns = turns.slice(initialTurnCount);
             for (const t of newTurns) {
                 const txt = (t.innerText || '').toLowerCase();
+                if (
+                    txt.includes("you've reached your rate limit") ||
+                    txt.includes("reached your rate limit. please try again later")
+                ) {
+                    return { status: 'rate_limit' };
+                }
                 if (txt.includes('no image generated')) {
                     return { status: 'no_image_generated' };
                 }
+            }
+        } else if (turns.length > 0) {
+            // If turns haven't split yet, check the latest turn
+            const lastTurn = turns[turns.length - 1];
+            const txt = (lastTurn.innerText || '').toLowerCase();
+            if (
+                txt.includes("you've reached your rate limit") ||
+                txt.includes("reached your rate limit. please try again later")
+            ) {
+                return { status: 'rate_limit' };
+            }
+        }
+
+        // Also check any active snackbar / toast notifications that appear globally
+        const toasts = Array.from(document.querySelectorAll('mat-snack-bar-container, .mat-mdc-snack-bar-container, ms-toast, .snackbar'));
+        for (const toast of toasts) {
+            const toastTxt = (toast.innerText || '').toLowerCase();
+            if (
+                toastTxt.includes("you've reached your rate limit") ||
+                toastTxt.includes("reached your rate limit. please try again later")
+            ) {
+                return { status: 'rate_limit' };
             }
         }
 
