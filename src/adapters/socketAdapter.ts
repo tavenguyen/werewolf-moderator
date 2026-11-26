@@ -44,11 +44,19 @@ interface StoredSession {
 export class SocketAdapter implements GameSessionAdapter {
   private socket: Socket | null = null;
   private serverUrl: string;
+  private resumeTimeoutMs: number;
+  private socketFactory?: (url: string) => Socket;
   private state: GameSessionState;
   private listeners: Set<(state: GameSessionState) => void> = new Set();
   private token: string | null = null;
+  private sessionEpoch = 0;
 
-  constructor(serverUrl?: string) {
+  constructor(
+    serverUrl?: string,
+    options?: { resumeTimeoutMs?: number; socketFactory?: (url: string) => Socket }
+  ) {
+    this.resumeTimeoutMs = options?.resumeTimeoutMs ?? 5000;
+    this.socketFactory = options?.socketFactory;
     if (serverUrl) {
       this.serverUrl = serverUrl;
     } else if (typeof window !== 'undefined') {
@@ -109,19 +117,21 @@ export class SocketAdapter implements GameSessionAdapter {
 
     this.updateState({ isConnecting: true });
 
-    this.socket = io(this.serverUrl, {
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      transports: ['websocket', 'polling'],
-    });
+    this.socket = this.socketFactory
+      ? this.socketFactory(this.serverUrl)
+      : io(this.serverUrl, {
+          autoConnect: true,
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 1000,
+          transports: ['websocket', 'polling'],
+        });
 
     this.socket.on('connect', () => {
+      const hadActiveSession = Boolean(this.state.roomCode && this.hasRecoverableSession());
       this.updateState({ isConnected: true, isConnecting: false, error: null });
-      // Tự động khôi phục phiên (resume) nếu có token lưu trong localStorage để tránh zombie connection
-      const saved = this.getStoredSession();
-      if (saved && saved.roomCode && saved.token) {
+      // Chỉ tự động khôi phục phiên (resume) khi adapter đã có phiên phòng hoạt động trước khi rớt mạng
+      if (hadActiveSession) {
         void this.resumeSession().catch(() => {
           // ignore reconnect error
         });
@@ -168,11 +178,16 @@ export class SocketAdapter implements GameSessionAdapter {
     return this.socket;
   }
 
+  private isEpochActive(expectedEpoch?: number): boolean {
+    return expectedEpoch === undefined || expectedEpoch === this.sessionEpoch;
+  }
+
   private async emitWithAck<T>(
     event: string,
     payload: unknown,
     timeoutMs = 15000,
-    onProgress?: (msg: string) => void
+    onProgress?: (msg: string) => void,
+    expectedEpoch?: number
   ): Promise<T> {
     const socket = this.ensureSocket();
 
@@ -182,26 +197,38 @@ export class SocketAdapter implements GameSessionAdapter {
         socket.connect();
       }
       await new Promise<void>((resolve, reject) => {
-        let progressiveTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-          const msg = 'Đang đánh thức máy chủ, vui lòng đợi trong giây lát...';
-          this.updateState({ error: { code: 'COLD_START_WAKING', message: msg } });
-          onProgress?.(msg);
-        }, 3200);
+        let progressiveTimer: ReturnType<typeof setTimeout> | null =
+          timeoutMs > 3200
+            ? setTimeout(() => {
+                const msg = 'Đang đánh thức máy chủ, vui lòng đợi trong giây lát...';
+                if (this.isEpochActive(expectedEpoch)) {
+                  this.updateState({ error: { code: 'COLD_START_WAKING', message: msg } });
+                }
+                onProgress?.(msg);
+              }, 3200)
+            : null;
 
         const connectTimer = setTimeout(() => {
           if (progressiveTimer) clearTimeout(progressiveTimer);
           socket.off('connect', onConnect);
           socket.off('connect_error', onError);
           const errMsg = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau vài giây.';
-          this.updateState({ error: { code: 'CONNECT_TIMEOUT', message: errMsg } });
+          if (this.isEpochActive(expectedEpoch)) {
+            this.updateState({
+              isConnecting: false,
+              error: { code: 'CONNECT_TIMEOUT', message: errMsg },
+            });
+          }
           reject(new Error(errMsg));
-        }, 15000);
+        }, timeoutMs);
 
         const onConnect = () => {
           if (progressiveTimer) clearTimeout(progressiveTimer);
           clearTimeout(connectTimer);
           socket.off('connect_error', onError);
-          this.updateState({ error: null });
+          if (this.isEpochActive(expectedEpoch)) {
+            this.updateState({ isConnecting: false, error: null });
+          }
           resolve();
         };
 
@@ -210,7 +237,12 @@ export class SocketAdapter implements GameSessionAdapter {
           clearTimeout(connectTimer);
           socket.off('connect', onConnect);
           const errMsg = `Không thể kết nối đến máy chủ: ${err.message}`;
-          this.updateState({ error: { code: 'CONNECT_ERROR', message: errMsg } });
+          if (this.isEpochActive(expectedEpoch)) {
+            this.updateState({
+              isConnecting: false,
+              error: { code: 'CONNECT_ERROR', message: errMsg },
+            });
+          }
           reject(new Error(errMsg));
         };
 
@@ -225,7 +257,12 @@ export class SocketAdapter implements GameSessionAdapter {
         if (!settled) {
           settled = true;
           const errMsg = 'Máy chủ chưa phản hồi. Vui lòng thử lại.';
-          this.updateState({ error: { code: 'TIMEOUT', message: errMsg } });
+          if (this.isEpochActive(expectedEpoch)) {
+            this.updateState({
+              isConnecting: false,
+              error: { code: 'TIMEOUT', message: errMsg },
+            });
+          }
           reject(new Error(errMsg));
         }
       }, timeoutMs);
@@ -237,14 +274,18 @@ export class SocketAdapter implements GameSessionAdapter {
 
         if (!res) {
           const errMsg = 'Máy chủ không phản hồi';
-          this.updateState({ error: { code: 'NO_RESPONSE', message: errMsg } });
+          if (this.isEpochActive(expectedEpoch)) {
+            this.updateState({ error: { code: 'NO_RESPONSE', message: errMsg } });
+          }
           reject(new Error(errMsg));
           return;
         }
         if (res.ok) {
           resolve(res.data);
         } else {
-          this.updateState({ error: { code: res.error.code, message: res.error.message } });
+          if (this.isEpochActive(expectedEpoch)) {
+            this.updateState({ error: { code: res.error.code, message: res.error.message } });
+          }
           reject(new Error(res.error.message));
         }
       });
@@ -297,6 +338,7 @@ export class SocketAdapter implements GameSessionAdapter {
   }
 
   public async createRoom(options: CreateRoomOptions): Promise<{ roomCode: string }> {
+    const epoch = ++this.sessionEpoch;
     this.ensureSocket();
     const payload: ClientCreateRoomPayload = {
       isPlayer: options.isPlayer,
@@ -310,7 +352,17 @@ export class SocketAdapter implements GameSessionAdapter {
       playerToken?: string;
     }
 
-    const data = await this.emitWithAck<CreateResponse>('room:create', payload);
+    const data = await this.emitWithAck<CreateResponse>(
+      'room:create',
+      payload,
+      undefined,
+      undefined,
+      epoch
+    );
+
+    if (epoch !== this.sessionEpoch) {
+      return { roomCode: data.roomCode };
+    }
 
     this.token = data.hostToken;
     const hostMode: HostMode = options.isPlayer ? 'PLAYER_HOST' : 'CENTER_BOARD';
@@ -339,6 +391,7 @@ export class SocketAdapter implements GameSessionAdapter {
     roomCode: string,
     username: string
   ): Promise<{ playerId: PlayerId; seatIndex: number }> {
+    const epoch = ++this.sessionEpoch;
     this.ensureSocket();
     const payload: ClientJoinRoomPayload = { roomCode, username };
 
@@ -348,7 +401,17 @@ export class SocketAdapter implements GameSessionAdapter {
       seatIndex: number;
     }
 
-    const data = await this.emitWithAck<JoinResponse>('room:join', payload);
+    const data = await this.emitWithAck<JoinResponse>(
+      'room:join',
+      payload,
+      undefined,
+      undefined,
+      epoch
+    );
+
+    if (epoch !== this.sessionEpoch) {
+      return { playerId: data.playerId, seatIndex: data.seatIndex };
+    }
 
     this.token = data.playerToken;
 
@@ -375,13 +438,13 @@ export class SocketAdapter implements GameSessionAdapter {
   }
 
   public async resumeSession(): Promise<boolean> {
+    const myEpoch = this.sessionEpoch;
     const saved = this.getStoredSession();
     if (!saved || !saved.roomCode || !saved.token) {
       return false;
     }
 
     this.ensureSocket();
-    this.token = saved.token;
 
     const payload: ClientResumePayload = {
       roomCode: saved.roomCode,
@@ -394,8 +457,26 @@ export class SocketAdapter implements GameSessionAdapter {
       playerId?: PlayerId;
     }
 
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
     try {
-      const data = await this.emitWithAck<ResumeResponse>('room:resume', payload);
+      const data = await Promise.race([
+        this.emitWithAck<ResumeResponse>(
+          'room:resume',
+          payload,
+          this.resumeTimeoutMs,
+          undefined,
+          myEpoch
+        ),
+        new Promise<never>((_, reject) => {
+          fallbackTimer = setTimeout(() => {
+            reject(new Error('RESUME_TIMEOUT'));
+          }, this.resumeTimeoutMs);
+        }),
+      ]);
+      if (myEpoch !== this.sessionEpoch) {
+        return false;
+      }
+      this.token = saved.token;
       this.updateState({
         roomCode: saved.roomCode,
         isHost: data.isHost,
@@ -403,29 +484,44 @@ export class SocketAdapter implements GameSessionAdapter {
         playerId: data.playerId ?? saved.playerId,
         mySeatIndex: saved.mySeatIndex,
         deviceMode: 'MULTI_DEVICE',
+        isConnecting: false,
         error: null,
       });
       return true;
     } catch {
-      this.clearStoredSession();
+      if (myEpoch !== this.sessionEpoch) {
+        return false;
+      }
+      const errorCode = this.state.error?.code;
+      if (errorCode === 'ROOM_NOT_FOUND' || errorCode === 'INVALID_TOKEN') {
+        this.clearStoredSession();
+      }
+      this.updateState({ isConnecting: false });
       return false;
+    } finally {
+      if (fallbackTimer !== null) {
+        clearTimeout(fallbackTimer);
+      }
     }
   }
 
   public async leaveRoom(): Promise<void> {
-    if (this.state.roomCode && this.token) {
+    this.sessionEpoch += 1;
+    const roomCode = this.state.roomCode;
+    const token = this.token;
+    this.clearStoredSession();
+    this.token = null;
+    if (roomCode && token) {
       try {
         await this.emitWithAck('room:leave', {
-          roomCode: this.state.roomCode,
-          token: this.token,
+          roomCode,
+          token,
         });
       } catch {
         // ignore
       }
     }
 
-    this.clearStoredSession();
-    this.token = null;
     this.updateState({
       roomCode: '',
       isHost: false,

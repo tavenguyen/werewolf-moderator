@@ -100,6 +100,7 @@ export interface NightActions {
     targets?: PlayerId[];
     isSkip?: boolean;
     individualVotes?: Record<PlayerId, PlayerId | null>; // voterId -> targetId | null (skip)
+    multiVotes?: Record<PlayerId, PlayerId[]>; // voterId -> up to 2 targetIds (Wolf Cub double kill)
   };
   whiteWolf?: { targetId: PlayerId | null };
   seer?: { targetId: PlayerId };

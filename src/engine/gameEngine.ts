@@ -17,6 +17,35 @@ export interface PlayerSetupInput {
   id: PlayerId;
   name: string;
   seatIndex: number;
+  drunkRealRoleId?: string;
+}
+
+const DRUNK_ELIGIBLE_ROLE_POOL = [
+  'seer',
+  'bodyguard',
+  'witch',
+  'hunter',
+  'aura_seer',
+  'fox',
+  'pi',
+  'spellcaster',
+  'troublemaker',
+  'bear_tamer',
+  'elder',
+  'village_idiot',
+  'prince',
+  'tough_guy',
+  'rusty_knight',
+  'villager',
+] as const;
+
+function pickDrunkRealRoleId(
+  usedRoleIds: Set<string>,
+  seedIndex: number
+): string {
+  const unused = DRUNK_ELIGIBLE_ROLE_POOL.filter((roleId) => !usedRoleIds.has(roleId));
+  const pool = unused.length > 0 ? unused : DRUNK_ELIGIBLE_ROLE_POOL;
+  return pool[Math.abs(seedIndex) % pool.length] ?? 'villager';
 }
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
@@ -69,12 +98,23 @@ export function createInitialGameState(
   }
 
   const mergedSettings: RoomSettings = { ...DEFAULT_ROOM_SETTINGS, ...settings };
+  const usedRoleIds = new Set<string>(assignedRoleIds);
 
   const players: PlayerState[] = playersInput.map((input, idx) => {
     const roleId = assignedRoleIds[idx] ?? 'villager';
     const def = ROLES_BY_ID[roleId];
     if (!def || !def.implementedInEngine) {
       throw new Error(`Vai trò [${roleId}] chưa được hỗ trợ trong Game Engine`);
+    }
+
+    let drunkRealRoleId: string | undefined;
+    if (roleId === 'drunk') {
+      if (input.drunkRealRoleId && ROLES_BY_ID[input.drunkRealRoleId]?.implementedInEngine) {
+        drunkRealRoleId = input.drunkRealRoleId;
+      } else {
+        drunkRealRoleId = pickDrunkRealRoleId(usedRoleIds, generation - 1 + idx);
+        usedRoleIds.add(drunkRealRoleId);
+      }
     }
 
     return {
@@ -87,6 +127,7 @@ export function createInitialGameState(
       isAlive: true,
       voteWeight: 1,
       elderHp: roleId === 'elder' ? 2 : undefined,
+      drunkRealRoleId,
     };
   });
 
@@ -313,30 +354,14 @@ export function executeDayVote(
     // 2. Treo cổ đưa vào Death Cascade
     processDeathCascade(nextState, [{ playerId: target.id, cause: 'VILLAGE_VOTE' }]);
 
-    // Kiểm tra kết quả thắng ngay sau mỗi mục tiêu:
+    // Kiểm tra kết quả thắng tức thì sau mỗi mục tiêu bị treo cổ:
     // - Ưu tiên 1: Angel thắng ngay ở Ngày 1
     // - Ưu tiên 2: Tanner thắng ngay ở mọi ngày
     const immediateWin = checkWinCondition(nextState);
-    if (immediateWin) {
+    if (immediateWin && (immediateWin.winner === 'ANGEL' || immediateWin.winner === 'TANNER')) {
       nextState.phase = 'GAME_OVER';
       nextState.doubleVoteDay = false;
       return { nextState, survivedByReveal, winOutcome: immediateWin };
-    }
-
-    // Nếu có Thợ săn vừa bị treo cổ (hoặc chết chùm), mở lượt bắn
-    if (nextState.pendingHunterShotPlayerId) {
-      nextState.phase = 'HUNTER_SHOT';
-      nextState.previousPhaseBeforeHunter = 'NIGHT';
-      nextState.doubleVoteDay = false;
-      return { nextState, survivedByReveal, winOutcome: null };
-    }
-
-    // Nếu Trưởng làng bị treo cổ, mở truyền ngôi
-    if (nextState.pendingMayorSuccessionPlayerId) {
-      nextState.phase = 'MAYOR_SUCCESSION';
-      nextState.previousPhaseBeforeMayorSuccession = 'NIGHT';
-      nextState.doubleVoteDay = false;
-      return { nextState, survivedByReveal, winOutcome: null };
     }
   }
 
@@ -355,15 +380,32 @@ export function executeDayVote(
     }
   }
 
+  const hasAlivePlayers = nextState.players.some((p) => p.isAlive);
+
+  // Nếu có Thợ săn vừa bị treo cổ (hoặc chết chùm), mở lượt bắn sau khi giải quyết xong toàn bộ mục tiêu
+  if (nextState.pendingHunterShotPlayerId && hasAlivePlayers) {
+    nextState.phase = 'HUNTER_SHOT';
+    nextState.previousPhaseBeforeHunter = 'NIGHT';
+    return { nextState, survivedByReveal, winOutcome: null };
+  }
+
   const finalWin = checkWinCondition(nextState);
   if (finalWin) {
     nextState.phase = 'GAME_OVER';
-  } else {
-    nextState.roundNumber += 1;
-    nextState.phase = 'NIGHT';
+    return { nextState, survivedByReveal, winOutcome: finalWin };
   }
 
-  return { nextState, survivedByReveal, winOutcome: finalWin };
+  // Nếu Trưởng làng bị treo cổ (hoặc chết chùm) và ván đấu chưa ngã ngũ, mở truyền ngôi
+  if (nextState.pendingMayorSuccessionPlayerId && hasAlivePlayers) {
+    nextState.phase = 'MAYOR_SUCCESSION';
+    nextState.previousPhaseBeforeMayorSuccession = 'NIGHT';
+    return { nextState, survivedByReveal, winOutcome: null };
+  }
+
+  nextState.roundNumber += 1;
+  nextState.phase = 'NIGHT';
+
+  return { nextState, survivedByReveal, winOutcome: null };
 }
 
 /**
@@ -390,18 +432,22 @@ export function executeHunterShot(
     nextState.historyLogs.push('Thợ săn không chọn ai hoặc đã bắn trượt.');
   }
 
-  // Nếu phát súng trúng Trưởng làng, mở truyền ngôi
-  if (nextState.pendingMayorSuccessionPlayerId) {
+  const winOutcome = checkWinCondition(nextState);
+  if (winOutcome) {
+    nextState.phase = 'GAME_OVER';
+    return { nextState, winOutcome };
+  }
+
+  // Nếu phát súng trúng Trưởng làng (hoặc Trưởng làng chết trước đó) và ván đấu chưa ngã ngũ, mở truyền ngôi
+  const hasAlivePlayers = nextState.players.some((p) => p.isAlive);
+  if (nextState.pendingMayorSuccessionPlayerId && hasAlivePlayers) {
     nextState.phase = 'MAYOR_SUCCESSION';
     nextState.previousPhaseBeforeMayorSuccession =
       nextState.previousPhaseBeforeHunter ?? 'DAY_DISCUSS';
     return { nextState, winOutcome: null };
   }
 
-  const winOutcome = checkWinCondition(nextState);
-  if (winOutcome) {
-    nextState.phase = 'GAME_OVER';
-  } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
+  if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
     nextState.bearGrowled = evaluateBearGrowl(nextState);
   } else {
     nextState.phase = nextState.previousPhaseBeforeHunter ?? 'DAY_DISCUSS';

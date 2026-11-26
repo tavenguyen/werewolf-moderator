@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
+import { ROLES_BY_ID } from '../../engine/roles';
+import { getRoleImage } from '../../assets/roles';
 import { formatTime } from '../../utils/formatTime';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
 import type { PlayerId } from '../../engine/types';
@@ -28,6 +30,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   const [isSubmittingFinalize, setIsSubmittingFinalize] = useState(false);
   const [notice, setNotice] = useState('');
   const [remainingTime, setRemainingTime] = useState(180);
+  const [isPeekingRole, setIsPeekingRole] = useState(false);
+  const [peekAvatarError, setPeekAvatarError] = useState(false);
 
   const phase = publicView?.phase ?? 'DAY_DISCUSS';
   const isHunterShotPhase = phase === 'HUNTER_SHOT';
@@ -91,6 +95,32 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   useEffect(() => {
     setHandVotes({});
   }, [publicView?.roundNumber, publicView?.phase]);
+
+  // Đóng thẻ xem vai khi đổi người chơi/pha hoặc mất focus
+  useEffect(() => {
+    setPeekAvatarError(false);
+    setIsPeekingRole(false);
+  }, [privateView?.roleId, privateView?.playerId, publicView?.phase, isSingleDevice]);
+
+  useEffect(() => {
+    if (!isPeekingRole) return;
+    const hidePeek = () => setIsPeekingRole(false);
+    const handleVisibility = () => {
+      if (document.hidden) {
+        hidePeek();
+      }
+    };
+    window.addEventListener('pointerup', hidePeek);
+    window.addEventListener('pointercancel', hidePeek);
+    window.addEventListener('blur', hidePeek);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('pointerup', hidePeek);
+      window.removeEventListener('pointercancel', hidePeek);
+      window.removeEventListener('blur', hidePeek);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isPeekingRole]);
 
   const effectiveVoteSubmitted =
     voteSubmitted ||
@@ -243,6 +273,43 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
       </header>
 
       <div className="day-main">
+        {/* Nút giữ để xem vai bí mật của bản thân (Multi-device) */}
+        {!isSingleDevice && privateView?.roleId && (
+          <div className="day-role-peek-bar">
+            <button
+              type="button"
+              className={`day-role-peek-pill ${isPeekingRole ? 'is-peeking' : ''}`}
+              aria-pressed={isPeekingRole}
+              aria-expanded={isPeekingRole}
+              aria-label="Giữ để xem vai trò bí mật của bạn"
+              onPointerDown={(e) => {
+                if (e.button !== undefined && e.button !== 0) return;
+                setIsPeekingRole(true);
+              }}
+              onPointerUp={() => setIsPeekingRole(false)}
+              onPointerLeave={() => setIsPeekingRole(false)}
+              onPointerCancel={() => setIsPeekingRole(false)}
+              onBlur={() => setIsPeekingRole(false)}
+              onKeyDown={(e) => {
+                if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+                  e.preventDefault();
+                  setIsPeekingRole(true);
+                }
+              }}
+              onKeyUp={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  setIsPeekingRole(false);
+                }
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              <span aria-hidden="true">👁</span>
+              <span>{isPeekingRole ? 'Thả tay để ẩn vai' : 'Giữ để xem vai'}</span>
+            </button>
+          </div>
+        )}
+
         {/* Antique Sundial Countdown Clock */}
         <section className={`day-clock-card ${isUrgent ? 'is-urgent' : ''}`}>
           <span className="eyebrow">THỜI GIAN THẢO LUẬN</span>
@@ -939,6 +1006,105 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         </div>
       )}
+      {/* Thẻ xem vai trò bí mật khi giữ (Multi-device) */}
+      {!isSingleDevice && isPeekingRole && privateView?.roleId && (() => {
+        const myRoleDef = ROLES_BY_ID[privateView.roleId] ?? ROLES_BY_ID.villager;
+        const myRoleImage = getRoleImage(privateView.roleId);
+        const faction = privateView.faction ?? myRoleDef.faction;
+        const factionLabel =
+          faction === 'WEREWOLF'
+            ? '🐺 PHE MA SÓI'
+            : faction === 'THIRD_PARTY'
+            ? '🎭 PHE THỨ BA'
+            : '🛡️ PHE DÂN LÀNG';
+        const shortReminder = myRoleDef.shortDesc
+          ? `${myRoleDef.shortDesc.split('.')[0]}.`
+          : 'Giữ kín vai trò của bạn.';
+        const loverPlayer = privateView.loverId
+          ? players.find((p) => p.id === privateView.loverId)
+          : null;
+        const drunkRealRole = privateView.skills?.drunkRealRoleId
+          ? ROLES_BY_ID[privateView.skills.drunkRealRoleId]
+          : null;
+
+        const secretStatuses: string[] = [];
+        if (privateView.isMayor) {
+          secretStatuses.push('👑 Trưởng làng (2 phiếu biểu quyết)');
+        }
+        if (privateView.loverId) {
+          const partnerText = loverPlayer
+            ? `#${loverPlayer.seatIndex} ${loverPlayer.name}`
+            : 'Người chơi bí mật';
+          secretStatuses.push(
+            `💘 Cặp đôi với ${partnerText}${privateView.isCrossFactionCouple ? ' (Phe Thứ 3)' : ''}`
+          );
+        }
+        if (privateView.skills?.drunkRealRoleId) {
+          secretStatuses.push(
+            `🍺 Vai trò thật (Đêm 3+): ${drunkRealRole?.nameVi ?? privateView.skills.drunkRealRoleId}`
+          );
+        }
+        if (privateView.roleId === 'elder' && typeof privateView.skills?.elderHp === 'number') {
+          secretStatuses.push(`🛡️ Giáp Già làng còn: ${privateView.skills.elderHp} mạng`);
+        }
+        if (privateView.roleId === 'witch') {
+          secretStatuses.push(
+            `🧪 Bình Cứu: ${privateView.skills?.witchHealUsed ? 'Đã dùng' : 'Còn'} · ☠️ Bình Độc: ${privateView.skills?.witchPoisonUsed ? 'Đã dùng' : 'Còn'}`
+          );
+        }
+        if (privateView.roleId === 'fox' && privateView.skills?.foxLostPower) {
+          secretStatuses.push('🦊 Đã mất khứu giác');
+        }
+        if (privateView.skills?.isMuted) {
+          secretStatuses.push('🔇 Đang bị phù phép câm lặng');
+        }
+        if (privateView.skills?.isEnchanted) {
+          secretStatuses.push('🎵 Đã bị thôi miên');
+        }
+        if (privateView.skills?.isCultMember) {
+          secretStatuses.push('🕯️ Thành viên giáo phái');
+        }
+        if (!privateView.isAlive) {
+          secretStatuses.push('☠️ Bạn đã rời khỏi ván đấu');
+        }
+
+        return (
+          <div className="day-role-peek-overlay" role="dialog" aria-label="Thông tin vai trò cá nhân">
+            <div className={`day-role-peek-card faction-${faction}`}>
+              <div className="day-role-peek-header">
+                <span className={`day-role-peek-faction faction-${faction}`}>{factionLabel}</span>
+                <span className="day-role-peek-hint">Thả tay để che lại</span>
+              </div>
+              <div className="day-role-peek-body">
+                {myRoleImage && !peekAvatarError ? (
+                  <img
+                    src={myRoleImage}
+                    alt=""
+                    aria-hidden="true"
+                    className="day-role-peek-art"
+                    decoding="async"
+                    draggable={false}
+                    onError={() => setPeekAvatarError(true)}
+                  />
+                ) : (
+                  <div className="day-role-peek-art-fallback" aria-hidden="true">✦</div>
+                )}
+                <div className="day-role-peek-info">
+                  <strong className="day-role-peek-name">{myRoleDef.nameVi}</strong>
+                  <p className="day-role-peek-desc">{shortReminder}</p>
+                </div>
+              </div>
+              {secretStatuses.length > 0 && (
+                <ul className="day-role-peek-status-list">
+                  {secretStatuses.map((status) => (
+                    <li key={status}>{status}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }

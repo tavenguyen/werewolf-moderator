@@ -130,6 +130,8 @@ export function tallyMayorElection(state: GameState): {
 } {
   const nextState: GameState = structuredClone(state);
   if (!nextState.dayState || !nextState.dayState.mayorBallots) {
+    nextState.historyLogs.push('Không có ai nhận được phiếu bầu Trưởng làng. Không có Trưởng làng!');
+    nextState.phase = 'DAY_DISCUSS';
     return { nextState, electedMayorId: null };
   }
 

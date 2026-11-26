@@ -26,6 +26,8 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
   const [remainingTime, setRemainingTime] = useState(180);
   const [qrOpen, setQrOpen] = useState(false);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [confirmFinalizeOpen, setConfirmFinalizeOpen] = useState(false);
+  const [isSubmittingFinalize, setIsSubmittingFinalize] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
   const [isMuted, setIsMuted] = useState(() => audioController.getIsMuted());
@@ -34,6 +36,20 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
 
   const qrTrigger = useRef<HTMLButtonElement>(null);
   const qrClose = useRef<HTMLButtonElement>(null);
+  const finalizeTrigger = useRef<HTMLButtonElement>(null);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+
+  const phase = publicView?.phase ?? 'DAY_DISCUSS';
+  const isNightPhase = phase === 'NIGHT';
+  const isMayorElectionPhase = phase === 'DAY_MAYOR_ELECTION';
+  const isRunoffPhase = phase === 'DAY_RUNOFF';
+  const isHunterShotPhase = phase === 'HUNTER_SHOT';
+  const isMayorSuccessionPhase = phase === 'MAYOR_SUCCESSION';
+  const isGameOverPhase = phase === 'GAME_OVER';
+  const isTimedDayPhase =
+    phase === 'DAY_DISCUSS' || isMayorElectionPhase || isRunoffPhase;
+  const effectiveVoteLocked =
+    isMayorElectionPhase || isRunoffPhase ? false : voteLocked;
 
   const handleCopyLink = async () => {
     try {
@@ -60,12 +76,30 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
 
   useEffect(() => {
     if (!publicView?.deadlineAt) {
-      setRemainingTime(180);
+      if (publicView?.isPaused) {
+        if (publicView.pausedRemainingSeconds != null) {
+          setRemainingTime(publicView.pausedRemainingSeconds);
+        }
+        return;
+      }
+      const fallbackSeconds = isMayorElectionPhase
+        ? 45
+        : isRunoffPhase
+        ? 30
+        : isHunterShotPhase
+        ? 15
+        : isMayorSuccessionPhase
+        ? 10
+        : 180;
+      setRemainingTime(fallbackSeconds);
       return;
     }
 
     if (publicView.isPaused) {
-      // Đóng băng hiển thị đồng hồ khi Pause
+      // Đóng băng hiển thị đồng hồ khi Pause (ưu tiên số giây server đã lưu)
+      if (publicView.pausedRemainingSeconds != null) {
+        setRemainingTime(publicView.pausedRemainingSeconds);
+      }
       return;
     }
 
@@ -78,23 +112,42 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
     updateTimer();
     const interval = window.setInterval(updateTimer, 500);
     return () => window.clearInterval(interval);
-  }, [publicView?.deadlineAt, publicView?.isPaused]);
+  }, [
+    publicView?.deadlineAt,
+    publicView?.isPaused,
+    publicView?.pausedRemainingSeconds,
+    isMayorElectionPhase,
+    isRunoffPhase,
+    isHunterShotPhase,
+    isMayorSuccessionPhase,
+  ]);
 
   useEffect(() => {
-    if (!qrOpen && !emergencyOpen) return;
+    setConfirmFinalizeOpen(false);
+    setIsSubmittingFinalize(false);
+    setEmergencyOpen(false);
+  }, [publicView?.phase, publicView?.roundNumber]);
+
+  useEffect(() => {
+    if (!qrOpen && !emergencyOpen && !confirmFinalizeOpen) return;
     if (qrOpen) qrClose.current?.focus();
+    if (confirmFinalizeOpen) confirmCancelRef.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (qrOpen) {
           setQrOpen(false);
           qrTrigger.current?.focus();
         }
+        if (confirmFinalizeOpen && !isSubmittingFinalize) {
+          setConfirmFinalizeOpen(false);
+          finalizeTrigger.current?.focus();
+        }
         if (emergencyOpen) setEmergencyOpen(false);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [qrOpen, emergencyOpen]);
+  }, [qrOpen, emergencyOpen, confirmFinalizeOpen, isSubmittingFinalize]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenEnabled) return;

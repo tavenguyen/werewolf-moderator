@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import HomeScreen from './screens/home/HomeScreen';
 import LobbyScreen from './screens/lobby/LobbyScreen';
 import RoleRevealScreen from './screens/reveal/RoleRevealScreen';
@@ -8,6 +8,7 @@ import HostScreen from './screens/host/HostScreen';
 import SummaryScreen from './screens/summary/SummaryScreen';
 import RulesAndRolesDrawer from './components/RulesAndRolesDrawer';
 import { GameSessionProvider, useGameSession } from './adapters/useGameSession';
+import type { GamePhase } from './engine/types';
 import type { ScreenName } from './navigation';
 
 const screens = ['home', 'lobby', 'reveal', 'night', 'day', 'host', 'summary'] as const satisfies readonly ScreenName[];
@@ -23,10 +24,17 @@ const screenLabels: Record<ScreenName, { title: string; keyNum: string }> = {
 };
 
 function AppContent() {
-  const { state } = useGameSession();
+  const { state, isAutoResumed } = useGameSession();
   const [screen, setScreen] = useState<ScreenName>('home');
   const [rulesDrawerOpen, setRulesDrawerOpen] = useState(false);
   const [rulesDrawerTab, setRulesDrawerTab] = useState<'rules' | 'roles'>('rules');
+  const isDevMode = useMemo(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dev') === '1',
+    []
+  );
+  const prevPhaseRef = useRef<GamePhase | null>(null);
+  const prevRoomCodeRef = useRef<string | null>(null);
+  const prevAutoResumedRef = useRef(false);
 
   const navigate = setScreen;
 
@@ -35,50 +43,84 @@ function AppContent() {
     setRulesDrawerOpen(true);
   };
 
-  // Tự động điều hướng theo gamePhase của GameSession
+  // Tự động điều hướng theo gamePhase của GameSession (chỉ khi phase/roomCode chuyển hoặc auto-resume)
   useEffect(() => {
-    const phase = state.publicView?.phase;
-    if (!phase) return;
+    const phase = state.publicView?.phase ?? null;
+    const roomCode = state.publicView?.roomCode ?? (state.roomCode || null);
+
+    if (!phase) {
+      prevPhaseRef.current = null;
+      prevRoomCodeRef.current = null;
+      prevAutoResumedRef.current = isAutoResumed;
+      return;
+    }
+
+    const phaseChanged = phase !== prevPhaseRef.current;
+    const roomChanged = roomCode !== prevRoomCodeRef.current;
+    const autoResumedTriggered = isAutoResumed && !prevAutoResumedRef.current;
+
+    prevPhaseRef.current = phase;
+    prevRoomCodeRef.current = roomCode;
+    prevAutoResumedRef.current = isAutoResumed;
+
+    if (!phaseChanged && !roomChanged && !autoResumedTriggered) {
+      return;
+    }
 
     const isCenterBoardHost =
       state.deviceMode === 'MULTI_DEVICE' &&
       state.isHost &&
       state.hostMode === 'CENTER_BOARD';
 
-    if (phase === 'LOBBY') {
-      if (screen !== 'home' && screen !== 'lobby' && screen !== 'host') {
-        setScreen('lobby');
+    setScreen((currentScreen) => {
+      if (phase === 'LOBBY') {
+        if (
+          (currentScreen !== 'home' && currentScreen !== 'lobby' && currentScreen !== 'host') ||
+          (currentScreen === 'home' && isAutoResumed)
+        ) {
+          return 'lobby';
+        }
+        return currentScreen;
       }
-    } else if (phase === 'FIRST_NIGHT_SETUP') {
-      if (screen !== 'reveal') {
-        setScreen('reveal');
+      if (phase === 'FIRST_NIGHT_SETUP') {
+        return currentScreen !== 'reveal' ? 'reveal' : currentScreen;
       }
-    } else if (phase === 'NIGHT') {
-      if (isCenterBoardHost) {
-        if (screen !== 'host') setScreen('host');
-      } else {
-        if (screen !== 'night') setScreen('night');
+      if (phase === 'NIGHT') {
+        const targetScreen = isCenterBoardHost ? 'host' : 'night';
+        return currentScreen !== targetScreen ? targetScreen : currentScreen;
       }
-    } else if (
-      phase === 'DAY_DISCUSS' ||
-      phase === 'DAY_VOTE' ||
-      phase === 'DAY_RUNOFF' ||
-      phase === 'DAY_MAYOR_ELECTION' ||
-      phase === 'HUNTER_SHOT' ||
-      phase === 'MAYOR_SUCCESSION'
-    ) {
-      if (isCenterBoardHost) {
-        if (screen !== 'host') setScreen('host');
-      } else {
-        if (screen !== 'day') setScreen('day');
+      if (
+        phase === 'DAY_DISCUSS' ||
+        phase === 'DAY_VOTE' ||
+        phase === 'DAY_RUNOFF' ||
+        phase === 'DAY_MAYOR_ELECTION' ||
+        phase === 'HUNTER_SHOT' ||
+        phase === 'MAYOR_SUCCESSION'
+      ) {
+        const targetScreen = isCenterBoardHost ? 'host' : 'day';
+        return currentScreen !== targetScreen ? targetScreen : currentScreen;
       }
-    } else if (phase === 'GAME_OVER') {
-      if (screen !== 'summary') setScreen('summary');
-    }
-  }, [state.publicView?.phase, state.deviceMode, state.isHost, state.hostMode, screen]);
+      if (phase === 'GAME_OVER') {
+        return currentScreen !== 'summary' ? 'summary' : currentScreen;
+      }
+      return currentScreen;
+    });
+  }, [
+    state.publicView?.phase,
+    state.publicView?.roomCode,
+    state.roomCode,
+    state.deviceMode,
+    state.isHost,
+    state.hostMode,
+    isAutoResumed,
+  ]);
 
-  // Bắt phím tắt bàn phím [1..6] để dev/tester chuyển nhanh khi cần
+  // Bắt phím tắt bàn phím [1..7] chỉ khi bật chế độ ?dev=1
   useEffect(() => {
+    if (!isDevMode) {
+      return;
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
         return;
@@ -101,31 +143,33 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rulesDrawerOpen]);
+  }, [isDevMode, rulesDrawerOpen]);
 
   return (
     <>
-      <div className="demo-nav-wrapper">
-        <nav className="demo-nav" aria-label="Chuyển màn hình ván đấu">
-          <div className="demo-nav-label">
-            <span className="hud-dot" aria-hidden="true" />
-            <span>MODERATOR HUD</span>
-          </div>
-          <div className="demo-nav-items">
-            {screens.map((item) => (
-              <button
-                key={item}
-                className={screen === item ? 'demo-nav-button active' : 'demo-nav-button'}
-                onClick={() => navigate(item)}
-                title={`Nhấn phím [${screenLabels[item].keyNum}] để chuyển`}
-              >
-                <span>{screenLabels[item].title}</span>
-                <kbd>{screenLabels[item].keyNum}</kbd>
-              </button>
-            ))}
-          </div>
-        </nav>
-      </div>
+      {isDevMode && (
+        <div className="demo-nav-wrapper">
+          <nav className="demo-nav" aria-label="Chuyển màn hình ván đấu">
+            <div className="demo-nav-label">
+              <span className="hud-dot" aria-hidden="true" />
+              <span>MODERATOR HUD</span>
+            </div>
+            <div className="demo-nav-items">
+              {screens.map((item) => (
+                <button
+                  key={item}
+                  className={screen === item ? 'demo-nav-button active' : 'demo-nav-button'}
+                  onClick={() => navigate(item)}
+                  title={`Nhấn phím [${screenLabels[item].keyNum}] để chuyển`}
+                >
+                  <span>{screenLabels[item].title}</span>
+                  <kbd>{screenLabels[item].keyNum}</kbd>
+                </button>
+              ))}
+            </div>
+          </nav>
+        </div>
+      )}
 
       <div key={screen} className={`screen-container screen-${screen}`}>
         {screen === 'home' && (

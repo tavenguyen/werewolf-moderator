@@ -92,6 +92,7 @@ export interface RoomState {
   nightTurnPlan: NightTurnPlanItem[];
   nightActionsAccumulator: NightActions;
   nightActionAcks: Set<PlayerId>;
+  currentNightSeed?: number;
 
   // Timers
   timers: RoomTimers;
@@ -136,6 +137,7 @@ export interface PublicRoomView {
   players: PublicPlayerView[];
   deadlineAt: number | null;
   isPaused: boolean;
+  pausedRemainingSeconds?: number | null;
   voteLocked: boolean;
   voteLockRemainingSeconds: number | null;
   extensionsUsed: number;
@@ -149,8 +151,6 @@ export interface PublicRoomView {
     turnIndex?: number;
     totalTurns?: number;
     nextTurnTitleVi?: string | null;
-    isFake?: boolean;
-    canAct?: boolean;
   };
   lastVoteTally?: {
     tallies: Record<PlayerId, number>;
@@ -193,6 +193,8 @@ export interface PlayerPrivateView {
     witchHealUsed?: boolean;
     witchPoisonUsed?: boolean;
     witchVictimId?: PlayerId | null; // Chỉ có khi Phù thủy thức và settings.witchKnowsVictim = true
+    witchVictimIds?: PlayerId[]; // Toàn bộ nạn nhân bị bầy Sói cắn đêm nay (khi Sói con chết / Sói đại ca)
+    wolfCubDoubleKillNextNight?: boolean;
     lastProtectedPlayerId?: PlayerId | null;
     elderHp?: number;
     masonPartnerIds?: PlayerId[];

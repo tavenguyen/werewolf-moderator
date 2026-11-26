@@ -235,6 +235,13 @@ export class RoomService {
       }
       // Trong ván: đánh dấu Host disconnect
       room.host.socketId = null;
+      if (room.host.isPlayer && room.host.playerId) {
+        const hostPlayer = room.players.get(room.host.playerId);
+        if (hostPlayer) {
+          hostPlayer.socketId = null;
+          hostPlayer.isConnected = false;
+        }
+      }
       this.touchRoom(roomCode);
       return true;
     }
@@ -264,7 +271,7 @@ export class RoomService {
 
   /**
    * Reconnect Host:
-   * Xác thực hostToken, cập nhật socketId mới.
+   * Xác thực hostToken, cập nhật socketId mới (bao gồm player record nếu là Host kiêm người chơi).
    */
   public reconnectHost(roomCode: string, hostToken: string, socketId: string): boolean {
     const room = this.rooms.get(roomCode);
@@ -275,6 +282,13 @@ export class RoomService {
     }
 
     room.host.socketId = socketId;
+    if (room.host.isPlayer && room.host.playerId) {
+      const hostPlayer = room.players.get(room.host.playerId);
+      if (hostPlayer) {
+        hostPlayer.socketId = socketId;
+        hostPlayer.isConnected = true;
+      }
+    }
     this.touchRoom(roomCode);
     return true;
   }
@@ -315,6 +329,13 @@ export class RoomService {
     for (const room of this.rooms.values()) {
       if (room.host.socketId === socketId) {
         room.host.socketId = null;
+        if (room.host.isPlayer && room.host.playerId) {
+          const hostPlayer = room.players.get(room.host.playerId);
+          if (hostPlayer) {
+            hostPlayer.socketId = null;
+            hostPlayer.isConnected = false;
+          }
+        }
         return { roomCode: room.roomCode, isHost: true };
       }
 
@@ -426,19 +447,39 @@ export class RoomService {
     // Thu hồi token ngay lập tức
     player.playerToken = '';
     player.isConnected = false;
+    player.socketId = null;
 
     if (room.gameState) {
       const pState = room.gameState.players.find((p) => p.id === targetPlayerId);
       if (pState && pState.isAlive) {
+        const prevPhase = room.gameState.phase;
         room.gameState.historyLogs.push(
           `Host đã sử dụng quyền LOẠI KHẨN CẤP đối với [${player.name}].`
         );
+        room.publicHistoryLogs.push(
+          `Host đã sử dụng quyền LOẠI KHẨN CẤP đối với [${player.name}].`
+        );
         processDeathCascade(room.gameState, [{ playerId: targetPlayerId, cause: 'VILLAGE_VOTE' }]);
-        player.isAlive = false;
 
-        const win = checkWinCondition(room.gameState);
-        if (win) {
-          room.gameState.phase = 'GAME_OVER';
+        for (const gsPlayer of room.gameState.players) {
+          const rp = room.players.get(gsPlayer.id);
+          if (rp) {
+            rp.isAlive = gsPlayer.isAlive;
+          }
+        }
+
+        const hasAlivePlayers = room.gameState.players.some((p) => p.isAlive);
+        if (room.gameState.pendingHunterShotPlayerId && hasAlivePlayers) {
+          room.gameState.previousPhaseBeforeHunter = prevPhase;
+          room.gameState.phase = 'HUNTER_SHOT';
+        } else if (room.gameState.pendingMayorSuccessionPlayerId && hasAlivePlayers) {
+          room.gameState.previousPhaseBeforeMayorSuccession = prevPhase;
+          room.gameState.phase = 'MAYOR_SUCCESSION';
+        } else {
+          const win = checkWinCondition(room.gameState);
+          if (win) {
+            room.gameState.phase = 'GAME_OVER';
+          }
         }
       }
     } else {
@@ -466,12 +507,27 @@ export class RoomService {
     }
 
     const playerCount = room.players.size;
-    const preset = getSmartPreset(playerCount);
-    if (!preset) {
-      throw new Error(`Không tìm thấy preset cấu hình vai trò cho ${playerCount} người chơi.`);
+    const customDeckRoles: string[] = [];
+    if (room.settings.customDeck) {
+      for (const [roleId, qty] of Object.entries(room.settings.customDeck)) {
+        const n = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
+        for (let i = 0; i < n; i++) {
+          customDeckRoles.push(roleId);
+        }
+      }
     }
 
-    const roleIds = [...preset.roles];
+    let roleIds: string[];
+    if (customDeckRoles.length === playerCount && customDeckRoles.length > 0) {
+      roleIds = [...customDeckRoles];
+    } else {
+      const preset = getSmartPreset(playerCount);
+      if (!preset) {
+        throw new Error(`Không tìm thấy preset cấu hình vai trò cho ${playerCount} người chơi.`);
+      }
+      roleIds = [...preset.roles];
+    }
+
     for (let i = roleIds.length - 1; i > 0; i--) {
       const j = crypto.randomInt(0, i + 1);
       const temp = roleIds[i];
@@ -484,10 +540,14 @@ export class RoomService {
     room.nightTurnPlan = [];
     room.nightActionsAccumulator = {};
     room.nightActionAcks.clear();
+    room.currentNightSeed = undefined;
     room.lastVoteTally = undefined;
     room.publicHistoryLogs = [];
     room.seerInvestigationResult = undefined;
     room.sorcererInvestigationResult = undefined;
+    room.auraInvestigationResult = undefined;
+    room.foxInvestigationResult = undefined;
+    room.piInvestigationResult = undefined;
 
     // Reset timers
     if (room.timers.timerId) {
@@ -499,6 +559,7 @@ export class RoomService {
     room.timers.isPaused = false;
 
     // Khởi tạo GameState mới qua pure function engine
+    room.gameState.settings = { ...room.settings };
     room.gameState = createRematchGameState(room.gameState, roleIds);
     room.gameState.phase = 'NIGHT';
     room.gameGeneration += 1;

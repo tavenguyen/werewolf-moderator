@@ -330,4 +330,95 @@ describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
     expect(p5View).not.toBeNull();
     expect(p5View!.skills.hoodlumTargetIds).toEqual([p1.id, p2.id]);
   });
+
+  it('PublicRoomView.currentTurnInfo tuyệt đối không rò rỉ isFake hay canAct', async () => {
+    const { roomCode } = await setupGame(['werewolf', 'seer', 'witch', 'villager', 'villager', 'villager']);
+    const room = roomService.getRoom(roomCode)!;
+
+    // Giả lập Seer đã chết -> lượt fake
+    const seer = room.gameState!.players.find((p) => p.roleId === 'seer')!;
+    seer.isAlive = false;
+    room.nightTurnPlan = [
+      {
+        roleId: 'seer',
+        turnKey: 'seer',
+        priority: 40,
+        titleVi: 'Tiên tri',
+        titleEn: 'Seer',
+        activePlayerIds: [],
+        isFake: true,
+        canAct: false,
+        audioKey: 'night_seer',
+      },
+    ];
+    room.currentNightTurnIndex = 0;
+
+    const publicView = createPublicRoomView(room);
+    expect(publicView.currentTurnInfo).toBeDefined();
+    expect(publicView.currentTurnInfo!.turnKey).toBe('seer');
+    expect((publicView.currentTurnInfo as Record<string, unknown>).isFake).toBeUndefined();
+    expect((publicView.currentTurnInfo as Record<string, unknown>).canAct).toBeUndefined();
+  });
+
+  it('Cupid validTargets loại trừ bản thân khi allowCupidSelfMatch = false', async () => {
+    const { roomCode } = await setupGame(['cupid', 'werewolf', 'seer', 'villager', 'villager', 'villager']);
+    const room = roomService.getRoom(roomCode)!;
+    const cupid = room.gameState!.players.find((p) => p.roleId === 'cupid')!;
+
+    room.nightTurnPlan = [
+      {
+        roleId: 'cupid',
+        turnKey: 'cupid',
+        priority: 10,
+        titleVi: 'Thần tình yêu',
+        titleEn: 'Cupid',
+        activePlayerIds: [cupid.id],
+        isFake: false,
+        canAct: true,
+        audioKey: 'night_cupid',
+      },
+    ];
+    room.currentNightTurnIndex = 0;
+
+    // Mặc định allowCupidSelfMatch = true -> bao gồm Cupid
+    const viewAllowed = createPlayerPrivateView(room, cupid.id)!;
+    expect(viewAllowed.validTargets).toContain(cupid.id);
+
+    // Tắt allowCupidSelfMatch = false -> loại trừ Cupid
+    room.settings.allowCupidSelfMatch = false;
+    const viewDisallowed = createPlayerPrivateView(room, cupid.id)!;
+    expect(viewDisallowed.validTargets).not.toContain(cupid.id);
+    expect(viewDisallowed.validTargets.length).toBe(5);
+  });
+
+  it('Witch nhận đủ witchVictimIds khi Sói cắn nhiều người và khóa bình thứ 2 khi allowWitchBothPotionsSameNight = false', async () => {
+    const { roomCode } = await setupGame(['werewolf', 'wolf_cub', 'witch', 'villager', 'villager', 'villager']);
+    const room = roomService.getRoom(roomCode)!;
+    room.settings.witchKnowsVictim = true;
+    room.settings.allowWitchBothPotionsSameNight = false;
+    room.gameState!.wolfCubDoubleKillNextNight = true;
+
+    const witch = room.gameState!.players.find((p) => p.roleId === 'witch')!;
+    const villagers = room.gameState!.players.filter((p) => p.roleId === 'villager');
+
+    room.nightActionsAccumulator.wolfPack = {
+      targets: [villagers[0].id, villagers[1].id],
+    };
+
+    const witchTurnIdx = room.nightTurnPlan.findIndex((t) => t.turnKey === 'witch');
+    room.currentNightTurnIndex = witchTurnIdx;
+    room.nightActionAcks.clear();
+
+    const witchViewBefore = createPlayerPrivateView(room, witch.id)!;
+    expect(witchViewBefore.skills.witchVictimId).toBe(villagers[0].id);
+    expect(witchViewBefore.skills.witchVictimIds).toEqual([villagers[0].id, villagers[1].id]);
+    expect(witchViewBefore.skills.witchHealUsed).toBe(false);
+    expect(witchViewBefore.skills.witchPoisonUsed).toBe(false);
+
+    // Khi Phù thủy đã dùng bình Cứu trong đêm này -> bình Độc cũng bị đánh dấu không khả dụng
+    room.nightActionsAccumulator.witch = { heal: true };
+    const witchViewAfterHeal = createPlayerPrivateView(room, witch.id)!;
+    expect(witchViewAfterHeal.skills.witchHealUsed).toBe(true);
+    expect(witchViewAfterHeal.skills.witchPoisonUsed).toBe(true);
+  });
 });

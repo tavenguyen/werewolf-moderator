@@ -927,5 +927,126 @@ describe('Realtime Backend - Projections & Targets for Phase 3 (wolf_accursed, b
         targetId: pVillagers[1].id,
       });
     });
+
+    it('SocketGateway hỗ trợ wolfCubDoubleKillNextNight (targetIds), seerRevealMode = EXACT_ROLE và aura_seer soi drunk', async () => {
+      const { roomCode, players } = await setupGame([
+        'werewolf',
+        'seer',
+        'aura_seer',
+        'drunk',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+      room.settings.seerRevealMode = 'EXACT_ROLE';
+      room.gameState!.settings.seerRevealMode = 'EXACT_ROLE';
+      room.gameState!.wolfCubDoubleKillNextNight = true;
+
+      const pWolf = room.gameState!.players.find((p) => p.roleId === 'werewolf')!;
+      const pSeer = room.gameState!.players.find((p) => p.roleId === 'seer')!;
+      const pAura = room.gameState!.players.find((p) => p.roleId === 'aura_seer')!;
+      const pDrunk = room.gameState!.players.find((p) => p.roleId === 'drunk')!;
+      const pVillagers = room.gameState!.players.filter((p) => p.roleId === 'villager');
+
+      const wolfPlayer = players.find((p) => p.id === pWolf.id)!;
+      const seerPlayer = players.find((p) => p.id === pSeer.id)!;
+      const auraPlayer = players.find((p) => p.id === pAura.id)!;
+
+      // 1. Wolf pack gửi 2 nạn nhân
+      room.currentNightTurnIndex = room.nightTurnPlan.findIndex((t) => t.turnKey === 'wolf_pack');
+      room.nightActionAcks.clear();
+
+      const wolfView = createPlayerPrivateView(room, pWolf.id)!;
+      expect(wolfView.skills.wolfCubDoubleKillNextNight).toBe(true);
+
+      const wolfRes: any = await new Promise((resolve) => {
+        wolfPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: wolfPlayer.token,
+            roleId: 'werewolf',
+            action: { targetIds: [pVillagers[0].id, pVillagers[1].id] },
+          },
+          resolve
+        );
+      });
+      expect(wolfRes.ok).toBe(true);
+      expect(room.nightActionsAccumulator.wolfPack?.multiVotes?.[pWolf.id]).toEqual([
+        pVillagers[0].id,
+        pVillagers[1].id,
+      ]);
+
+      // 2. Seer soi với EXACT_ROLE
+      room.currentNightTurnIndex = room.nightTurnPlan.findIndex((t) => t.turnKey === 'seer');
+      room.nightActionAcks.clear();
+      await new Promise((resolve) => {
+        seerPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: seerPlayer.token,
+            roleId: 'seer',
+            action: { targetId: pWolf.id },
+          },
+          resolve
+        );
+      });
+      expect(room.seerInvestigationResult).toEqual({
+        targetId: pWolf.id,
+        result: 'werewolf',
+      });
+
+      // 3. Aura Seer soi Drunk ở Đêm 1 (< 3) -> NORMAL
+      room.currentNightTurnIndex = room.nightTurnPlan.findIndex((t) => t.turnKey === 'aura_seer');
+      room.nightActionAcks.clear();
+      await new Promise((resolve) => {
+        auraPlayer.client.emit(
+          'night:action',
+          {
+            roomCode,
+            token: auraPlayer.token,
+            roleId: 'aura_seer',
+            action: { targetId: pDrunk.id },
+          },
+          resolve
+        );
+      });
+      expect(room.auraInvestigationResult).toEqual({
+        targetId: pDrunk.id,
+        result: 'NORMAL',
+      });
+    });
+
+    it('apprentice_seer không nhận seerInvestigationResult ở Đêm 3 khi Drunk còn sống thức tỉnh thành seer', async () => {
+      const { roomCode } = await setupGame([
+        'werewolf',
+        'drunk',
+        'apprentice_seer',
+        'witch',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+      const drunkPlayer = room.gameState!.players.find((p) => p.roleId === 'drunk')!;
+      const apprentice = room.gameState!.players.find((p) => p.roleId === 'apprentice_seer')!;
+      const wolf = room.gameState!.players.find((p) => p.roleId === 'werewolf')!;
+
+      drunkPlayer.drunkRealRoleId = 'seer';
+      room.gameState!.roundNumber = 3;
+      room.seerInvestigationResult = { targetId: wolf.id, result: 'WEREWOLF' };
+
+      // Drunk thức tỉnh thành Seer và còn sống -> apprentice_seer KHÔNG được nhận kết quả soi
+      const viewWhileAlive = createPlayerPrivateView(room, apprentice.id);
+      expect(viewWhileAlive?.investigationResult).toBeNull();
+
+      // Nếu Drunk-Seer đã chết -> apprentice_seer nhận được kết quả
+      drunkPlayer.isAlive = false;
+      const viewWhenDead = createPlayerPrivateView(room, apprentice.id);
+      expect(viewWhenDead?.investigationResult).toEqual({
+        targetId: wolf.id,
+        result: 'WEREWOLF',
+      });
+    });
   });
 });

@@ -620,6 +620,64 @@ describe('Engine - Deduction & Intervention Roles (Phase 4)', () => {
       expect(shotRes.winOutcome?.winner).toBe('VILLAGER');
     });
 
+    it('Hunter is hanged as TARGET 1 on doubleVoteDay: resolves BOTH targets before entering HUNTER_SHOT', () => {
+      const state = createTestGame([
+        'troublemaker',
+        'werewolf',
+        'hunter',
+        'villager',
+        'villager',
+        'villager',
+      ]);
+      state.doubleVoteDay = true;
+
+      // ['p3' (hunter), 'p4' (villager)] - Hunter is FIRST target!
+      const { nextState } = executeDayVote(state, ['p3', 'p4']);
+      expect(nextState.players.find((p) => p.id === 'p3')?.isAlive).toBe(false);
+      expect(nextState.players.find((p) => p.id === 'p4')?.isAlive).toBe(false);
+      expect(nextState.doubleVoteDay).toBe(false);
+      expect(nextState.phase).toBe('HUNTER_SHOT');
+      expect(nextState.pendingHunterShotPlayerId).toBe('p3');
+
+      const shotRes = executeHunterShot(nextState, 'p2');
+      expect(shotRes.winOutcome?.winner).toBe('VILLAGER');
+      expect(shotRes.nextState.phase).toBe('GAME_OVER');
+    });
+
+    it('Hunter (target 1) + Mayor (target 2) on doubleVoteDay: queues Hunter Shot then Mayor Succession before NIGHT', () => {
+      const state = createTestGame([
+        'troublemaker',
+        'werewolf',
+        'hunter',
+        'villager',
+        'villager',
+        'villager',
+      ]);
+      state.doubleVoteDay = true;
+      state.mayorId = 'p4';
+      state.players[3].voteWeight = 2;
+
+      const { nextState } = executeDayVote(state, ['p3', 'p4']);
+      expect(nextState.players.find((p) => p.id === 'p3')?.isAlive).toBe(false);
+      expect(nextState.players.find((p) => p.id === 'p4')?.isAlive).toBe(false);
+      expect(nextState.phase).toBe('HUNTER_SHOT');
+      expect(nextState.pendingHunterShotPlayerId).toBe('p3');
+      expect(nextState.pendingMayorSuccessionPlayerId).toBe('p4');
+
+      // Hunter shoots p5 (villager) -> transitions to MAYOR_SUCCESSION for p4
+      const shotRes = executeHunterShot(nextState, 'p5');
+      expect(shotRes.winOutcome).toBeNull();
+      expect(shotRes.nextState.phase).toBe('MAYOR_SUCCESSION');
+      expect(shotRes.nextState.pendingMayorSuccessionPlayerId).toBe('p4');
+
+      // Mayor transfers title to p6 -> transitions to NIGHT round 2
+      const { executeMayorSuccession } = require('../gameEngine');
+      const mayorRes = executeMayorSuccession(shotRes.nextState, 'p6');
+      expect(mayorRes.nextState.phase).toBe('NIGHT');
+      expect(mayorRes.nextState.roundNumber).toBe(2);
+      expect(mayorRes.nextState.mayorId).toBe('p6');
+    });
+
     it('Single vote on double vote day: hangs only that single person', () => {
       const state = createTestGame(['troublemaker', 'werewolf', 'villager', 'villager', 'villager', 'villager']);
       state.doubleVoteDay = true;

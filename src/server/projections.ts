@@ -1,6 +1,7 @@
 import { canHostTallyEarly } from '../engine/voting';
 import { checkWinCondition } from '../engine/winConditions';
 import { getRawWolfTargets, getWitchVictimsPreview } from '../engine/nightResolution';
+import { ROLES_BY_ID } from '../engine/roles';
 import type {
   HostBoardView,
   PlayerPrivateView,
@@ -47,8 +48,6 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
         turnIndex: room.currentNightTurnIndex + 1,
         totalTurns: room.nightTurnPlan.length,
         nextTurnTitleVi: nextTurn ? nextTurn.titleVi : null,
-        isFake: currentTurn.isFake,
-        canAct: currentTurn.canAct,
       };
     }
   }
@@ -67,6 +66,10 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     players: publicPlayers,
     deadlineAt: room.timers.deadlineAt,
     isPaused: room.timers.isPaused,
+    pausedRemainingSeconds:
+      room.timers.isPaused && room.timers.remainingBeforePause != null
+        ? Math.max(0, Math.ceil(room.timers.remainingBeforePause / 1000))
+        : null,
     voteLocked: gameState?.dayState?.voteLocked ?? false,
     voteLockRemainingSeconds: gameState?.dayState?.voteLockRemainingSeconds ?? null,
     extensionsUsed: gameState?.dayState?.extensionsUsed ?? 0,
@@ -168,11 +171,40 @@ export function createPlayerPrivateView(
   let turnKey: string | null = null;
   let validTargets: PlayerId[] = [];
 
+  const getEffectiveIdentity = (pl: (typeof gameState.players)[number]) => {
+    if (pl.roleId === 'drunk' && gameState.roundNumber >= 3 && pl.drunkRealRoleId) {
+      return {
+        roleId: pl.drunkRealRoleId,
+        faction: ROLES_BY_ID[pl.drunkRealRoleId]?.faction ?? pl.faction,
+      };
+    }
+    return { roleId: pl.roleId, faction: pl.faction };
+  };
+
+  const isDrunkAwakened =
+    pState.roleId === 'drunk' && gameState.roundNumber >= 3 && Boolean(pState.drunkRealRoleId);
+  const effectiveRoleId = isDrunkAwakened ? pState.drunkRealRoleId! : pState.roleId;
+  const effectiveFaction = isDrunkAwakened
+    ? (ROLES_BY_ID[pState.drunkRealRoleId!]?.faction ?? pState.faction)
+    : pState.faction;
+
+  const usedHealThisNight = Boolean(room.nightActionsAccumulator.witch?.heal);
+  const usedPoisonThisNight = Boolean(room.nightActionsAccumulator.witch?.poisonTargetId);
+  const disallowBothPotions = room.settings.allowWitchBothPotionsSameNight === false;
+  const effectiveWitchHealUsed = Boolean(
+    gameState.witchHealUsed || usedHealThisNight || (disallowBothPotions && usedPoisonThisNight)
+  );
+  const effectiveWitchPoisonUsed = Boolean(
+    gameState.witchPoisonUsed ||
+      usedPoisonThisNight ||
+      (disallowBothPotions && usedHealThisNight)
+  );
+
   const skills: PlayerPrivateView['skills'] = {
-    witchHealUsed: gameState.witchHealUsed,
-    witchPoisonUsed: gameState.witchPoisonUsed,
+    witchHealUsed: effectiveWitchHealUsed,
+    witchPoisonUsed: effectiveWitchPoisonUsed,
     lastProtectedPlayerId: gameState.lastProtectedPlayerId,
-    elderHp: pState.elderHp,
+    elderHp: pState.elderHp ?? (isDrunkAwakened && effectiveRoleId === 'elder' ? 2 : undefined),
     accursedWolfUsed: gameState.accursedWolfUsed,
     isMuted: pState.id === gameState.mutedPlayerId || Boolean(pState.isMuted),
     foxLostPower: Boolean(gameState.foxLostPower),
@@ -188,23 +220,29 @@ export function createPlayerPrivateView(
         : undefined,
   };
 
-  if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
+  if (effectiveRoleId === 'mason' || pState.initialRoleId === 'mason') {
     skills.masonPartnerIds = gameState.players
-      .filter((p) => p.initialRoleId === 'mason' && p.id !== playerId)
+      .filter((p) => {
+        const otherRole =
+          p.roleId === 'drunk' && gameState.roundNumber >= 3 && p.drunkRealRoleId
+            ? p.drunkRealRoleId
+            : p.roleId;
+        return (p.initialRoleId === 'mason' || otherRole === 'mason') && p.id !== playerId;
+      })
       .map((p) => p.id);
   }
 
-  if (pState.roleId === 'wild_child' || pState.initialRoleId === 'wild_child') {
+  if (effectiveRoleId === 'wild_child' || pState.initialRoleId === 'wild_child') {
     skills.roleModelId =
       pState.roleModelId ?? (room.nightActionsAccumulator.wildChild?.targetId ?? null);
   }
 
-  if (pState.roleId === 'dire_wolf' || pState.initialRoleId === 'dire_wolf') {
+  if (effectiveRoleId === 'dire_wolf' || pState.initialRoleId === 'dire_wolf') {
     skills.companionId =
       pState.companionId ?? (room.nightActionsAccumulator.direWolf?.targetId ?? null);
   }
 
-  if (pState.roleId === 'hoodlum' || pState.initialRoleId === 'hoodlum') {
+  if (effectiveRoleId === 'hoodlum' || pState.initialRoleId === 'hoodlum') {
     skills.hoodlumTargetIds =
       pState.hoodlumTargetIds ??
       (room.nightActionsAccumulator.hoodlum
@@ -238,33 +276,39 @@ export function createPlayerPrivateView(
           skills.wolfPackVictimId = getRawWolfPackVictim(room);
         }
 
+        if (currentTurn.turnKey === 'wolf_pack' && gameState.wolfCubDoubleKillNextNight) {
+          skills.wolfCubDoubleKillNextNight = true;
+        }
+
         // Nếu Phù thủy biết nạn nhân bị cắn đêm nay (đã lọc qua Bảo vệ và Sói nguyền)
         if (currentTurn.turnKey === 'witch' && room.settings.witchKnowsVictim) {
-          skills.witchVictimId = getWolfPackVictimCandidate(room);
+          const victims = getWolfPackVictimCandidates(room);
+          skills.witchVictimIds = victims;
+          skills.witchVictimId = victims[0] ?? null;
         }
       }
     }
 
-    if (pState.roleId === 'seer' && room.seerInvestigationResult) {
+    if (effectiveRoleId === 'seer' && room.seerInvestigationResult) {
       investigationResult = room.seerInvestigationResult;
     } else if (
-      pState.roleId === 'apprentice_seer' &&
+      effectiveRoleId === 'apprentice_seer' &&
       room.seerInvestigationResult &&
-      !gameState.players.some((p) => p.isAlive && p.roleId === 'seer')
+      !gameState.players.some((p) => p.isAlive && getEffectiveIdentity(p).roleId === 'seer')
     ) {
       investigationResult = room.seerInvestigationResult;
-    } else if (pState.roleId === 'sorcerer' && room.sorcererInvestigationResult) {
+    } else if (effectiveRoleId === 'sorcerer' && room.sorcererInvestigationResult) {
       investigationResult = {
         targetId: room.sorcererInvestigationResult.targetId,
         result: room.sorcererInvestigationResult.isSeer,
       };
     } else if (
-      (pState.roleId === 'aura_seer' || pState.initialRoleId === 'aura_seer') &&
+      (effectiveRoleId === 'aura_seer' || pState.initialRoleId === 'aura_seer') &&
       room.auraInvestigationResult
     ) {
       investigationResult = room.auraInvestigationResult;
     } else if (
-      (pState.roleId === 'fox' || pState.initialRoleId === 'fox') &&
+      (effectiveRoleId === 'fox' || pState.initialRoleId === 'fox') &&
       room.foxInvestigationResult
     ) {
       investigationResult = {
@@ -274,7 +318,7 @@ export function createPlayerPrivateView(
         inspectedPlayerIds: room.foxInvestigationResult.inspectedPlayerIds,
       };
     } else if (
-      (pState.roleId === 'pi' || pState.initialRoleId === 'pi') &&
+      (effectiveRoleId === 'pi' || pState.initialRoleId === 'pi') &&
       room.piInvestigationResult
     ) {
       investigationResult = {
@@ -340,18 +384,20 @@ export function createPlayerPrivateView(
   // 1. Sói thấy nhau (bao gồm White Wolf; Dream Wolf chỉ thấy khi đã thức tỉnh)
   // 2. Kẻ phản bội (Minion) chỉ thấy Sói ở Đêm 1
   const teammates: PlayerPrivateView['teammates'] = [];
-  const isWolfMember = pState.faction === 'WEREWOLF' || pState.roleId === 'white_wolf';
 
-  if (isWolfMember && (pState.roleId !== 'dream_wolf' || gameState.dreamWolfAwakened)) {
+  const isWolfMember = effectiveFaction === 'WEREWOLF' || effectiveRoleId === 'white_wolf';
+
+  if (isWolfMember && (effectiveRoleId !== 'dream_wolf' || gameState.dreamWolfAwakened)) {
     for (const pl of gameState.players) {
       if (pl.id === playerId) continue;
-      const isOtherWolf = pl.faction === 'WEREWOLF' || pl.roleId === 'white_wolf';
-      if (isOtherWolf && pl.roleId !== 'minion' && pl.roleId !== 'sorcerer') {
+      const other = getEffectiveIdentity(pl);
+      const isOtherWolf = other.faction === 'WEREWOLF' || other.roleId === 'white_wolf';
+      if (isOtherWolf && other.roleId !== 'minion' && other.roleId !== 'sorcerer') {
         // Sói thường chỉ thấy Sói trắng là 'werewolf' bình thường để bảo mật danh tính
         const displayedRoleId =
-          pl.roleId === 'white_wolf' && pState.roleId !== 'white_wolf'
+          other.roleId === 'white_wolf' && effectiveRoleId !== 'white_wolf'
             ? 'werewolf'
-            : pl.roleId;
+            : other.roleId;
 
         teammates.push({
           id: pl.id,
@@ -360,13 +406,14 @@ export function createPlayerPrivateView(
         });
       }
     }
-  } else if (pState.roleId === 'minion' && gameState.roundNumber === 1) {
+  } else if (effectiveRoleId === 'minion' && gameState.roundNumber === 1) {
     // Minion thấy ai là Sói ở Đêm 1 (Sói trắng cũng hiển thị là 'werewolf')
     for (const pl of gameState.players) {
       if (pl.id === playerId) continue;
-      const isOtherWolf = pl.faction === 'WEREWOLF' || pl.roleId === 'white_wolf';
-      if (isOtherWolf && pl.roleId !== 'minion' && pl.roleId !== 'sorcerer') {
-        const displayedRoleId = pl.roleId === 'white_wolf' ? 'werewolf' : pl.roleId;
+      const other = getEffectiveIdentity(pl);
+      const isOtherWolf = other.faction === 'WEREWOLF' || other.roleId === 'white_wolf';
+      if (isOtherWolf && other.roleId !== 'minion' && other.roleId !== 'sorcerer') {
+        const displayedRoleId = other.roleId === 'white_wolf' ? 'werewolf' : other.roleId;
 
         teammates.push({
           id: pl.id,
@@ -378,10 +425,11 @@ export function createPlayerPrivateView(
   }
 
   // 3. Hội Tam Điểm (Mason) nhận diện anh em
-  if (pState.roleId === 'mason' || pState.initialRoleId === 'mason') {
+  if (effectiveRoleId === 'mason' || pState.initialRoleId === 'mason') {
     for (const pl of gameState.players) {
       if (pl.id === playerId) continue;
-      if (pl.initialRoleId === 'mason' || pl.roleId === 'mason') {
+      const other = getEffectiveIdentity(pl);
+      if (pl.initialRoleId === 'mason' || other.roleId === 'mason') {
         teammates.push({
           id: pl.id,
           name: pl.name,
@@ -395,9 +443,9 @@ export function createPlayerPrivateView(
     playerId: pState.id,
     seatIndex: pState.seatIndex,
     isAlive: pState.isAlive,
-    roleId: pState.roleId,
+    roleId: effectiveRoleId,
     initialRoleId: pState.initialRoleId,
-    faction: pState.faction,
+    faction: effectiveFaction,
     isMayor: gameState.mayorId === playerId,
     loverId: pState.loverId ?? null,
     isCrossFactionCouple: pState.isCrossFactionCouple,
@@ -425,7 +473,9 @@ function calculateNightValidTargets(
 
   switch (turnKey) {
     case 'cupid':
-      return livingPlayers.map((p) => p.id);
+      return room.settings.allowCupidSelfMatch === false
+        ? livingPlayers.filter((p) => p.id !== playerId).map((p) => p.id)
+        : livingPlayers.map((p) => p.id);
 
     case 'bodyguard':
       // Không được bảo vệ cùng 1 người 2 đêm liên tiếp
@@ -489,11 +539,11 @@ function calculateNightValidTargets(
 
     case 'big_bad_wolf':
     case 'night_big_bad_wolf': {
-      const packVictim = getWolfPackVictimCandidate(room);
+      const packVictims = new Set(getWolfPackVictimCandidates(room));
       return livingPlayers
         .filter((p) => {
           if (p.id === playerId) return false;
-          if (packVictim && p.id === packVictim) return false;
+          if (packVictims.has(p.id)) return false;
           if (!room.settings.allowWolfFriendlyFire) {
             if (p.faction === 'WEREWOLF' || p.roleId === 'white_wolf') {
               return false;
@@ -538,7 +588,11 @@ function calculateNightValidTargets(
  */
 export function getRawWolfPackVictim(room: RoomState): PlayerId | null {
   if (room.gameState) {
-    const rawTargets = getRawWolfTargets(room.gameState, room.nightActionsAccumulator);
+    const rawTargets = getRawWolfTargets(
+      room.gameState,
+      room.nightActionsAccumulator,
+      room.currentNightSeed
+    );
     return rawTargets[0] ?? null;
   }
 
@@ -571,27 +625,37 @@ export function getRawWolfPackVictim(room: RoomState): PlayerId | null {
 }
 
 /**
- * Lấy mục tiêu sói cắn tạm thời để gửi cho Phù thủy biết.
+ * Lấy toàn bộ danh sách nạn nhân sói cắn tạm thời để gửi cho Phù thủy biết.
  * Nhất quán với getWitchVictimsPreview (xử lý big_bad_wolf, wolfCubDoubleKillNextNight,
  * bảo vệ trùng đêm trước, villagePowerStripped và lời nguyền Sói nguyền).
  */
-export function getWolfPackVictimCandidate(room: RoomState): PlayerId | null {
+export function getWolfPackVictimCandidates(room: RoomState): PlayerId[] {
   if (room.gameState) {
-    const victims = getWitchVictimsPreview(room.gameState, room.nightActionsAccumulator);
-    return victims[0] ?? null;
+    return getWitchVictimsPreview(
+      room.gameState,
+      room.nightActionsAccumulator,
+      room.currentNightSeed
+    );
   }
 
   const rawVictim = getRawWolfPackVictim(room);
-  if (!rawVictim) return null;
+  if (!rawVictim) return [];
 
   const protectedId = room.nightActionsAccumulator.bodyguard?.targetId;
   const cursedId = room.nightActionsAccumulator.accursedWolf?.curseTargetId;
 
   if (rawVictim === protectedId || rawVictim === cursedId) {
-    return null;
+    return [];
   }
 
-  return rawVictim;
+  return [rawVictim];
+}
+
+/**
+ * Lấy mục tiêu sói cắn đầu tiên tạm thời để gửi cho Phù thủy biết (tương thích ngược).
+ */
+export function getWolfPackVictimCandidate(room: RoomState): PlayerId | null {
+  return getWolfPackVictimCandidates(room)[0] ?? null;
 }
 
 /**

@@ -188,6 +188,9 @@ export function processDeathCascade(
           const realRoleId = victim.drunkRealRoleId || 'villager';
           dg.roleId = realRoleId;
           dg.faction = ROLES_BY_ID[realRoleId]?.faction ?? 'VILLAGER';
+          if (realRoleId === 'elder') {
+            dg.elderHp = 2;
+          }
           state.historyLogs.push(
             `Nhân bản (${dg.name}) sao chép Kẻ say rượu và thức tỉnh vai thật [${realRoleId}]!`
           );

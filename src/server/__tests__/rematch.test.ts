@@ -160,4 +160,38 @@ describe('Realtime Backend - Rematch Lifecycle', () => {
     expect(room.currentNightTurnIndex).toBe(0);
     expect(room.timers.deadlineAt).toBeDefined();
   });
+
+  it('rematch tôn trọng settings.customDeck và dọn sạch toàn bộ *InvestigationResult', async () => {
+    const { hostClient, roomCode, hostToken, players, room } = await setupGameOverGame();
+
+    room.settings.customDeck = {
+      werewolf: 1,
+      seer: 1,
+      aura_seer: 1,
+      fox: 1,
+      villager: 2,
+    };
+    room.seerInvestigationResult = { targetId: players[0].id, result: 'WEREWOLF' };
+    room.sorcererInvestigationResult = { targetId: players[0].id, isSeer: false };
+    room.auraInvestigationResult = { targetId: players[0].id, result: 'SPECIAL' };
+    room.foxInvestigationResult = { targetId: players[0].id, hasWerewolf: true, inspectedPlayerIds: [] };
+    room.piInvestigationResult = { targetId: players[0].id, hasWerewolf: false, inspectedPlayerIds: [] };
+
+    const rematchRes: any = await new Promise((resolve) => {
+      hostClient.emit('host:rematch', { roomCode, token: hostToken }, resolve);
+    });
+    expect(rematchRes.ok).toBe(true);
+
+    expect(room.seerInvestigationResult).toBeUndefined();
+    expect(room.sorcererInvestigationResult).toBeUndefined();
+    expect(room.auraInvestigationResult).toBeUndefined();
+    expect(room.foxInvestigationResult).toBeUndefined();
+    expect(room.piInvestigationResult).toBeUndefined();
+
+    const roleCounts: Record<string, number> = {};
+    for (const p of room.gameState!.players) {
+      roleCounts[p.roleId] = (roleCounts[p.roleId] ?? 0) + 1;
+    }
+    expect(roleCounts).toEqual(room.settings.customDeck);
+  });
 });

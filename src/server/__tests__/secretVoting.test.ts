@@ -227,5 +227,123 @@ describe('Realtime Backend - Secret Voting & Tally Secrecy', () => {
     expect(tally!.tallies[players[2].id]).toBe(1);
     // Phiếu trắng: player 4 (1) + player 5 (1) = 2
     expect(tally!.abstainCount).toBe(2);
+    expect(room.publicHistoryLogs.some((l) => l.includes('Runoff'))).toBe(true);
+  });
+
+  it('executeFinalizeDayVote cập nhật runoffCandidates/runoffBallots khi hòa phiếu RUNOFF và không ghi log trời sáng trước NIGHT', async () => {
+    const { roomCode, players, room } = await setupDayGame();
+    room.settings.tieVoteMode = 'RUNOFF';
+    room.gameState!.settings.tieVoteMode = 'RUNOFF';
+
+    // Hòa phiếu giữa players[1] và players[2]
+    await new Promise((r) =>
+      players[0].client.emit('day:vote', { roomCode, token: players[0].token, targetPlayerId: players[1].id }, r)
+    );
+    await new Promise((r) =>
+      players[3].client.emit('day:vote', { roomCode, token: players[3].token, targetPlayerId: players[2].id }, r)
+    );
+
+    gateway.executeFinalizeDayVote(room);
+
+    expect(room.gameState!.phase).toBe('DAY_RUNOFF');
+    expect(room.gameState!.dayState?.runoffCandidates).toEqual([players[1].id, players[2].id]);
+    expect(room.gameState!.dayState?.runoffBallots).toEqual({});
+
+    // Vòng 2: cả làng tha bổng -> sang NIGHT mà không có log "Trời đã sáng"
+    room.publicHistoryLogs = [];
+    (gateway as any).finalizeRunoffVote(room);
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(room.gameState!.phase).toBe('NIGHT');
+    expect(room.publicHistoryLogs.some((l) => l.includes('Trời đã sáng'))).toBe(false);
+  });
+
+  it('finalizeRunoffVote chuyển MAYOR_SUCCESSION và khởi động timer khi Trưởng làng bị treo cổ', async () => {
+    const { players, room } = await setupDayGame();
+    room.gameState!.mayorId = players[1].id;
+    room.gameState!.players.find((p) => p.id === players[1].id)!.voteWeight = 2;
+
+    room.gameState!.phase = 'DAY_RUNOFF';
+    room.gameState!.dayState!.runoffCandidates = [players[1].id, players[2].id];
+    room.gameState!.dayState!.runoffBallots = {
+      [players[0].id]: players[1].id,
+      [players[2].id]: players[1].id,
+      [players[3].id]: players[1].id,
+      [players[4].id]: players[1].id,
+    };
+
+    (gateway as any).finalizeRunoffVote(room);
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(room.gameState!.phase).toBe('MAYOR_SUCCESSION');
+    expect(room.gameState!.pendingMayorSuccessionPlayerId).toBe(players[1].id);
+    expect(room.timers.phase).toBe('MAYOR_SUCCESSION');
+    expect(room.timers.deadlineAt).not.toBeNull();
+  });
+
+  it('emergencyEliminate qua SocketGateway chuyển HUNTER_SHOT và khởi động timer', async () => {
+    const { hostClient, roomCode, hostToken, room } = await setupDayGame();
+    // Thay một villager thành hunter
+    const villager = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+    villager.roleId = 'hunter';
+    villager.initialRoleId = 'hunter';
+
+    const res: any = await new Promise((resolve) => {
+      hostClient.emit(
+        'host:emergencyEliminate',
+        { roomCode, token: hostToken, targetPlayerId: villager.id },
+        resolve
+      );
+    });
+    expect(res.ok).toBe(true);
+    expect(room.gameState!.phase).toBe('HUNTER_SHOT');
+    expect(room.timers.phase).toBe('HUNTER_SHOT');
+    expect(room.timers.deadlineAt).not.toBeNull();
+  });
+
+  it('bảo vệ phase & generation cho double-finalize và stale timer callbacks', async () => {
+    const { hostClient, roomCode, hostToken, players, room } = await setupDayGame();
+
+    // 1. Host chốt DAY_MAYOR_ELECTION trực tiếp qua day:finalizePublicVote (không bị double-enqueue)
+    room.gameState!.phase = 'DAY_MAYOR_ELECTION';
+    room.gameState!.dayState = createInitialDayState();
+    room.gameState!.dayState.mayorBallots = { [players[0].id]: players[1].id };
+
+    const mayorRes: any = await new Promise((resolve) => {
+      hostClient.emit('day:finalizePublicVote', { roomCode, token: hostToken }, resolve);
+    });
+    expect(mayorRes.ok).toBe(true);
+    expect(room.gameState!.phase).toBe('DAY_DISCUSS');
+    expect(room.gameState!.mayorId).toBe(players[1].id);
+
+    // 2. Stale callback từ DAY_MAYOR_ELECTION không làm hỏng DAY_DISCUSS
+    const logsCountBeforeStale = room.publicHistoryLogs.length;
+    gateway.executeFinalizeMayorElection(room);
+    expect(room.gameState!.phase).toBe('DAY_DISCUSS');
+    expect(room.publicHistoryLogs.length).toBe(logsCountBeforeStale);
+
+    // 3. Stale generation cho executeFinalizeDayVote / executeFinalizeRunoffVote / advanceNightTurn
+    gateway.executeFinalizeDayVote(room, room.gameGeneration - 1);
+    expect(room.gameState!.phase).toBe('DAY_DISCUSS');
+
+    room.gameState!.phase = 'DAY_RUNOFF';
+    room.gameState!.dayState!.runoffCandidates = [players[0].id, players[1].id];
+    room.gameState!.dayState!.runoffBallots = {};
+    gateway.executeFinalizeRunoffVote(room, room.gameGeneration - 1);
+    expect(room.gameState!.phase).toBe('DAY_RUNOFF');
+
+    // Host chốt DAY_RUNOFF qua day:finalizePublicVote (không double-enqueue) -> chuyển sang NIGHT
+    const runoffRes: any = await new Promise((resolve) => {
+      hostClient.emit('day:finalizePublicVote', { roomCode, token: hostToken }, resolve);
+    });
+    expect(runoffRes.ok).toBe(true);
+    expect(room.gameState!.phase).toBe('NIGHT');
+
+    // Stale advanceNightTurn với generation cũ hoặc turnIndex cũ không tăng currentNightTurnIndex
+    const turnIdxBefore = room.currentNightTurnIndex;
+    (gateway as any).advanceNightTurn(room, room.gameGeneration - 1, turnIdxBefore);
+    (gateway as any).advanceNightTurn(room, room.gameGeneration, turnIdxBefore + 1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(room.currentNightTurnIndex).toBe(turnIdxBefore);
   });
 });

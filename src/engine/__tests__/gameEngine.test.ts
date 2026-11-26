@@ -99,4 +99,43 @@ describe('Game Engine - Full Lifecycle Integration', () => {
     expect(afterShot.dayState!.discussionSecondsRemaining).toBe(180);
     expect(afterShot.players.find((p) => p.id === 'p3')!.isAlive).toBe(false);
   });
+
+  it('should go straight to GAME_OVER instead of MAYOR_SUCCESSION when executeDayVote decides the winner', () => {
+    const game = createTestGame([
+      'werewolf', // p1 (Mayor, last wolf)
+      'villager', // p2
+      'villager', // p3
+      'villager', // p4
+      'seer',     // p5
+      'witch',    // p6
+    ]);
+    game.mayorId = 'p1';
+    game.players[0].voteWeight = 2;
+
+    const { nextState, winOutcome } = executeDayVote(game, 'p1');
+    expect(winOutcome?.winner).toBe('VILLAGER');
+    expect(nextState.phase).toBe('GAME_OVER');
+  });
+
+  it('should go straight to GAME_OVER instead of MAYOR_SUCCESSION when executeHunterShot decides the winner', () => {
+    const game = createTestGame([
+      'werewolf', // p1 (Mayor, last wolf)
+      'hunter',   // p2
+      'villager', // p3
+      'villager', // p4
+      'seer',     // p5
+      'witch',    // p6
+    ]);
+    game.mayorId = 'p1';
+    game.players[0].voteWeight = 2;
+
+    const { nextState: nightState } = executeNightPhase(game, {
+      wolfPack: { targets: ['p2'] },
+    });
+    expect(nightState.phase).toBe('HUNTER_SHOT');
+
+    const { nextState: afterShot, winOutcome } = executeHunterShot(nightState, 'p1');
+    expect(winOutcome?.winner).toBe('VILLAGER');
+    expect(afterShot.phase).toBe('GAME_OVER');
+  });
 });

@@ -155,4 +155,24 @@ describe('Engine - Death Cascade & Cascading Effects', () => {
     expect(records.filter((r) => r.playerId === 'p1')).toHaveLength(1);
     expect(records.filter((r) => r.playerId === 'p2')).toHaveLength(1);
   });
+
+  it('should set elderHp = 2 when doppelganger copies a drunk with drunkRealRoleId = elder', () => {
+    const game = createTestGame([
+      'doppelganger', // p1
+      'drunk',        // p2
+      'villager',     // p3
+      'werewolf',     // p4
+      'seer',         // p5
+      'witch',        // p6
+    ]);
+    game.players[0].doppelgangerTargetId = 'p2';
+    game.players[1].drunkRealRoleId = 'elder';
+
+    processDeathCascade(game, [{ playerId: 'p2', cause: 'WOLF_PACK' }]);
+
+    const dg = game.players[0];
+    expect(dg.roleId).toBe('elder');
+    expect(dg.faction).toBe('VILLAGER');
+    expect(dg.elderHp).toBe(2);
+  });
 });

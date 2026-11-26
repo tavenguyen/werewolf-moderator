@@ -1145,4 +1145,75 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
       }
     }
   });
+
+  it('sendHunterShot / sendMayorTransfer khởi động dayTimer khi chuyển sang DAY_MAYOR_ELECTION, và resumeSession khôi phục timer cho DAY_RUNOFF', async () => {
+    const store = new Map<string, string>();
+    const originalStorage = (globalThis as Record<string, unknown>).localStorage;
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+    };
+
+    try {
+      const adapter = createPopulatedAdapter(6);
+      await adapter.updateSettings({ hasMayor: true });
+      await adapter.startGame(['hunter', 'werewolf', 'villager', 'villager', 'villager', 'villager']);
+      await adapter.startFirstNight();
+
+      const roomState = (adapter as unknown as { roomState: any }).roomState;
+      const hunter = roomState.gameState.players.find((p: any) => p.roleId === 'hunter');
+      const villager = roomState.gameState.players.find((p: any) => p.roleId === 'villager');
+
+      // Giả lập Thợ săn chết đêm 1 (khi hasMayor = true -> previousPhaseBeforeHunter = DAY_MAYOR_ELECTION)
+      roomState.gameState.phase = 'HUNTER_SHOT';
+      roomState.gameState.pendingHunterShotPlayerId = hunter.id;
+      roomState.gameState.previousPhaseBeforeHunter = 'DAY_MAYOR_ELECTION';
+
+      await adapter.sendHunterShot(villager.id);
+      expect(adapter.getState().publicView?.phase).toBe('DAY_MAYOR_ELECTION');
+      expect((adapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).not.toBeNull();
+
+      // Test resumeSession với DAY_RUNOFF
+      roomState.gameState.phase = 'DAY_RUNOFF';
+      roomState.timers.deadlineAt = Date.now() + 30_000;
+      roomState.timers.isPaused = false;
+      (adapter as unknown as { emitState: () => void }).emitState();
+
+      await adapter.leaveRoom();
+      // Lưu lại payload trước khi leaveRoom để mô phỏng F5 thực tế
+      const adapter2 = new LocalEngineAdapter();
+      store.set(
+        'werewolf_local_game_session',
+        JSON.stringify({
+          roomCode: '7290',
+          gameGeneration: 1,
+          hostMode: 'CENTER_BOARD',
+          players: Array.from(roomState.players.values()),
+          settings: roomState.settings,
+          gameState: roomState.gameState,
+          timers: {
+            deadlineAt: Date.now() + 30_000,
+            isPaused: false,
+            phase: 'DAY_RUNOFF',
+          },
+          expiresAt: Date.now() + 60_000,
+        })
+      );
+      const resumed = await adapter2.resumeSession();
+      expect(resumed).toBe(true);
+      expect((adapter2 as unknown as { dayTimerInterval: number | null }).dayTimerInterval).not.toBeNull();
+      await adapter2.leaveRoom();
+    } finally {
+      if (originalStorage === undefined) {
+        delete (globalThis as Record<string, unknown>).localStorage;
+      } else {
+        (globalThis as Record<string, unknown>).localStorage = originalStorage;
+      }
+    }
+  });
 });

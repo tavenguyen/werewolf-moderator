@@ -28,11 +28,16 @@ export function getAuraSeerResult(
   player: PlayerState,
   roundNumber: number
 ): 'NORMAL' | 'SPECIAL' {
-  if (
-    player.roleId === 'villager' ||
-    player.roleId === 'werewolf' ||
-    (player.roleId === 'drunk' && roundNumber < 3)
-  ) {
+  if (player.roleId === 'drunk') {
+    if (roundNumber < 3) return 'NORMAL';
+    if (player.drunkRealRoleId) {
+      return player.drunkRealRoleId === 'villager' || player.drunkRealRoleId === 'werewolf'
+        ? 'NORMAL'
+        : 'SPECIAL';
+    }
+    return 'SPECIAL';
+  }
+  if (player.roleId === 'villager' || player.roleId === 'werewolf') {
     return 'NORMAL';
   }
   return 'SPECIAL';
@@ -40,15 +45,29 @@ export function getAuraSeerResult(
 
 /**
  * Helper xác định một người chơi có tính là Ma sói khi Con cáo (Fox) và Thám tử (P.I.) điều tra hay không:
+ * - Ở Đêm 3+, giải mã vai thật drunkRealRoleId nếu người chơi là Kẻ say rượu chưa kịp đổi roleId.
  * - false nếu roleId === 'minion' || roleId === 'sorcerer'.
  * - true nếu roleId === 'lycan'.
  * - true nếu faction === 'WEREWOLF' || roleId === 'white_wolf'.
  * - false cho các trường hợp còn lại.
  */
-export function isWerewolfForInvestigation(player: PlayerState): boolean {
-  if (player.roleId === 'minion' || player.roleId === 'sorcerer') return false;
-  if (player.roleId === 'lycan') return true;
-  if (player.faction === 'WEREWOLF' || player.roleId === 'white_wolf') return true;
+export function isWerewolfForInvestigation(
+  player: PlayerState,
+  roundNumber?: number
+): boolean {
+  const isDrunkAwakened =
+    roundNumber !== undefined &&
+    roundNumber >= 3 &&
+    player.roleId === 'drunk' &&
+    Boolean(player.drunkRealRoleId);
+  const effectiveRoleId = isDrunkAwakened ? player.drunkRealRoleId! : player.roleId;
+  const effectiveFaction = isDrunkAwakened
+    ? (ROLES_BY_ID[effectiveRoleId]?.faction ?? player.faction)
+    : player.faction;
+
+  if (effectiveRoleId === 'minion' || effectiveRoleId === 'sorcerer') return false;
+  if (effectiveRoleId === 'lycan') return true;
+  if (effectiveFaction === 'WEREWOLF' || effectiveRoleId === 'white_wolf') return true;
   return false;
 }
 
@@ -62,7 +81,7 @@ function pickDeterministic<T>(items: T[], seed: number): T {
 }
 
 /**
- * Tally phiếu bầu của bầy Sói từ các phiếu cá nhân.
+ * Tally phiếu bầu của bầy Sói từ các phiếu cá nhân (1 mục tiêu hoặc nhiều mục tiêu khi Sói con chết).
  * Sói trắng (white_wolf) được tham gia bỏ phiếu cùng bầy.
  */
 function tallyWolfPackVotes(
@@ -72,33 +91,50 @@ function tallyWolfPackVotes(
   allowFriendlyFire: boolean,
   targetCount: number,
   seed: number,
-  players: PlayerState[]
+  players: PlayerState[],
+  multiVotes?: Record<PlayerId, PlayerId[]>
 ): PlayerId[] {
   const validVoterIds = new Set(livingWolves.map((w) => w.id));
   const voteCounts = new Map<string, number>();
 
-  for (const [voterId, targetId] of Object.entries(votes)) {
-    if (!validVoterIds.has(voterId)) continue;
-
-    // Bỏ cắn (Skip)
+  const recordTargetVote = (targetId: PlayerId | null) => {
     if (targetId === null) {
       if (allowSkip) {
         voteCounts.set('__SKIP__', (voteCounts.get('__SKIP__') ?? 0) + 1);
       }
-      continue;
+      return;
     }
 
-    // Kiểm tra cắn đồng đội (Friendly Fire)
     const targetPlayer = players.find((p) => p.id === targetId && p.isAlive);
-    if (!targetPlayer) continue;
+    if (!targetPlayer) return;
 
     const isWolfPackAlly =
       targetPlayer.faction === 'WEREWOLF' || targetPlayer.roleId === 'white_wolf';
     if (isWolfPackAlly && !allowFriendlyFire) {
-      continue; // Cấm cắn đồng đội thì bỏ qua phiếu này
+      return; // Cấm cắn đồng đội thì bỏ qua phiếu này
     }
 
     voteCounts.set(targetId, (voteCounts.get(targetId) ?? 0) + 1);
+  };
+
+  if (multiVotes) {
+    for (const [voterId, targetIds] of Object.entries(multiVotes)) {
+      if (!validVoterIds.has(voterId)) continue;
+      if (!targetIds || targetIds.length === 0) {
+        recordTargetVote(null);
+        continue;
+      }
+      const uniqueTargets = Array.from(new Set(targetIds)).slice(0, targetCount);
+      for (const targetId of uniqueTargets) {
+        recordTargetVote(targetId);
+      }
+    }
+  }
+
+  for (const [voterId, targetId] of Object.entries(votes)) {
+    if (!validVoterIds.has(voterId)) continue;
+    if (multiVotes && Object.prototype.hasOwnProperty.call(multiVotes, voterId)) continue;
+    recordTargetVote(targetId);
   }
 
   if (voteCounts.size === 0) return [];
@@ -146,7 +182,7 @@ export function getRawWolfTargets(
   let rawWolfTargets: PlayerId[] = [];
 
   if (actions.wolfPack) {
-    if (actions.wolfPack.individualVotes) {
+    if (actions.wolfPack.multiVotes || actions.wolfPack.individualVotes) {
       const livingWolves = state.players.filter((p) => {
         if (!p.isAlive) return false;
         if (p.faction !== 'WEREWOLF' && p.roleId !== 'white_wolf') return false;
@@ -156,13 +192,14 @@ export function getRawWolfTargets(
       });
 
       rawWolfTargets = tallyWolfPackVotes(
-        actions.wolfPack.individualVotes,
+        actions.wolfPack.individualVotes ?? {},
         livingWolves,
         state.settings.allowWolfSkip,
         state.settings.allowWolfFriendlyFire,
         targetCount,
         randomSeed,
-        state.players
+        state.players,
+        actions.wolfPack.multiVotes
       );
     } else if (actions.wolfPack.targets) {
       if (!actions.wolfPack.isSkip || !state.settings.allowWolfSkip) {
@@ -206,9 +243,10 @@ export function getRawWolfTargets(
  */
 export function getWitchVictimsPreview(
   state: GameState,
-  actions: NightActions
+  actions: NightActions,
+  randomSeed: number = 42
 ): PlayerId[] {
-  const rawTargets = getRawWolfTargets(state, actions);
+  const rawTargets = getRawWolfTargets(state, actions, randomSeed);
 
   // Bảo vệ che chở (nếu không mất phép và không trùng đêm trước)
   const isProtectedValid =
@@ -288,6 +326,9 @@ export function resolveNight(
         const roleDef = ROLES_BY_ID[realRoleId];
         if (roleDef) {
           p.faction = roleDef.faction;
+        }
+        if (realRoleId === 'elder' && p.elderHp === undefined) {
+          p.elderHp = 2;
         }
         nextState.historyLogs.push(
           `Kẻ say rượu (${p.name}) đã tỉnh rượu ở Đêm 3 và nhận thức được vai trò thật của mình: [${realRoleId}]!`
@@ -409,7 +450,7 @@ export function resolveNight(
   if (actions.wolfPack) {
     if (nextState.settings.firstNightNoKill && nextState.roundNumber === 1) {
       nextState.historyLogs.push('Đêm 1 luật hòa bình: Ma sói chỉ nhận mặt, không có ai bị cắn chết!');
-    } else if (actions.wolfPack.individualVotes) {
+    } else if (actions.wolfPack.multiVotes || actions.wolfPack.individualVotes) {
       // Sói trắng (white_wolf) cũng được thức dậy và bỏ phiếu cùng bầy
       const livingWolves = nextState.players.filter((p) => {
         if (!p.isAlive) return false;
@@ -420,13 +461,14 @@ export function resolveNight(
       });
 
       rawWolfTargets = tallyWolfPackVotes(
-        actions.wolfPack.individualVotes,
+        actions.wolfPack.individualVotes ?? {},
         livingWolves,
         nextState.settings.allowWolfSkip,
         nextState.settings.allowWolfFriendlyFire,
         targetCount,
         randomSeed,
-        nextState.players
+        nextState.players,
+        actions.wolfPack.multiVotes
       );
     } else if (actions.wolfPack.targets) {
       if (!actions.wolfPack.isSkip || !nextState.settings.allowWolfSkip) {
@@ -672,16 +714,21 @@ export function resolveNight(
     );
     if (hasAliveSeer || hasAliveApprentice) {
       // Quy tắc State Snapshot: Soi dựa trên trạng thái danh tính đầu đêm của người chơi
+      // (Kẻ say rượu từ Đêm 3+ đã thức tỉnh vai trò thật ở đầu đêm)
       const target = state.players.find((p) => p.id === seerTargetId);
       if (target) {
-        const def = ROLES_BY_ID[target.roleId];
+        const effectiveRoleId =
+          target.roleId === 'drunk' && state.roundNumber >= 3 && target.drunkRealRoleId
+            ? target.drunkRealRoleId
+            : target.roleId;
+        const def = ROLES_BY_ID[effectiveRoleId];
         let result: SeerResult | string = def?.seerResult ?? 'VILLAGER';
         if (nextState.settings.seerRevealMode === 'EXACT_ROLE') {
-          result = target.roleId;
+          result = effectiveRoleId;
         } else {
           // Lycan soi ra Sói, Minion soi ra Dân
-          if (target.roleId === 'lycan') result = 'WEREWOLF';
-          if (target.roleId === 'minion') result = 'VILLAGER';
+          if (effectiveRoleId === 'lycan') result = 'WEREWOLF';
+          if (effectiveRoleId === 'minion') result = 'VILLAGER';
         }
 
         infoResults.seerResult = {
@@ -700,10 +747,14 @@ export function resolveNight(
 
   // 7b. Pháp sư sói (Sorcerer)
   if (actions.sorcerer?.targetId) {
-    const target = nextState.players.find((p) => p.id === actions.sorcerer!.targetId);
+    const target = state.players.find((p) => p.id === actions.sorcerer!.targetId);
+    const effectiveRoleId =
+      target && target.roleId === 'drunk' && state.roundNumber >= 3 && target.drunkRealRoleId
+        ? target.drunkRealRoleId
+        : target?.roleId;
     infoResults.sorcererResult = {
       targetId: actions.sorcerer.targetId,
-      isSeer: target?.roleId === 'seer',
+      isSeer: effectiveRoleId === 'seer',
     };
   }
 

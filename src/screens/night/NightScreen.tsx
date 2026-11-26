@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
-import { audioController, type AudioStatus } from '../../audio/audioController';
+import {
+  audioController,
+  NARRATION_PROMPTS,
+  type AudioStatus,
+} from '../../audio/audioController';
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
@@ -12,6 +16,98 @@ type NightScreenProps = {
   onNavigate?: (screen: ScreenName) => void;
   onOpenRules?: (tab?: 'rules' | 'roles') => void;
 };
+
+type CircularSeatPlayer = {
+  id: PlayerId;
+  name: string;
+  seatIndex: number;
+};
+
+type CircularSeatMapProps = {
+  targets: PlayerId[];
+  players: CircularSeatPlayer[];
+  selectedIds: PlayerId[];
+  showOrderBadge?: boolean;
+  centerIcon: string;
+  ariaLabel: string;
+  disabled?: boolean;
+  variant?: 'default' | 'poison' | 'hoodlum' | 'piedpiper';
+  onSelect: (targetId: PlayerId) => void;
+};
+
+/**
+ * Sơ đồ ghế vòng tròn cho chế độ Một máy: tự động chia 2 vòng so le khi có >= 12 mục tiêu
+ * và hiển thị badge thứ tự #1 / #2 cho các vai chọn nhiều người.
+ */
+function CircularSeatMap({
+  targets,
+  players,
+  selectedIds,
+  showOrderBadge = false,
+  centerIcon,
+  ariaLabel,
+  disabled = false,
+  variant = 'default',
+  onSelect,
+}: CircularSeatMapProps) {
+  const isDense = targets.length >= 12;
+
+  return (
+    <div
+      className={`circular-seat-map ${isDense ? 'is-dense' : ''}`}
+      data-count={targets.length}
+      role="group"
+      aria-label={ariaLabel}
+    >
+      <div className="circular-seat-center" aria-hidden="true">
+        <span>{centerIcon}</span>
+        <small>{targets.length} mục tiêu</small>
+      </div>
+      {targets.map((tId, idx) => {
+        const targetP = players.find((p) => p.id === tId);
+        if (!targetP) return null;
+
+        const orderIdx = selectedIds.indexOf(tId);
+        const isSelected = orderIdx !== -1;
+        const angle = (idx / Math.max(1, targets.length)) * 2 * Math.PI - Math.PI / 2;
+        const radiusPct = isDense
+          ? idx % 2 === 0
+            ? 44
+            : 31
+          : targets.length > 10
+          ? 40
+          : 37;
+        const leftPct = 50 + Math.cos(angle) * radiusPct;
+        const topPct = 50 + Math.sin(angle) * radiusPct;
+
+        const variantClass =
+          isSelected && variant !== 'default' ? `${variant}-selected` : '';
+        const orderLabel = showOrderBadge && isSelected ? `, đã chọn #${orderIdx + 1}` : '';
+
+        return (
+          <button
+            type="button"
+            key={`${variant}-${tId}`}
+            disabled={disabled}
+            aria-pressed={isSelected}
+            aria-label={`Ghế #${targetP.seatIndex} ${targetP.name}${orderLabel}`}
+            onClick={() => onSelect(tId)}
+            style={{ left: `${leftPct.toFixed(2)}%`, top: `${topPct.toFixed(2)}%` }}
+            className={`circular-seat-node ${isSelected ? 'selected' : ''} ${variantClass}`}
+          >
+            {showOrderBadge && isSelected && (
+              <span className="circular-seat-order-badge" aria-hidden="true">
+                #{orderIdx + 1}
+              </span>
+            )}
+            <span className="circular-seat-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
+            <span className="circular-seat-name">{targetP.name}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 const INVESTIGATION_TURN_KEYS = new Set([
   'seer',
@@ -40,6 +136,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [wolfTargets, setWolfTargets] = useState<PlayerId[]>([]);
   const [witchPoisonTargetId, setWitchPoisonTargetId] = useState<PlayerId | null>(null);
   const [isWitchHeal, setIsWitchHeal] = useState(false);
+  const [witchHealTargetId, setWitchHealTargetId] = useState<PlayerId | null>(null);
   const [notice, setNotice] = useState('');
   const [sleepNotice, setSleepNotice] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -59,7 +156,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const currentTurnInfo = publicView?.currentTurnInfo;
 
   const currentTurnKey = privateView?.turnKey || privateView?.roleId || '';
-  const isWolfPack = currentTurnKey === 'wolf_pack';
+  const isWolfPack = currentTurnKey === 'wolf_pack' || currentTurnKey === 'werewolf';
   const isWolfDoubleKill =
     isWolfPack &&
     Boolean(
@@ -88,6 +185,8 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [isTroublemakerActive, setIsTroublemakerActive] = useState<boolean | null>(null);
   const [isFoxSkip, setIsFoxSkip] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [isPeekingRole, setIsPeekingRole] = useState(false);
+  const [peekAvatarError, setPeekAvatarError] = useState(false);
   const submitSleepTimerRef = useRef<number | null>(null);
   const resultTimerRef = useRef<number | null>(null);
   const advancePopTimerRef = useRef<number | null>(null);
@@ -97,7 +196,35 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
 
   useEffect(() => {
     setAvatarError(false);
+    setPeekAvatarError(false);
   }, [myRoleId, privateView?.turnKey, privateView?.playerId]);
+
+  // Đóng thẻ xem vai ngay lập tức nếu rời chế độ ngủ, đổi pha hoặc mất focus cửa sổ
+  useEffect(() => {
+    if (mode !== 'sleep' || isSingleDevice || !privateView?.roleId) {
+      setIsPeekingRole(false);
+    }
+  }, [mode, isSingleDevice, privateView?.roleId, privateView?.playerId, publicView?.phase]);
+
+  useEffect(() => {
+    if (!isPeekingRole) return;
+    const hidePeek = () => setIsPeekingRole(false);
+    const handleVisibility = () => {
+      if (document.hidden) {
+        hidePeek();
+      }
+    };
+    window.addEventListener('pointerup', hidePeek);
+    window.addEventListener('pointercancel', hidePeek);
+    window.addEventListener('blur', hidePeek);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('pointerup', hidePeek);
+      window.removeEventListener('pointercancel', hidePeek);
+      window.removeEventListener('blur', hidePeek);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isPeekingRole]);
 
   useEffect(() => {
     return audioController.subscribeAudioStatus((status) => {
@@ -125,11 +252,29 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     };
   }, []);
 
-  // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy
-  const victimPlayerId = privateView?.skills?.witchVictimId;
-  const victimPlayer = victimPlayerId
-    ? publicView?.players.find((p) => p.id === victimPlayerId)
-    : null;
+  // Lấy thông tin nạn nhân bị sói cắn nếu là phù thủy (hỗ trợ nhiều nạn nhân qua witchVictimIds)
+  const skillsWithOptionalVictims = privateView?.skills as
+    | (NonNullable<typeof privateView>['skills'] & { witchVictimIds?: PlayerId[] })
+    | undefined;
+  const witchVictimIds: PlayerId[] =
+    Array.isArray(skillsWithOptionalVictims?.witchVictimIds) &&
+    skillsWithOptionalVictims.witchVictimIds.length > 0
+      ? skillsWithOptionalVictims.witchVictimIds
+      : skillsWithOptionalVictims?.witchVictimId
+      ? [skillsWithOptionalVictims.witchVictimId]
+      : [];
+  const victimPlayers = witchVictimIds
+    .map((id) => publicView?.players.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+  const primaryVictimId = witchVictimIds[0] ?? null;
+  const disallowBothWitchPotions = publicView?.settings?.allowWitchBothPotionsSameNight === false;
+  const witchHealMode = publicView?.settings?.witchHealMode ?? 'AOE';
+  const witchKnowsVictim = publicView?.settings?.witchKnowsVictim !== false;
+  const isWitchSingleVictimChoice =
+    isWitch && witchHealMode === 'SINGLE' && victimPlayers.length > 1;
+  const validWitchHealTargetId =
+    witchHealTargetId && witchVictimIds.includes(witchHealTargetId) ? witchHealTargetId : null;
+  const isWolfSkipDisabled = isWolfPack && publicView?.settings?.allowWolfSkip === false;
 
   // Lấy thông tin nạn nhân của bầy Sói cho Sói nguyền
   const accursedVictimId = validTargets[0] || privateView?.skills?.wolfPackVictimId;
@@ -186,6 +331,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setWolfTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
+    setWitchHealTargetId(null);
     setIsCurseAction(null);
     setIsTroublemakerActive(null);
     setIsFoxSkip(false);
@@ -225,7 +371,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     }
   }, [isSingleDevice, canAct, showingResult]);
 
-  // Single-device Smart Fake Delay (5-14s): Tự động chuyển lượt khi ở Sleep Overlay
+  // Single-device Smart Fake Delay: Tự động chuyển lượt khi ở Sleep Overlay, luôn chờ đủ narration + 3.5s đệm
   useEffect(() => {
     if (autoAdvanceTimerRef.current !== null) {
       window.clearTimeout(autoAdvanceTimerRef.current);
@@ -237,9 +383,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     }
 
     const introLeadMs = currentTurnInfo?.turnIndex === 1 && !hasSubmitted ? 4500 : 0;
+    const audioDurationMs = NARRATION_PROMPTS[currentTurnInfo?.turnKey ?? '']?.durationMs ?? 5000;
     const delayMs = hasSubmitted
       ? 1400
-      : introLeadMs + 5000 + Math.floor(Math.random() * 9001);
+      : introLeadMs + audioDurationMs + 3500 + Math.floor(Math.random() * 5501);
 
     autoAdvanceTimerRef.current = window.setTimeout(() => {
       autoAdvanceTimerRef.current = null;
@@ -259,6 +406,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     mode,
     publicView?.phase,
     currentTurnInfo?.turnIndex,
+    currentTurnInfo?.turnKey,
     hasSubmitted,
     actions,
   ]);
@@ -284,16 +432,36 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     }
   };
 
-  const handleConfirmAction = async () => {
+  const handleConfirmAction = async (overrideSkip = false) => {
     if (!privateView) return;
 
     try {
       if (isWitch) {
-        await actions.sendNightAction('witch', {
-          heal: isWitchHeal,
-          healTargetId: isWitchHeal ? (victimPlayerId ?? null) : null,
-          poisonTargetId: witchPoisonTargetId,
-        });
+        if (overrideSkip) {
+          await actions.sendNightAction('witch', {
+            heal: false,
+            healTargetId: null,
+            poisonTargetId: null,
+          });
+        } else {
+          if (disallowBothWitchPotions && isWitchHeal && witchPoisonTargetId) {
+            setNotice('Luật phòng không cho phép dùng cả Bình Cứu và Bình Độc trong cùng một đêm.');
+            return;
+          }
+          if (isWitchHeal && isWitchSingleVictimChoice && !validWitchHealTargetId) {
+            setNotice('Chế độ cứu 1 người: vui lòng chọn 1 nạn nhân cụ thể để cứu.');
+            return;
+          }
+          await actions.sendNightAction('witch', {
+            heal: isWitchHeal,
+            healTargetId: isWitchHeal
+              ? isWitchSingleVictimChoice
+                ? validWitchHealTargetId
+                : primaryVictimId
+              : null,
+            poisonTargetId: witchPoisonTargetId,
+          });
+        }
       } else if (isCupid) {
         if (cupidTargets.length !== 2 || cupidTargets[0] === cupidTargets[1]) {
           setNotice('Vui lòng chọn đủ 2 người chơi khác nhau để ghép đôi.');
@@ -336,13 +504,20 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           curseTargetId,
         });
       } else if (isBigBadWolf) {
-        if (!selectedTargetId) {
-          setNotice('Vui lòng chọn 1 nạn nhân để cắn xé thêm.');
-          return;
+        if (overrideSkip) {
+          await actions.sendNightAction('big_bad_wolf', {
+            targetId: null,
+            isSkip: true,
+          });
+        } else {
+          if (!selectedTargetId) {
+            setNotice('Vui lòng chọn 1 nạn nhân để cắn xé thêm.');
+            return;
+          }
+          await actions.sendNightAction('big_bad_wolf', {
+            targetId: selectedTargetId,
+          });
         }
-        await actions.sendNightAction('big_bad_wolf', {
-          targetId: selectedTargetId,
-        });
       } else if (isTroublemaker) {
         if (isTroublemakerActive === null) {
           setNotice('Vui lòng chọn Kích hoạt hoặc Bỏ qua.');
@@ -352,7 +527,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           activate: isTroublemakerActive,
         });
       } else if (isFox) {
-        if (privateView?.skills?.foxLostPower || isFoxSkip) {
+        if (overrideSkip || privateView?.skills?.foxLostPower || isFoxSkip) {
           await actions.sendNightAction('fox', { isSkip: true });
         } else {
           if (!selectedTargetId) {
@@ -413,7 +588,17 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           targetId: selectedTargetId,
         });
       } else if (isWolfPack) {
-        if (isWolfDoubleKill) {
+        if (overrideSkip) {
+          if (isWolfSkipDisabled) {
+            setNotice('Luật phòng không cho phép bầy Sói bỏ qua lượt cắn.');
+            return;
+          }
+          await actions.sendNightAction('wolf_pack', {
+            targetId: null,
+            targetIds: [],
+            isSkip: true,
+          });
+        } else if (isWolfDoubleKill) {
           if (wolfTargets.length !== 2 || wolfTargets[0] === wolfTargets[1]) {
             setNotice('Vui lòng chọn đủ 2 nạn nhân khác nhau (Sói Con đã hy sinh).');
             return;
@@ -422,6 +607,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             targetIds: wolfTargets,
           });
         } else {
+          if (isWolfSkipDisabled && selectedTargetId === null) {
+            setNotice('Luật phòng không cho phép bầy Sói bỏ qua lượt cắn.');
+            return;
+          }
           await actions.sendNightAction('wolf_pack', {
             targetId: selectedTargetId,
             targetIds: selectedTargetId ? [selectedTargetId] : [],
@@ -429,15 +618,30 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           });
         }
       } else {
-        await actions.sendNightAction(privateView.roleId, {
-          targetId: selectedTargetId,
-          isSkip: selectedTargetId === null,
-        });
+        if (overrideSkip) {
+          await actions.sendNightAction(privateView.roleId, {
+            targetId: null,
+            isSkip: true,
+          });
+        } else {
+          await actions.sendNightAction(privateView.roleId, {
+            targetId: selectedTargetId,
+            isSkip: selectedTargetId === null,
+          });
+        }
       }
 
       setHasSubmitted(true);
       playMultiDeviceConfirmSfx();
-      const successMsg = isMason
+      const successMsg = overrideSkip
+        ? isWolfPack
+          ? '✓ Bầy Sói đã bỏ qua lượt cắn đêm nay.'
+          : isBigBadWolf
+          ? '✓ Sói Đại Ca đã bỏ qua lượt cắn thêm.'
+          : isFox
+          ? '✓ Cáo bỏ qua lượt đánh hơi đêm nay.'
+          : '✓ Đã bỏ qua hành động đêm nay.'
+        : isMason
         ? '✓ Đã nhận diện anh em Hội Tam Điểm.'
         : isCupid
         ? '✓ Đã bắn mũi tên ghép đôi hai người chơi.'
@@ -477,6 +681,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       setNotice(successMsg);
       const shouldShowResult =
         INVESTIGATION_TURN_KEYS.has(currentTurnKey) &&
+        !overrideSkip &&
         !(isFox && isFoxSkip) &&
         Boolean(selectedTargetId);
 
@@ -584,6 +789,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     setWolfTargets([]);
     setWitchPoisonTargetId(null);
     setIsWitchHeal(false);
+    setWitchHealTargetId(null);
     setIsCurseAction(null);
     setIsTroublemakerActive(null);
     setIsFoxSkip(false);
@@ -646,6 +852,10 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const isWolfDoubleValid = wolfTargets.length === 2 && wolfTargets[0] !== wolfTargets[1];
   const canConfirm = isWolfDoubleKill
     ? isWolfDoubleValid
+    : isWolfSkipDisabled
+    ? selectedTargetId !== null || wolfTargets.length > 0
+    : isWitch && isWitchHeal && isWitchSingleVictimChoice
+    ? Boolean(validWitchHealTargetId)
     : isCupid
     ? isCupidValid
     : isHoodlum
@@ -665,7 +875,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
     : true;
 
   return (
-    <main className={`night-screen app-page ${mode === 'sleep' ? 'night-sleep' : ''}`}>
+    <main className={`night-screen app-page ${mode === 'sleep' ? 'night-sleep mode-sleep' : ''}`}>
       {/* Compact Host Control Bar cho Host kiêm Người chơi */}
       {isPlayerHost && <CompactHostControlBar />}
 
@@ -720,8 +930,6 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
             <p className="night-calling-hint">
               {isSingleDevice
                 ? 'Hãy nhắm mắt và lắng nghe lời quản trò.'
-                : currentTurnInfo?.isFake
-                ? '✦ Đêm vẫn đang tiếp diễn. Hãy giữ im lặng.'
                 : canAct
                 ? 'Đến lượt bạn thức giấc!'
                 : 'Hãy nhắm mắt và lắng nghe lời quản trò.'}
@@ -756,30 +964,158 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 </p>
               )}
 
-              <div className="night-offline-advance-bar">
-                <button
-                  type="button"
-                  disabled={advancePressed}
-                  className={`offline-quick-skip-btn ${advancePressed ? 'btn-pop' : ''}`}
-                  onClick={handleAdvanceLocal}
-                >
-                  Qua lượt nhanh
-                </button>
-              </div>
+              <p className="sleep-face-down-hint">Hãy úp điện thoại xuống bàn</p>
             </>
           ) : (
-            canAct && (
-              <button
-                type="button"
-                className="jump-to-action-btn"
-                onClick={() => setMode('action')}
-              >
-                ⚡ Thức giấc để hành động ➔
-              </button>
-            )
+            <>
+              {canAct && (
+                <button
+                  type="button"
+                  className="jump-to-action-btn"
+                  onClick={() => setMode('action')}
+                >
+                  ⚡ Thức giấc để hành động ➔
+                </button>
+              )}
+
+              {privateView?.roleId && (
+                <div className="night-role-peek-wrap">
+                  <button
+                    type="button"
+                    className={`night-role-peek-pill ${isPeekingRole ? 'is-peeking' : ''}`}
+                    aria-pressed={isPeekingRole}
+                    aria-expanded={isPeekingRole}
+                    aria-label="Giữ để xem vai trò bí mật của bạn"
+                    onPointerDown={(e) => {
+                      if (e.button !== undefined && e.button !== 0) return;
+                      setIsPeekingRole(true);
+                    }}
+                    onPointerUp={() => setIsPeekingRole(false)}
+                    onPointerLeave={() => setIsPeekingRole(false)}
+                    onPointerCancel={() => setIsPeekingRole(false)}
+                    onBlur={() => setIsPeekingRole(false)}
+                    onKeyDown={(e) => {
+                      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+                        e.preventDefault();
+                        setIsPeekingRole(true);
+                      }
+                    }}
+                    onKeyUp={(e) => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault();
+                        setIsPeekingRole(false);
+                      }
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
+                  >
+                    <span aria-hidden="true">👁</span>
+                    <span>{isPeekingRole ? 'Thả tay để ẩn vai' : 'Giữ để xem vai'}</span>
+                  </button>
+                </div>
+              )}
+
+              <p className="sleep-face-down-hint">Hãy úp điện thoại xuống bàn</p>
+            </>
           )}
         </section>
       )}
+
+      {!isSingleDevice && mode === 'sleep' && isPeekingRole && privateView?.roleId && (() => {
+        const faction = privateView.faction ?? roleDef.faction;
+        const factionLabel =
+          faction === 'WEREWOLF'
+            ? '🐺 PHE MA SÓI'
+            : faction === 'THIRD_PARTY'
+            ? '🎭 PHE THỨ BA'
+            : '🛡️ PHE DÂN LÀNG';
+        const shortReminder = roleDef.shortDesc
+          ? `${roleDef.shortDesc.split('.')[0]}.`
+          : 'Giữ kín vai trò của bạn.';
+        const loverPlayer = privateView.loverId
+          ? publicView?.players.find((p) => p.id === privateView.loverId)
+          : null;
+        const drunkRealRole = privateView.skills?.drunkRealRoleId
+          ? ROLES_BY_ID[privateView.skills.drunkRealRoleId]
+          : null;
+
+        const secretStatuses: string[] = [];
+        if (privateView.isMayor) {
+          secretStatuses.push('👑 Trưởng làng (2 phiếu biểu quyết)');
+        }
+        if (privateView.loverId) {
+          const partnerText = loverPlayer
+            ? `#${loverPlayer.seatIndex} ${loverPlayer.name}`
+            : 'Người chơi bí mật';
+          secretStatuses.push(
+            `💘 Cặp đôi với ${partnerText}${privateView.isCrossFactionCouple ? ' (Phe Thứ 3)' : ''}`
+          );
+        }
+        if (privateView.skills?.drunkRealRoleId) {
+          secretStatuses.push(
+            `🍺 Vai trò thật (Đêm 3+): ${drunkRealRole?.nameVi ?? privateView.skills.drunkRealRoleId}`
+          );
+        }
+        if (privateView.roleId === 'elder' && typeof privateView.skills?.elderHp === 'number') {
+          secretStatuses.push(`🛡️ Giáp Già làng còn: ${privateView.skills.elderHp} mạng`);
+        }
+        if (privateView.roleId === 'witch') {
+          secretStatuses.push(
+            `🧪 Bình Cứu: ${privateView.skills?.witchHealUsed ? 'Đã dùng' : 'Còn'} · ☠️ Bình Độc: ${privateView.skills?.witchPoisonUsed ? 'Đã dùng' : 'Còn'}`
+          );
+        }
+        if (privateView.roleId === 'fox' && privateView.skills?.foxLostPower) {
+          secretStatuses.push('🦊 Đã mất khứu giác');
+        }
+        if (privateView.skills?.isMuted) {
+          secretStatuses.push('🔇 Đang bị phù phép câm lặng');
+        }
+        if (privateView.skills?.isEnchanted) {
+          secretStatuses.push('🎵 Đã bị thôi miên');
+        }
+        if (privateView.skills?.isCultMember) {
+          secretStatuses.push('🕯️ Thành viên giáo phái');
+        }
+        if (!privateView.isAlive) {
+          secretStatuses.push('☠️ Bạn đã rời khỏi ván đấu');
+        }
+
+        return (
+          <div className="role-peek-overlay" role="dialog" aria-label="Thông tin vai trò cá nhân">
+            <div className={`role-peek-card faction-${faction}`}>
+              <div className="role-peek-header">
+                <span className={`role-peek-faction faction-${faction}`}>{factionLabel}</span>
+                <span className="role-peek-cover-hint">Thả tay để che lại</span>
+              </div>
+              <div className="role-peek-body">
+                {myRoleImage && !peekAvatarError ? (
+                  <img
+                    src={myRoleImage}
+                    alt=""
+                    aria-hidden="true"
+                    className="role-peek-art"
+                    decoding="async"
+                    draggable={false}
+                    onError={() => setPeekAvatarError(true)}
+                  />
+                ) : (
+                  <div className="role-peek-art-fallback" aria-hidden="true">✦</div>
+                )}
+                <div className="role-peek-info">
+                  <strong className="role-peek-name">{roleDef.nameVi}</strong>
+                  <p className="role-peek-desc">{shortReminder}</p>
+                </div>
+              </div>
+              {secretStatuses.length > 0 && (
+                <ul className="role-peek-status-list">
+                  {secretStatuses.map((status) => (
+                    <li key={status}>{status}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 3. Lượt Hành Động Bí Mật Trong Đêm */}
       {mode === 'action' && (canAct || showingResult) && (
@@ -893,7 +1229,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 <button
                   type="button"
                   className="primary-confirm-btn mason-confirm-btn"
-                  onClick={handleConfirmAction}
+                  onClick={() => void handleConfirmAction(false)}
                 >
                   <span>✓ ĐÃ BIẾT MẶT ANH EM</span>
                 </button>
@@ -960,7 +1296,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   type="button"
                   className={`primary-confirm-btn ${!canConfirm ? 'disabled' : ''}`}
                   disabled={!canConfirm}
-                  onClick={handleConfirmAction}
+                  onClick={() => void handleConfirmAction(false)}
                 >
                   <span>
                     {isCurseAction === true
@@ -1006,7 +1342,7 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   type="button"
                   className={`primary-confirm-btn ${!canConfirm ? 'disabled' : ''}`}
                   disabled={!canConfirm}
-                  onClick={handleConfirmAction}
+                  onClick={() => void handleConfirmAction(false)}
                 >
                   <span>
                     {isTroublemakerActive === true
@@ -1021,43 +1357,124 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
           ) : (
             <>
               {/* Nạn nhân Phù Thủy / Bình thuốc cứu */}
-              {isWitch && !privateView?.skills?.witchHealUsed && (
-                <div className="victim-card">
-                  <div className="victim-info">
-                    <div className="victim-glyph-wrap" aria-hidden="true">
-                      <span className="victim-glyph">{victimPlayer ? '☠' : '🧪'}</span>
+              {isWitch && !privateView?.skills?.witchHealUsed && (() => {
+                const isHealBlockedByPoison = disallowBothWitchPotions && witchPoisonTargetId !== null;
+                const isEmptyKnownVictim = witchKnowsVictim && victimPlayers.length === 0;
+                const selectedHealVictim = validWitchHealTargetId
+                  ? victimPlayers.find((vp) => vp.id === validWitchHealTargetId)
+                  : null;
+
+                return (
+                  <div className="victim-card">
+                    <div className="victim-info">
+                      <div className="victim-glyph-wrap" aria-hidden="true">
+                        <span className="victim-glyph">{victimPlayers.length > 0 ? '☠' : '🧪'}</span>
+                      </div>
+                      <div className="victim-meta">
+                        {victimPlayers.length > 0 ? (
+                          <>
+                            <small>
+                              {isWitchSingleVictimChoice
+                                ? `CHỌN 1 NẠN NHÂN ĐỂ CỨU (${victimPlayers.length} NGƯỜI BỊ SÓI CẮN)`
+                                : victimPlayers.length > 1
+                                ? `CÁC NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY (${victimPlayers.length})`
+                                : 'NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY'}
+                            </small>
+                            {victimPlayers.length === 1 ? (
+                              <strong>#{victimPlayers[0].seatIndex} {victimPlayers[0].name}</strong>
+                            ) : isWitchSingleVictimChoice ? (
+                              <div
+                                className="witch-victim-select-list"
+                                role="group"
+                                aria-label="Chọn 1 nạn nhân để dùng Bình Cứu"
+                              >
+                                {victimPlayers.map((vp) => {
+                                  const isSelectedForHeal = validWitchHealTargetId === vp.id && isWitchHeal;
+                                  return (
+                                    <button
+                                      key={vp.id}
+                                      type="button"
+                                      disabled={isHealBlockedByPoison}
+                                      aria-pressed={isSelectedForHeal}
+                                      className={`witch-victim-choice ${isSelectedForHeal ? 'selected' : ''}`}
+                                      onClick={() => {
+                                        if (isSelectedForHeal) {
+                                          setWitchHealTargetId(null);
+                                          setIsWitchHeal(false);
+                                        } else {
+                                          setWitchHealTargetId(vp.id);
+                                          setIsWitchHeal(true);
+                                        }
+                                      }}
+                                    >
+                                      <span>#{vp.seatIndex} {vp.name}</span>
+                                      <span aria-hidden="true">{isSelectedForHeal ? '✓ Cứu' : '○'}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <ul className="witch-victim-list">
+                                {victimPlayers.map((vp) => (
+                                  <li key={vp.id}>
+                                    <strong>#{vp.seatIndex} {vp.name}</strong>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        ) : witchKnowsVictim ? (
+                          <>
+                            <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
+                            <strong>Đêm nay không có nạn nhân bị Sói cắn.</strong>
+                          </>
+                        ) : (
+                          <>
+                            <small>BÌNH THUỐC CỨU (CỨU MÙ)</small>
+                            <strong>Không hiển thị nạn nhân theo luật phòng</strong>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="victim-meta">
-                      {victimPlayer ? (
-                        <>
-                          <small>NẠN NHÂN BỊ SÓI CẮN ĐÊM NAY</small>
-                          <strong>#{victimPlayer.seatIndex} {victimPlayer.name}</strong>
-                        </>
-                      ) : (
-                        <>
-                          <small>BÌNH THUỐC CỨU (CỨU MÙ)</small>
-                          <strong>Không hiển thị nạn nhân theo luật phòng</strong>
-                        </>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      disabled={isHealBlockedByPoison || isEmptyKnownVictim}
+                      className={`hold-button heal-button ${isWitchHeal ? 'is-complete' : ''}`}
+                      onClick={() => {
+                        if (isWitchHeal) {
+                          setIsWitchHeal(false);
+                          setWitchHealTargetId(null);
+                        } else {
+                          setIsWitchHeal(true);
+                        }
+                      }}
+                    >
+                      <span>
+                        {isEmptyKnownVictim
+                          ? 'KHÔNG CÓ NẠN NHÂN ĐỂ CỨU'
+                          : isWitchSingleVictimChoice
+                          ? isWitchHeal && selectedHealVictim
+                            ? `✓ CỨU #${selectedHealVictim.seatIndex} ${selectedHealVictim.name}`
+                            : isWitchHeal
+                            ? 'CHỌN 1 NẠN NHÂN BÊN TRÊN'
+                            : 'DÙNG BÌNH CỨU (CHỌN 1 NGƯỜI)'
+                          : victimPlayers.length > 0
+                          ? isWitchHeal
+                            ? '✓ DÙNG BÌNH CỨU'
+                            : 'DÙNG BÌNH CỨU NGƯỜI'
+                          : isWitchHeal
+                          ? '✓ ĐÃ CHỌN CỨU MÙ'
+                          : 'DÙNG BÌNH CỨU NGƯỜI (CỨU MÙ)'}
+                      </span>
+                    </button>
+                    {isHealBlockedByPoison && (
+                      <p className="witch-potion-rule-note" role="status">
+                        Luật phòng không cho dùng cả Bình Cứu và Bình Độc trong cùng một đêm. Hãy bỏ chọn Bình Độc nếu muốn cứu.
+                      </p>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    className={`hold-button heal-button ${isWitchHeal ? 'is-complete' : ''}`}
-                    onClick={() => setIsWitchHeal((prev) => !prev)}
-                  >
-                    <span>
-                      {victimPlayer
-                        ? isWitchHeal
-                          ? '✓ DÙNG BÌNH CỨU'
-                          : 'DÙNG BÌNH CỨU NGƯỜI'
-                        : isWitchHeal
-                        ? '✓ ĐÃ CHỌN CỨU MÙ'
-                        : 'DÙNG BÌNH CỨU NGƯỜI (CỨU MÙ)'}
-                    </span>
-                  </button>
-                </div>
-              )}
+                );
+              })()}
 
               {isWitch && privateView?.skills?.witchHealUsed && (
                 <div className="witch-used-note" role="status">
@@ -1315,30 +1732,39 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
               )}
 
               {/* Bình thuốc độc cho Phù Thủy */}
-              {isWitch && !privateView?.skills?.witchPoisonUsed && (
-                <div className="witch-poison-section">
-                  <strong>BÌNH THUỐC ĐỘC</strong>
-                  <div className="target-grid">
-                    {validTargets.map((tId) => {
-                      const targetP = publicView?.players.find((p) => p.id === tId);
-                      if (!targetP) return null;
-                      const isPoisoned = witchPoisonTargetId === tId;
-                      return (
-                        <button
-                          type="button"
-                          key={`poison-${tId}`}
-                          aria-pressed={isPoisoned}
-                          onClick={() => setWitchPoisonTargetId(isPoisoned ? null : tId)}
-                          className={`target-card ${isPoisoned ? 'selected poison-selected' : ''}`}
-                        >
-                          <span className="target-name">Đầu độc #{targetP.seatIndex} {targetP.name}</span>
-                          <span>{isPoisoned ? '☠' : '○'}</span>
-                        </button>
-                      );
-                    })}
+              {isWitch && !privateView?.skills?.witchPoisonUsed && (() => {
+                const isPoisonBlockedByHeal = disallowBothWitchPotions && isWitchHeal;
+                return (
+                  <div className="witch-poison-section">
+                    <strong>BÌNH THUỐC ĐỘC</strong>
+                    {isPoisonBlockedByHeal && (
+                      <p className="witch-potion-rule-note" role="status">
+                        Đã chọn dùng Bình Cứu — luật phòng không cho dùng thêm Bình Độc trong cùng đêm.
+                      </p>
+                    )}
+                    <div className="target-grid">
+                      {validTargets.map((tId) => {
+                        const targetP = publicView?.players.find((p) => p.id === tId);
+                        if (!targetP) return null;
+                        const isPoisoned = witchPoisonTargetId === tId;
+                        return (
+                          <button
+                            type="button"
+                            key={`poison-${tId}`}
+                            disabled={isPoisonBlockedByHeal}
+                            aria-pressed={isPoisoned}
+                            onClick={() => setWitchPoisonTargetId(isPoisoned ? null : tId)}
+                            className={`target-card ${isPoisoned ? 'selected poison-selected' : ''}`}
+                          >
+                            <span className="target-name">Đầu độc #{targetP.seatIndex} {targetP.name}</span>
+                            <span>{isPoisoned ? '☠' : '○'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {isWitch && privateView?.skills?.witchPoisonUsed && (
                 <div className="witch-used-note" role="status">
@@ -1381,13 +1807,17 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   type="button"
                   className={`primary-confirm-btn ${!canConfirm ? 'disabled' : ''}`}
                   disabled={!canConfirm}
-                  onClick={handleConfirmAction}
+                  onClick={() => void handleConfirmAction(false)}
                 >
                   <span>
                     {isWolfDoubleKill
                       ? isWolfDoubleValid
                         ? 'XÁC NHẬN CẮN 2 NẠN NHÂN'
                         : `CHỌN ĐỦ 2 NẠN NHÂN (${wolfTargets.length}/2)`
+                      : isWolfSkipDisabled && selectedTargetId === null && wolfTargets.length === 0
+                      ? 'CHỌN 1 NẠN NHÂN ĐỂ CẮN'
+                      : isWitch && isWitchHeal && isWitchSingleVictimChoice && !validWitchHealTargetId
+                      ? 'CHỌN 1 NẠN NHÂN ĐỂ CỨU'
                       : isCupid
                       ? isCupidValid
                         ? 'XÁC NHẬN GHÉP ĐÔI'
@@ -1424,35 +1854,18 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                   </span>
                 </button>
 
-                {!['cupid', 'night_cupid', 'wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi', 'doppelganger', 'night_doppelganger', 'pied_piper', 'night_pied_piper', 'cult_leader', 'night_cult_leader'].includes(currentTurnKey) && (
+                {!isWolfSkipDisabled && !['cupid', 'night_cupid', 'wild_child', 'dire_wolf', 'hoodlum', 'mason', 'night_wild_child', 'night_dire_wolf', 'night_hoodlum', 'night_mason', 'wolf_accursed', 'night_wolf_accursed', 'troublemaker', 'night_troublemaker', 'spellcaster', 'night_spellcaster', 'aura_seer', 'night_aura_seer', 'pi', 'night_pi', 'doppelganger', 'night_doppelganger', 'pied_piper', 'night_pied_piper', 'cult_leader', 'night_cult_leader'].includes(currentTurnKey) && (
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={async () => {
+                    onClick={() => {
                       setSelectedTargetId(null);
                       setWolfTargets([]);
                       setIsWitchHeal(false);
+                      setWitchHealTargetId(null);
                       setWitchPoisonTargetId(null);
-                      if (isWolfPack) {
-                        await actions.sendNightAction('werewolf', {
-                          targetId: null,
-                          targetIds: [],
-                          isSkip: true,
-                        });
-                        setHasSubmitted(true);
-      playMultiDeviceConfirmSfx();
-                        setNotice('✓ Bầy Sói đã bỏ qua lượt cắn đêm nay.');
-                        if (submitSleepTimerRef.current !== null) {
-                          window.clearTimeout(submitSleepTimerRef.current);
-                        }
-                        submitSleepTimerRef.current = window.setTimeout(() => {
-                          submitSleepTimerRef.current = null;
-                          setMode('sleep');
-                          setNotice('');
-                        }, 1000);
-                        return;
-                      }
-                      void handleConfirmAction();
+                      setIsFoxSkip(isFox);
+                      void handleConfirmAction(true);
                     }}
                   >
                     Bỏ qua đêm nay

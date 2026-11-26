@@ -63,9 +63,9 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
   // Cập nhật trạng thái thức tỉnh của Sói chiêm bao ở đầu đêm nếu có Sói khác đã chết
   const dreamWolfAwakened = state.dreamWolfAwakened || hasAnyOtherWolfDied(state);
 
-  // Kẻ say rượu (Drunk) ở Đêm 3+ (roundNumber >= 3) chuyển đổi sang vai thật (drunkRealRoleId)
+  // Kẻ say rượu (Drunk) còn sống ở Đêm 3+ (roundNumber >= 3) chuyển đổi sang vai thật (drunkRealRoleId)
   const effectivePlayers = state.players.map((p) => {
-    if (p.roleId === 'drunk' && round >= 3 && p.drunkRealRoleId) {
+    if (p.isAlive && p.roleId === 'drunk' && round >= 3 && p.drunkRealRoleId) {
       const def = ROLES_BY_ID[p.drunkRealRoleId];
       return {
         ...p,

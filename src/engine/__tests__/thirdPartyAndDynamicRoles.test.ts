@@ -160,6 +160,60 @@ describe('Engine - Phase 5 Third Party & Dynamic Roles (pied_piper, cult_leader,
       expect(wolfTurn!.activePlayerIds).toContain(drunkPlayer.id);
       expect(wolfTurn!.activePlayerIds).toContain(game.players[1].id);
     });
+
+    it('createInitialGameState auto-assigns an eligible real village role for Drunk and awakens cleanly on Round 3+', () => {
+      const game = createTestGame([
+        'drunk',
+        'werewolf',
+        'seer',
+        'villager',
+        'villager',
+        'villager',
+      ]);
+      const drunkPlayer = game.players[0];
+      expect(drunkPlayer.roleId).toBe('drunk');
+      expect(drunkPlayer.drunkRealRoleId).toBeDefined();
+      expect(drunkPlayer.drunkRealRoleId).not.toBe('drunk');
+      // Should not duplicate seer which is already in the deck
+      expect(drunkPlayer.drunkRealRoleId).not.toBe('seer');
+
+      // Round 3 awakening via executeNightPhase when drunkRealRoleId is seer
+      drunkPlayer.drunkRealRoleId = 'aura_seer';
+      game.roundNumber = 3;
+      const planN3 = generateNightTurnPlan(game);
+      const auraTurn = planN3.find((t) => t.turnKey === 'aura_seer');
+      expect(auraTurn).toBeDefined();
+      expect(auraTurn!.canAct).toBe(true);
+      expect(auraTurn!.activePlayerIds).toEqual([drunkPlayer.id]);
+
+      const { nextState, nightOutput } = executeNightPhase(game, {
+        auraSeer: { targetId: game.players[2].id },
+      });
+      const awakened = nextState.players.find((p) => p.id === drunkPlayer.id)!;
+      expect(awakened.roleId).toBe('aura_seer');
+      expect(awakened.faction).toBe('VILLAGER');
+      expect(nightOutput.infoResults.auraResult).toEqual({
+        targetId: game.players[2].id,
+        result: 'SPECIAL',
+      });
+    });
+
+    it('should NOT create phantom fake turns at Round 3 if Drunk died before Round 3', () => {
+      const game = createTestGame([
+        'drunk',
+        'werewolf',
+        'villager',
+        'villager',
+        'villager',
+        'villager',
+      ]);
+      game.players[0].drunkRealRoleId = 'witch';
+      game.players[0].isAlive = false;
+      game.roundNumber = 3;
+
+      const planN3 = generateNightTurnPlan(game);
+      expect(planN3.some((t) => t.turnKey === 'witch')).toBe(false);
+    });
   });
 
   // =========================================================================

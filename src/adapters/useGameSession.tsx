@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CreateRoomOptions,
   DeviceMode,
@@ -17,6 +17,7 @@ export interface GameSessionContextValue {
   adapter: GameSessionAdapter;
   deviceMode: DeviceMode;
   setDeviceMode: (mode: DeviceMode) => void;
+  isAutoResumed: boolean;
   actions: {
     createRoom: (options: CreateRoomOptions) => Promise<{ roomCode: string }>;
     joinRoom: (roomCode: string, username: string) => Promise<{ playerId: PlayerId; seatIndex: number }>;
@@ -56,6 +57,8 @@ export function GameSessionProvider({
   initialDeviceMode = 'MULTI_DEVICE',
 }: GameSessionProviderProps) {
   const [deviceMode, setDeviceModeState] = useState<DeviceMode>(initialDeviceMode);
+  const [isAutoResumed, setIsAutoResumed] = useState(false);
+  const userActionStartedRef = useRef(0);
 
   // Khởi tạo 2 adapter đơn nhất
   const socketAdapter = useMemo(() => new SocketAdapter(), []);
@@ -74,6 +77,41 @@ export function GameSessionProvider({
     });
     return unsubscribe;
   }, [activeAdapter]);
+
+  // Tự động khôi phục phiên chơi đang diễn ra khi tải lại trang (F5)
+  useEffect(() => {
+    let cancelled = false;
+    const startActionEpoch = userActionStartedRef.current;
+    const isAborted = () => cancelled || userActionStartedRef.current !== startActionEpoch;
+
+    if (localEngineAdapter.hasRecoverableSession() || socketAdapter.hasRecoverableSession()) {
+      void (async () => {
+        try {
+          if (isAborted()) return;
+          const localOk = await localEngineAdapter.resumeSession();
+          if (isAborted()) return;
+          if (localOk) {
+            audioController.setDeviceMode('SINGLE_DEVICE');
+            setDeviceModeState('SINGLE_DEVICE');
+            setIsAutoResumed(true);
+            return;
+          }
+          const socketOk = await socketAdapter.resumeSession();
+          if (isAborted()) return;
+          if (socketOk) {
+            audioController.setDeviceMode('MULTI_DEVICE');
+            setDeviceModeState('MULTI_DEVICE');
+            setIsAutoResumed(true);
+          }
+        } catch {
+          // Bỏ qua lỗi khôi phục phiên để không làm gián đoạn khởi động ứng dụng
+        }
+      })();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [localEngineAdapter, socketAdapter]);
 
   // Quản lý Screen Wake Lock: Giữ sáng màn hình khi đang trong ván chơi (không phải LOBBY và không phải GAME_OVER)
   useEffect(() => {
@@ -104,6 +142,12 @@ export function GameSessionProvider({
       if (currentTurn) {
         audioController.playTurnNarration(currentTurn);
       }
+    } else if (
+      phase === 'DAY_MAYOR_ELECTION' ||
+      phase === 'HUNTER_SHOT' ||
+      phase === 'MAYOR_SUCCESSION'
+    ) {
+      audioController.stopNightBGM();
     } else if (phase === 'DAY_DISCUSS') {
       audioController.stopNightBGM();
       // Hiệu lệnh sáng dậy và thảo luận
@@ -132,6 +176,8 @@ export function GameSessionProvider({
   const actions = useMemo(() => {
     return {
       createRoom: async (options: CreateRoomOptions) => {
+        userActionStartedRef.current += 1;
+        setIsAutoResumed(false);
         const mode = options.deviceMode ?? deviceMode;
         if (mode !== deviceMode) {
           setDeviceMode(mode);
@@ -151,6 +197,8 @@ export function GameSessionProvider({
         return targetAdapter.createRoom(options);
       },
       joinRoom: async (roomCode: string, username: string) => {
+        userActionStartedRef.current += 1;
+        setIsAutoResumed(false);
         if (typeof localStorage !== 'undefined') {
           try {
             localStorage.removeItem('werewolf_local_game_session');
@@ -178,6 +226,8 @@ export function GameSessionProvider({
         return localEngineAdapter.hasRecoverableSession() || socketAdapter.hasRecoverableSession();
       },
       leaveRoom: async () => {
+        userActionStartedRef.current += 1;
+        setIsAutoResumed(false);
         audioController.stopAll();
         await activeAdapter.leaveRoom();
         await releaseWakeLock();
@@ -255,6 +305,7 @@ export function GameSessionProvider({
     adapter: activeAdapter,
     deviceMode,
     setDeviceMode,
+    isAutoResumed,
     actions,
   };
 

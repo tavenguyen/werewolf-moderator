@@ -13,6 +13,7 @@
 
 .day-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -24,6 +25,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
   color: var(--parchment);
   font: 700 13px var(--headline);
   letter-spacing: 0.08em;
@@ -40,6 +42,7 @@
 
 .day-header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -1123,4 +1126,190 @@
 .day-confirm-submit:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* Multi-device Hold-to-Peek Private Role Pill & Floating Privacy Card */
+.day-role-peek-bar {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.day-role-peek-pill {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #161b26;
+  color: var(--parchment, #ede7dc);
+  font: 600 12.5px var(--headline);
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.day-role-peek-pill:hover,
+.day-role-peek-pill:focus-visible {
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+  outline: 2px solid rgba(245, 158, 11, 0.35);
+  outline-offset: 2px;
+}
+
+.day-role-peek-pill.is-peeking {
+  background: #1d2433;
+  border-color: rgba(245, 158, 11, 0.75);
+  color: #f59e0b;
+}
+
+.day-role-peek-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(11, 14, 20, 0.78);
+  pointer-events: none;
+}
+
+.day-role-peek-card {
+  width: min(100%, 390px);
+  max-height: 75dvh;
+  overflow-y: auto;
+  padding: 16px;
+  border-radius: 12px;
+  background: #0b0e14;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.day-role-peek-card.faction-WEREWOLF {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.day-role-peek-card.faction-VILLAGER {
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.day-role-peek-card.faction-THIRD_PARTY {
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.day-role-peek-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.day-role-peek-faction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 700 10.5px var(--headline);
+  letter-spacing: 0.06em;
+}
+
+.day-role-peek-faction.faction-WEREWOLF {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.day-role-peek-faction.faction-VILLAGER {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
+}
+
+.day-role-peek-faction.faction-THIRD_PARTY {
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fcd34d;
+}
+
+.day-role-peek-hint {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.day-role-peek-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.day-role-peek-art {
+  width: 64px;
+  height: 84px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #161b26;
+  flex: none;
+}
+
+.day-role-peek-art-fallback {
+  width: 64px;
+  height: 84px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #161b26;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  color: #f59e0b;
+  flex: none;
+}
+
+.day-role-peek-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.day-role-peek-name {
+  font: 800 16px var(--headline);
+  color: #ede7dc;
+  overflow-wrap: anywhere;
+}
+
+.day-role-peek-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #b5aea2;
+  overflow-wrap: anywhere;
+}
+
+.day-role-peek-status-list {
+  margin: 0;
+  padding: 10px 12px 10px 26px;
+  border-radius: 8px;
+  background: #161b26;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #ede7dc;
+  overflow-wrap: anywhere;
 }

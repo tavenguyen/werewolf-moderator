@@ -138,14 +138,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     const playerId = this.activeLocalPlayerId ?? Array.from(this.roomState.players.keys())[0];
     if (playerId) {
       privateView = createPlayerPrivateView(this.roomState, playerId);
-      if (
-        privateView &&
-        this.roomState.gameState?.phase === 'NIGHT' &&
-        this.roomState.gameState.wolfCubDoubleKillNextNight &&
-        privateView.turnKey === 'wolf_pack'
-      ) {
-        (privateView.skills as Record<string, unknown>).wolfCubDoubleKillNextNight = true;
-      }
     }
 
     this.state = {
@@ -299,7 +291,9 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
       const restoredPhase = this.roomState.gameState?.phase;
       if (
-        (restoredPhase === 'DAY_DISCUSS' || restoredPhase === 'DAY_MAYOR_ELECTION') &&
+        (restoredPhase === 'DAY_DISCUSS' ||
+          restoredPhase === 'DAY_MAYOR_ELECTION' ||
+          restoredPhase === 'DAY_RUNOFF') &&
         !this.roomState.timers.isPaused
       ) {
         this.startLocalDayTimer(true);
@@ -550,14 +544,20 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         if (action.targetId) {
           acc.seer = { targetId: action.targetId };
           const target = this.roomState.gameState?.players.find((p) => p.id === action.targetId);
-          if (target) {
-            const def = ROLES_BY_ID[target.roleId];
+          if (target && this.roomState.gameState) {
+            const effectiveRoleId =
+              target.roleId === 'drunk' &&
+              this.roomState.gameState.roundNumber >= 3 &&
+              target.drunkRealRoleId
+                ? target.drunkRealRoleId
+                : target.roleId;
+            const def = ROLES_BY_ID[effectiveRoleId];
             let result: string = def?.seerResult ?? 'VILLAGER';
             if (this.roomState.settings.seerRevealMode === 'EXACT_ROLE') {
-              result = target.roleId;
+              result = effectiveRoleId;
             } else {
-              if (target.roleId === 'lycan') result = 'WEREWOLF';
-              if (target.roleId === 'minion') result = 'VILLAGER';
+              if (effectiveRoleId === 'lycan') result = 'WEREWOLF';
+              if (effectiveRoleId === 'minion') result = 'VILLAGER';
             }
             this.roomState.seerInvestigationResult = {
               targetId: action.targetId,
@@ -570,21 +570,32 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         if (action.targetId) {
           acc.sorcerer = { targetId: action.targetId };
           const target = this.roomState.gameState?.players.find((p) => p.id === action.targetId);
-          if (target) {
+          if (target && this.roomState.gameState) {
+            const effectiveRoleId =
+              target.roleId === 'drunk' &&
+              this.roomState.gameState.roundNumber >= 3 &&
+              target.drunkRealRoleId
+                ? target.drunkRealRoleId
+                : target.roleId;
             this.roomState.sorcererInvestigationResult = {
               targetId: action.targetId,
-              isSeer: target.roleId === 'seer',
+              isSeer: effectiveRoleId === 'seer',
             };
           }
         }
         break;
-      case 'witch':
+      case 'witch': {
+        const disallowBoth = this.roomState.settings.allowWitchBothPotionsSameNight === false;
+        const canHeal = Boolean(action.heal && !this.roomState.gameState?.witchHealUsed);
+        const poisonTargetId =
+          disallowBoth && canHeal ? null : (action.poisonTargetId ?? null);
         acc.witch = {
           heal: action.heal,
           healTargetId: action.healTargetId ?? null,
-          poisonTargetId: action.poisonTargetId ?? null,
+          poisonTargetId,
         };
         break;
+      }
       case 'wild_child':
       case 'night_wild_child':
         if (action.targetId) {
@@ -635,7 +646,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           const neighbors = getAliveNeighbors(this.roomState.gameState.players, action.targetId);
           const group = neighbors ? neighbors.group : [];
           const inspectedPlayerIds = group.map((p) => p.id);
-          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+          const roundNumber = this.roomState.gameState.roundNumber;
+          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p, roundNumber));
           this.roomState.piInvestigationResult = {
             targetId: action.targetId,
             hasWerewolf,
@@ -654,7 +666,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           const neighbors = getAliveNeighbors(this.roomState.gameState.players, action.targetId);
           const group = neighbors ? neighbors.group : [];
           const inspectedPlayerIds = group.map((p) => p.id);
-          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+          const roundNumber = this.roomState.gameState.roundNumber;
+          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p, roundNumber));
           this.roomState.foxInvestigationResult = {
             targetId: action.targetId,
             hasWerewolf,
@@ -750,7 +763,18 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.publicHistoryLogs.push('Trời đã sáng. Một đêm bình yên, không ai ngã xuống!');
     }
 
-    if (this.roomState.gameState.phase === 'DAY_DISCUSS') {
+    if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+      if (this.roomState.gameState.pendingHunterShotPlayerId) {
+        this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
+      }
+    } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
+        this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
+      }
+    } else if (
+      this.roomState.gameState.phase === 'DAY_DISCUSS' ||
+      this.roomState.gameState.phase === 'DAY_MAYOR_ELECTION'
+    ) {
       this.startLocalDayTimer();
     }
 
@@ -764,10 +788,10 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     }
   }
 
-  private startLocalDayTimer(isResume = false): void {
+  private startLocalDayTimer(isResume: boolean = false, customDurationSec?: number): void {
     this.clearDayTimer();
 
-    const durationSec = this.roomState.settings.dayDiscussionSeconds ?? 180;
+    const durationSec = customDurationSec ?? this.roomState.settings.dayDiscussionSeconds ?? 180;
     const lockSec = this.roomState.settings.dayVoteLockSeconds ?? 60;
 
     if (!isResume) {
@@ -775,12 +799,16 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.timers.isPaused = false;
       this.roomState.timers.remainingBeforePause = undefined;
 
+      // DAY_RUNOFF never locks voting
+      const isRunoff = this.roomState.gameState?.phase === 'DAY_RUNOFF';
       if (this.roomState.gameState?.dayState) {
-        this.roomState.gameState.dayState.voteLocked = lockSec > 0;
-        this.roomState.gameState.dayState.voteLockRemainingSeconds = lockSec;
+        this.roomState.gameState.dayState.voteLocked = !isRunoff && lockSec > 0;
+        this.roomState.gameState.dayState.voteLockRemainingSeconds = isRunoff ? 0 : lockSec;
       }
 
-      audioController.playTurnNarration('day_discuss');
+      if (!isRunoff) {
+        audioController.playTurnNarration('day_discuss');
+      }
     } else if (this.roomState.timers.deadlineAt === null) {
       this.roomState.timers.deadlineAt = Date.now() + durationSec * 1000;
     }
@@ -840,11 +868,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.auraInvestigationResult = undefined;
     this.roomState.foxInvestigationResult = undefined;
     this.roomState.piInvestigationResult = undefined;
-    this.roomState.seerInvestigationResult = undefined;
-    this.roomState.sorcererInvestigationResult = undefined;
-    this.roomState.auraInvestigationResult = undefined;
-    this.roomState.foxInvestigationResult = undefined;
-    this.roomState.piInvestigationResult = undefined;
 
     const firstTurn = this.roomState.nightTurnPlan[0];
     if (firstTurn && firstTurn.activePlayerIds.length > 0) {
@@ -860,7 +883,16 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.gameState = nextState;
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
-    } else if (this.roomState.gameState.phase === 'DAY_DISCUSS') {
+      this.clearDayTimer();
+      this.clearNightIntroTimer();
+    } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
+        this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
+      }
+    } else if (
+      this.roomState.gameState.phase === 'DAY_DISCUSS' ||
+      this.roomState.gameState.phase === 'DAY_MAYOR_ELECTION'
+    ) {
       this.startLocalDayTimer();
     } else if (this.roomState.gameState.phase === 'NIGHT') {
       this.startNewLocalNight();
@@ -877,7 +909,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.gameState = nextState;
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
-    } else if (this.roomState.gameState.phase === 'DAY_DISCUSS') {
+      this.clearDayTimer();
+      this.clearNightIntroTimer();
+    } else if (
+      this.roomState.gameState.phase === 'DAY_DISCUSS' ||
+      this.roomState.gameState.phase === 'DAY_MAYOR_ELECTION'
+    ) {
       this.startLocalDayTimer();
     } else if (this.roomState.gameState.phase === 'NIGHT') {
       this.startNewLocalNight();
@@ -1039,6 +1076,16 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.clearDayTimer();
+      this.clearNightIntroTimer();
+    } else if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+      if (this.roomState.gameState.pendingHunterShotPlayerId) {
+        this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
+      }
+    } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
+        this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
+      }
     } else if (this.roomState.gameState.phase === 'NIGHT') {
       this.startNewLocalNight();
     }
@@ -1226,17 +1273,26 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       processDeathCascade(this.roomState.gameState, [{ playerId: targetPlayerId, cause: 'VILLAGE_VOTE' }]);
       this.roomState.publicHistoryLogs.push(`Quản trò đã trục xuất khẩn cấp [${p.name}] khỏi bàn.`);
 
-      const winOutcome = checkWinCondition(this.roomState.gameState);
-      if (winOutcome) {
-        this.roomState.gameState.phase = 'GAME_OVER';
-        this.clearDayTimer();
-        this.clearNightIntroTimer();
-      } else if (this.roomState.gameState.pendingHunterShotPlayerId) {
+      const hasAlivePlayers = this.roomState.gameState.players.some((pl) => pl.isAlive);
+      if (this.roomState.gameState.pendingHunterShotPlayerId && hasAlivePlayers) {
         this.roomState.gameState.previousPhaseBeforeHunter = prevPhase;
         this.roomState.gameState.phase = 'HUNTER_SHOT';
-      } else if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
+        this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
+        this.clearDayTimer();
+        this.clearNightIntroTimer();
+      } else if (this.roomState.gameState.pendingMayorSuccessionPlayerId && hasAlivePlayers) {
         this.roomState.gameState.previousPhaseBeforeMayorSuccession = prevPhase;
         this.roomState.gameState.phase = 'MAYOR_SUCCESSION';
+        this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
+        this.clearDayTimer();
+        this.clearNightIntroTimer();
+      } else {
+        const winOutcome = checkWinCondition(this.roomState.gameState);
+        if (winOutcome) {
+          this.roomState.gameState.phase = 'GAME_OVER';
+          this.clearDayTimer();
+          this.clearNightIntroTimer();
+        }
       }
 
       if (this.roomState.gameState.phase === 'NIGHT') {

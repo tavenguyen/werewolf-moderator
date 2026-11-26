@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import { executeDayVote, executeHunterShot, executeMayorSuccession, executeNightPhase } from '../engine/gameEngine';
 import { generateNightTurnPlan } from '../engine/turnPlan';
@@ -8,10 +9,15 @@ import {
   castRunoffVote,
   tallyDayVotes,
   tallyMayorElection,
+  tallyRunoffVotes,
 } from '../engine/voting';
 import { ROLES_BY_ID } from '../engine/roles';
 import { getAliveNeighbors } from '../engine/seating';
-import { isWerewolfForInvestigation } from '../engine/nightResolution';
+import {
+  getAuraSeerResult,
+  getRawWolfTargets,
+  isWerewolfForInvestigation,
+} from '../engine/nightResolution';
 import {
   createHostBoardView,
   createPlayerPrivateView,
@@ -26,11 +32,9 @@ import type {
   ClientEmergencyEliminatePayload,
   ClientHostControlPayload,
   ClientHunterShotPayload,
-  ClientJoinRoomPayload,
   ClientMayorElectPayload,
   ClientMayorTransferPayload,
   ClientNightActionPayload,
-  ClientResumePayload,
   ClientStartGamePayload,
   ClientUpdateSettingsPayload,
   RoomPlayer,
@@ -39,6 +43,10 @@ import type {
   ServerResponse,
 } from './types';
 import type { PlayerId } from '../engine/types';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export class SocketGateway {
   private io: Server;
@@ -92,10 +100,21 @@ export class SocketGateway {
     // 2. Tham gia phòng
     socket.on(
       'room:join',
-      (payload: ClientJoinRoomPayload, cb?: (res: ServerResponse) => void) => {
+      (payload: unknown, cb?: (res: ServerResponse) => void) => {
+        if (
+          !isPlainObject(payload) ||
+          typeof payload.roomCode !== 'string' ||
+          typeof payload.username !== 'string'
+        ) {
+          this.sendError(cb, 'INVALID_SETTINGS', 'Dữ liệu tham gia phòng không hợp lệ.');
+          return;
+        }
+
+        const { roomCode, username } = payload;
+
         try {
-          const result = this.roomService.joinRoom(payload.roomCode, payload.username);
-          const room = this.roomService.getRoom(payload.roomCode);
+          const result = this.roomService.joinRoom(roomCode, username);
+          const room = this.roomService.getRoom(roomCode);
           if (!room) {
             this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
             return;
@@ -106,7 +125,7 @@ export class SocketGateway {
             player.socketId = socket.id;
           }
 
-          socket.join(payload.roomCode);
+          socket.join(roomCode);
 
           this.sendOk(cb, result);
           this.broadcastRoom(room);
@@ -128,17 +147,27 @@ export class SocketGateway {
     );
 
     // 3. Khôi phục phiên (Resume)
-    socket.on('room:resume', (payload: ClientResumePayload, cb?: (res: ServerResponse) => void) => {
-      const room = this.roomService.getRoom(payload.roomCode);
+    socket.on('room:resume', (payload: unknown, cb?: (res: ServerResponse) => void) => {
+      if (
+        !isPlainObject(payload) ||
+        typeof payload.roomCode !== 'string' ||
+        typeof payload.token !== 'string'
+      ) {
+        this.sendError(cb, 'INVALID_TOKEN', 'Dữ liệu khôi phục phiên không hợp lệ.');
+        return;
+      }
+
+      const { roomCode, token } = payload;
+      const room = this.roomService.getRoom(roomCode);
       if (!room) {
         this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
         return;
       }
 
       // Kiểm tra Host
-      if (room.host.hostToken === payload.token) {
-        this.roomService.reconnectHost(payload.roomCode, payload.token, socket.id);
-        socket.join(payload.roomCode);
+      if (room.host.hostToken === token) {
+        this.roomService.reconnectHost(roomCode, token, socket.id);
+        socket.join(roomCode);
         this.sendOk(cb, {
           isHost: true,
           isPlayer: room.host.isPlayer,
@@ -149,13 +178,9 @@ export class SocketGateway {
       }
 
       // Kiểm tra Player
-      const player = this.roomService.reconnectPlayer(
-        payload.roomCode,
-        payload.token,
-        socket.id
-      );
+      const player = this.roomService.reconnectPlayer(roomCode, token, socket.id);
       if (player) {
-        socket.join(payload.roomCode);
+        socket.join(roomCode);
         this.sendOk(cb, { isHost: false, playerId: player.id });
         this.broadcastRoom(room);
         return;
@@ -165,18 +190,28 @@ export class SocketGateway {
     });
 
     // 3b. Rời phòng (Leave)
-    socket.on('room:leave', (payload: { roomCode: string; token: string }, cb?: (res: ServerResponse) => void) => {
-      const room = this.roomService.getRoom(payload.roomCode);
+    socket.on('room:leave', (payload: unknown, cb?: (res: ServerResponse) => void) => {
+      if (
+        !isPlainObject(payload) ||
+        typeof payload.roomCode !== 'string' ||
+        typeof payload.token !== 'string'
+      ) {
+        this.sendError(cb, 'INVALID_TOKEN', 'Dữ liệu rời phòng không hợp lệ.');
+        return;
+      }
+
+      const { roomCode, token } = payload;
+      const room = this.roomService.getRoom(roomCode);
       if (!room) {
         this.sendError(cb, 'ROOM_NOT_FOUND', 'Bàn chưa tồn tại hoặc đã kết thúc.');
         return;
       }
 
-      const ok = this.roomService.leaveRoom(payload.roomCode, payload.token);
-      socket.leave(payload.roomCode);
+      const ok = this.roomService.leaveRoom(roomCode, token);
+      socket.leave(roomCode);
 
       this.sendOk(cb, { left: ok });
-      const updatedRoom = this.roomService.getRoom(payload.roomCode);
+      const updatedRoom = this.roomService.getRoom(roomCode);
       if (updatedRoom) {
         this.broadcastRoom(updatedRoom);
       }
@@ -221,6 +256,7 @@ export class SocketGateway {
           room.currentNightTurnIndex = 0;
           room.nightActionsAccumulator = {};
           room.nightActionAcks.clear();
+          room.currentNightSeed = crypto.randomInt(1, 1_000_000);
           room.seerInvestigationResult = undefined;
           room.sorcererInvestigationResult = undefined;
           room.auraInvestigationResult = undefined;
@@ -351,12 +387,12 @@ export class SocketGateway {
           }
 
           if (phase === 'DAY_MAYOR_ELECTION') {
-            this.finalizeMayorElection(room);
+            this.executeFinalizeMayorElection(room);
             return { finalized: true };
           }
 
           if (phase === 'DAY_RUNOFF') {
-            this.finalizeRunoffVote(room);
+            this.executeFinalizeRunoffVote(room);
             return { finalized: true };
           }
 
@@ -507,9 +543,10 @@ export class SocketGateway {
           if (room.host.hostToken !== payload.token) {
             throw { code: 'NOT_HOST', message: 'Chỉ Host mới có quyền tiếp tục.' };
           }
+          const expectedGeneration = room.gameGeneration;
           const ok = this.timerManager.resumeTimer(
             room,
-            () => this.handleTimerExpiry(room),
+            () => this.handleTimerExpiry(room, expectedGeneration),
             () => this.broadcastRoom(room)
           );
           if (!ok) {
@@ -528,7 +565,10 @@ export class SocketGateway {
           if (room.host.hostToken !== payload.token) {
             throw { code: 'NOT_HOST', message: 'Chỉ Host mới có quyền gia hạn thời gian.' };
           }
-          const ok = this.timerManager.extendDayTimer(room, () => this.finalizeDayVote(room));
+          const expectedGeneration = room.gameGeneration;
+          const ok = this.timerManager.extendDayTimer(room, () =>
+            this.finalizeDayVote(room, expectedGeneration)
+          );
           if (!ok) {
             throw {
               code: 'MAX_EXTENSIONS_REACHED',
@@ -548,11 +588,34 @@ export class SocketGateway {
           if (room.host.hostToken !== payload.token) {
             throw { code: 'NOT_HOST', message: 'Chỉ Host mới có quyền loại khẩn cấp.' };
           }
+          const prevPhase = room.gameState?.phase;
           this.roomService.emergencyEliminate(
             payload.roomCode,
             payload.token,
             payload.targetPlayerId
           );
+
+          if (room.gameState) {
+            const expectedGeneration = room.gameGeneration;
+            if (room.gameState.phase === 'GAME_OVER') {
+              this.timerManager.clearRoomTimer(room);
+            } else if (
+              room.gameState.phase === 'HUNTER_SHOT' &&
+              prevPhase !== 'HUNTER_SHOT'
+            ) {
+              this.timerManager.startHunterShotTimer(room, () => {
+                this.handleHunterTimeout(room, expectedGeneration);
+              });
+            } else if (
+              room.gameState.phase === 'MAYOR_SUCCESSION' &&
+              prevPhase !== 'MAYOR_SUCCESSION'
+            ) {
+              this.timerManager.startMayorSuccessionTimer(room, () => {
+                this.handleMayorSuccessionTimeout(room, expectedGeneration);
+              });
+            }
+          }
+
           this.broadcastRoom(room);
           return { eliminated: true };
         });
@@ -576,6 +639,7 @@ export class SocketGateway {
           room.currentNightTurnIndex = 0;
           room.nightActionsAccumulator = {};
           room.nightActionAcks.clear();
+          room.currentNightSeed = crypto.randomInt(1, 1_000_000);
           room.seerInvestigationResult = undefined;
           room.sorcererInvestigationResult = undefined;
           room.auraInvestigationResult = undefined;
@@ -613,17 +677,29 @@ export class SocketGateway {
     const currentTurn = room.nightTurnPlan[room.currentNightTurnIndex];
     if (!currentTurn) return;
 
+    const expectedGeneration = room.gameGeneration;
+    const expectedTurnIndex = room.currentNightTurnIndex;
     this.timerManager.startNightTurnTimer(room, () => {
-      this.advanceNightTurn(room);
+      this.advanceNightTurn(room, expectedGeneration, expectedTurnIndex);
     });
   }
 
   /**
    * Chuyển tiếp lượt Đêm tiếp theo hoặc chốt Đêm.
    */
-  private advanceNightTurn(room: RoomState): void {
+  private advanceNightTurn(
+    room: RoomState,
+    expectedGeneration?: number,
+    expectedTurnIndex?: number
+  ): void {
     const queue = this.roomService.getCommandQueue(room.roomCode);
     void queue.enqueue(async () => {
+      if (!room.gameState || room.gameState.phase !== 'NIGHT') return;
+      if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
+      if (expectedTurnIndex !== undefined && room.currentNightTurnIndex !== expectedTurnIndex) {
+        return;
+      }
+
       const currentTurn = room.nightTurnPlan[room.currentNightTurnIndex];
       if (currentTurn?.turnKey === 'wolf_pack') {
         this.tallyWolfPackCandidate(room);
@@ -647,22 +723,16 @@ export class SocketGateway {
    */
   private tallyWolfPackCandidate(room: RoomState): void {
     const wolfActions = room.nightActionsAccumulator.wolfPack;
-    if (!wolfActions?.individualVotes) return;
+    if (!wolfActions || !room.gameState) return;
+    if (!wolfActions.individualVotes && !wolfActions.multiVotes) return;
 
-    const counts = new Map<PlayerId, number>();
-    for (const targetId of Object.values(wolfActions.individualVotes)) {
-      if (targetId) {
-        counts.set(targetId, (counts.get(targetId) ?? 0) + 1);
-      }
-    }
-
-    if (counts.size === 0) {
-      wolfActions.targets = [];
-      return;
-    }
-
-    const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-    wolfActions.targets = [sorted[0][0]];
+    const seed = room.currentNightSeed ?? crypto.randomInt(1, 1_000_000);
+    room.currentNightSeed = seed;
+    wolfActions.targets = getRawWolfTargets(
+      room.gameState,
+      { wolfPack: wolfActions },
+      seed
+    );
   }
 
   /**
@@ -671,9 +741,11 @@ export class SocketGateway {
   private resolveNightAndTransition(room: RoomState): void {
     if (!room.gameState) return;
 
+    const nightSeed = room.currentNightSeed ?? crypto.randomInt(1, 1_000_000);
     const { nextState, winOutcome } = executeNightPhase(
       room.gameState,
-      room.nightActionsAccumulator
+      room.nightActionsAccumulator,
+      nightSeed
     );
     room.gameState = nextState;
 
@@ -693,9 +765,11 @@ export class SocketGateway {
       room.publicHistoryLogs.push('Trời đã sáng. Một đêm bình yên, không ai ngã xuống!');
     }
 
+    const expectedGeneration = room.gameGeneration;
+
     if (room.gameState.phase === 'HUNTER_SHOT') {
       this.timerManager.startHunterShotTimer(room, () => {
-        this.handleHunterTimeout(room);
+        this.handleHunterTimeout(room, expectedGeneration);
       });
       this.broadcastRoom(room);
       return;
@@ -703,7 +777,7 @@ export class SocketGateway {
 
     if (room.gameState.phase === 'MAYOR_SUCCESSION') {
       this.timerManager.startMayorSuccessionTimer(room, () => {
-        this.handleMayorSuccessionTimeout(room);
+        this.handleMayorSuccessionTimeout(room, expectedGeneration);
       });
       this.broadcastRoom(room);
       return;
@@ -711,7 +785,7 @@ export class SocketGateway {
 
     if (room.gameState.phase === 'DAY_MAYOR_ELECTION') {
       this.timerManager.startMayorElectionTimer(room, () => {
-        this.finalizeMayorElection(room);
+        this.finalizeMayorElection(room, expectedGeneration);
       });
       this.broadcastRoom(room);
       return;
@@ -732,11 +806,12 @@ export class SocketGateway {
     }
     const discussSec = room.settings.dayDiscussionSeconds ?? DEFAULT_DAY_DISCUSS_SEC;
     const lockSec = room.settings.dayVoteLockSeconds ?? DEFAULT_VOTE_LOCK_SEC;
+    const expectedGeneration = room.gameGeneration;
 
     this.timerManager.startDayDiscussTimer(
       room,
       () => {
-        this.finalizeDayVote(room);
+        this.finalizeDayVote(room, expectedGeneration);
       },
       () => {
         // Callback mở khóa biểu quyết
@@ -750,32 +825,51 @@ export class SocketGateway {
   /**
    * Chốt kết quả Bầu cử Trưởng làng Ngày 1.
    */
-  private finalizeMayorElection(room: RoomState): void {
+  private finalizeMayorElection(room: RoomState, expectedGeneration?: number): void {
     const queue = this.roomService.getCommandQueue(room.roomCode);
     void queue.enqueue(async () => {
-      if (!room.gameState) return;
-
-      const { nextState } = tallyMayorElection(room.gameState);
-      room.gameState = nextState;
-
-      // Sau khi bầu Mayor xong, chuyển sang DAY_DISCUSS
-      this.startDayDiscussion(room);
-      this.broadcastRoom(room);
+      this.executeFinalizeMayorElection(room, expectedGeneration);
     });
+  }
+
+  public executeFinalizeMayorElection(room: RoomState, expectedGeneration?: number): void {
+    if (!room.gameState || room.gameState.phase !== 'DAY_MAYOR_ELECTION') return;
+    if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
+
+    const { nextState, electedMayorId } = tallyMayorElection(room.gameState);
+    room.gameState = nextState;
+
+    if (electedMayorId) {
+      const mayor = room.gameState.players.find((p) => p.id === electedMayorId);
+      room.publicHistoryLogs.push(
+        `Ngày ${room.gameState.roundNumber}: ${mayor?.name ?? 'Người chơi'} được bầu làm Trưởng làng (lá phiếu tính x2).`
+      );
+    } else {
+      const lastLog = room.gameState.historyLogs[room.gameState.historyLogs.length - 1];
+      if (lastLog) {
+        room.publicHistoryLogs.push(lastLog);
+      }
+    }
+
+    // Sau khi bầu Mayor xong, chuyển sang DAY_DISCUSS
+    this.startDayDiscussion(room);
+    this.broadcastRoom(room);
   }
 
   /**
    * Chốt phiếu Biểu quyết treo cổ ban ngày (Vote kín).
    */
-  public finalizeDayVote(room: RoomState): void {
+  public finalizeDayVote(room: RoomState, expectedGeneration?: number): void {
     const queue = this.roomService.getCommandQueue(room.roomCode);
     void queue.enqueue(async () => {
-      this.executeFinalizeDayVote(room);
+      this.executeFinalizeDayVote(room, expectedGeneration);
     });
   }
 
-  public executeFinalizeDayVote(room: RoomState): void {
+  public executeFinalizeDayVote(room: RoomState, expectedGeneration?: number): void {
     if (!room.gameState) return;
+    if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
+    if (room.gameState.phase !== 'DAY_DISCUSS' && room.gameState.phase !== 'DAY_VOTE') return;
 
     // Tally vote kín: chỉ công bố map số phiếu + abstainCount, nếu bật revealVoterIdentities thì bổ sung voterDetails
     const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
@@ -800,16 +894,18 @@ export class SocketGateway {
       room.lastVoteTally = { tallies, abstainCount };
     }
 
-    const { outcome } = tallyDayVotes(room.gameState);
+    const { nextState: talliedState, outcome } = tallyDayVotes(room.gameState);
+    room.gameState = talliedState;
     room.publicHistoryLogs.push(outcome.reason);
 
     if (outcome.type === 'RUNOFF' && outcome.candidateIds) {
       // Hòa phiếu -> Vòng Runoff
       room.gameState.phase = 'DAY_RUNOFF';
+      const runoffGen = room.gameGeneration;
       this.timerManager.startMayorElectionTimer(
         room,
         () => {
-          this.finalizeRunoffVote(room);
+          this.finalizeRunoffVote(room, runoffGen);
         },
         30
       );
@@ -817,9 +913,34 @@ export class SocketGateway {
       return;
     }
 
-    const targetPlayerId = outcome.type === 'EXECUTE' ? (outcome.targetPlayerId ?? null) : null;
-    const { nextState, winOutcome } = executeDayVote(room.gameState, targetPlayerId);
+    let targetsToExecute: PlayerId | PlayerId[] | null = null;
+    if (outcome.type === 'EXECUTE' && outcome.targetPlayerId) {
+      const targets = [outcome.targetPlayerId];
+      if (room.gameState.doubleVoteDay) {
+        const secondCandidate = Object.entries(tallies)
+          .sort((a, b) => b[1] - a[1])
+          .find(([id]) => id !== outcome.targetPlayerId);
+        if (secondCandidate) {
+          targets.push(secondCandidate[0]);
+        }
+      }
+      targetsToExecute = targets;
+    }
+
+    const prevHistoryLen = room.gameState.historyLogs.length;
+    const { nextState, survivedByReveal, winOutcome } = executeDayVote(
+      room.gameState,
+      targetsToExecute
+    );
     room.gameState = nextState;
+
+    if (survivedByReveal) {
+      for (const log of nextState.historyLogs.slice(prevHistoryLen)) {
+        if (log.includes('Thằng ngốc') || log.includes('Hoàng tử')) {
+          room.publicHistoryLogs.push(log);
+        }
+      }
+    }
 
     if (winOutcome) {
       room.gameState.phase = 'GAME_OVER';
@@ -828,18 +949,10 @@ export class SocketGateway {
       return;
     }
 
-    const roundDeaths = room.gameState.deaths.filter(
-      (d) => d.roundNumber === room.gameState!.roundNumber && d.phase === 'NIGHT'
-    );
-    if (roundDeaths.length > 0) {
-      room.publicHistoryLogs.push(`Trời đã sáng. Đêm qua có ${roundDeaths.length} người ngã xuống!`);
-    } else {
-      room.publicHistoryLogs.push('Trời đã sáng. Một đêm bình yên, không ai ngã xuống!');
-    }
-
+    const postVoteGen = room.gameGeneration;
     if (room.gameState.phase === 'HUNTER_SHOT') {
       this.timerManager.startHunterShotTimer(room, () => {
-        this.handleHunterTimeout(room);
+        this.handleHunterTimeout(room, postVoteGen);
       });
       this.broadcastRoom(room);
       return;
@@ -847,7 +960,7 @@ export class SocketGateway {
 
     if (room.gameState.phase === 'MAYOR_SUCCESSION') {
       this.timerManager.startMayorSuccessionTimer(room, () => {
-        this.handleMayorSuccessionTimeout(room);
+        this.handleMayorSuccessionTimeout(room, postVoteGen);
       });
       this.broadcastRoom(room);
       return;
@@ -861,65 +974,88 @@ export class SocketGateway {
   /**
    * Chốt biểu quyết Runoff.
    */
-  private finalizeRunoffVote(room: RoomState): void {
+  private finalizeRunoffVote(room: RoomState, expectedGeneration?: number): void {
     const queue = this.roomService.getCommandQueue(room.roomCode);
     void queue.enqueue(async () => {
-      if (!room.gameState) return;
-
-      const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
-      const runoffWeights = new Map<PlayerId, number>();
-      const tallies: Record<PlayerId, number> = {};
-      const voterDetails: Record<PlayerId, PlayerId[]> = {};
-      let abstainCount = 0;
-
-      for (const voter of livingVoters) {
-        const targetId = room.gameState.dayState?.runoffBallots?.[voter.id];
-        if (!targetId) {
-          abstainCount += voter.voteWeight;
-        } else {
-          runoffWeights.set(targetId, (runoffWeights.get(targetId) ?? 0) + voter.voteWeight);
-          tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
-          if (!voterDetails[targetId]) voterDetails[targetId] = [];
-          voterDetails[targetId].push(voter.id);
-        }
-      }
-
-      if (room.settings.revealVoterIdentities) {
-        room.lastVoteTally = { tallies, abstainCount, voterDetails };
-      } else {
-        room.lastVoteTally = { tallies, abstainCount };
-      }
-
-      let executeTargetId: PlayerId | null = null;
-      if (runoffWeights.size > 0) {
-        const sorted = Array.from(runoffWeights.entries()).sort((a, b) => b[1] - a[1]);
-        if (sorted.length === 1 || (sorted[0] && sorted[1] && sorted[0][1] > sorted[1][1])) {
-          executeTargetId = sorted[0][0];
-        }
-      }
-
-      const { nextState, winOutcome } = executeDayVote(room.gameState, executeTargetId);
-      room.gameState = nextState;
-
-      if (winOutcome) {
-        room.gameState.phase = 'GAME_OVER';
-        this.timerManager.clearRoomTimer(room);
-        this.broadcastRoom(room);
-        return;
-      }
-
-      if (room.gameState.phase === 'HUNTER_SHOT') {
-        this.timerManager.startHunterShotTimer(room, () => {
-          this.handleHunterTimeout(room);
-        });
-        this.broadcastRoom(room);
-        return;
-      }
-
-      if (room.gameState.phase === 'NIGHT') {
-        this.startNewNight(room);
-      }
+      this.executeFinalizeRunoffVote(room, expectedGeneration);
     });
+  }
+
+  public executeFinalizeRunoffVote(room: RoomState, expectedGeneration?: number): void {
+    if (!room.gameState || room.gameState.phase !== 'DAY_RUNOFF') return;
+    if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
+
+    const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
+    const tallies: Record<PlayerId, number> = {};
+    const voterDetails: Record<PlayerId, PlayerId[]> = {};
+    let abstainCount = 0;
+
+    for (const voter of livingVoters) {
+      const targetId = room.gameState.dayState?.runoffBallots?.[voter.id];
+      if (!targetId) {
+        abstainCount += voter.voteWeight;
+      } else {
+        tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
+        if (!voterDetails[targetId]) voterDetails[targetId] = [];
+        voterDetails[targetId].push(voter.id);
+      }
+    }
+
+    if (room.settings.revealVoterIdentities) {
+      room.lastVoteTally = { tallies, abstainCount, voterDetails };
+    } else {
+      room.lastVoteTally = { tallies, abstainCount };
+    }
+
+    const { nextState: runoffState, outcome } = tallyRunoffVotes(room.gameState);
+    room.gameState = runoffState;
+    room.publicHistoryLogs.push(outcome.reason);
+
+    const executeTargetId =
+      outcome.type === 'EXECUTE' ? (outcome.targetPlayerId ?? null) : null;
+
+    const prevHistoryLen = room.gameState.historyLogs.length;
+    const { nextState, survivedByReveal, winOutcome } = executeDayVote(
+      room.gameState,
+      executeTargetId
+    );
+    room.gameState = nextState;
+
+    if (survivedByReveal) {
+      for (const log of nextState.historyLogs.slice(prevHistoryLen)) {
+        if (log.includes('Thằng ngốc') || log.includes('Hoàng tử')) {
+          room.publicHistoryLogs.push(log);
+        }
+      }
+    }
+
+    if (winOutcome) {
+      room.gameState.phase = 'GAME_OVER';
+      this.timerManager.clearRoomTimer(room);
+      this.broadcastRoom(room);
+      return;
+    }
+
+    const postRunoffGen = room.gameGeneration;
+    if (room.gameState.phase === 'HUNTER_SHOT') {
+      this.timerManager.startHunterShotTimer(room, () => {
+        this.handleHunterTimeout(room, postRunoffGen);
+      });
+      this.broadcastRoom(room);
+      return;
+    }
+
+    if (room.gameState.phase === 'MAYOR_SUCCESSION') {
+      this.timerManager.startMayorSuccessionTimer(room, () => {
+        this.handleMayorSuccessionTimeout(room, postRunoffGen);
+      });
+      this.broadcastRoom(room);
+      return;
+    }
+
+    if (room.gameState.phase === 'NIGHT') {
+      this.startNewNight(room);
+    }
   }
 
   /**
@@ -932,6 +1068,7 @@ export class SocketGateway {
     room.currentNightTurnIndex = 0;
     room.nightActionsAccumulator = {};
     room.nightActionAcks.clear();
+    room.currentNightSeed = crypto.randomInt(1, 1_000_000);
     room.seerInvestigationResult = undefined;
     room.sorcererInvestigationResult = undefined;
     room.auraInvestigationResult = undefined;
@@ -945,10 +1082,11 @@ export class SocketGateway {
   /**
    * Xử lý timeout Thợ săn (tự động tính là bắn trượt).
    */
-  private handleHunterTimeout(room: RoomState): void {
+  private handleHunterTimeout(room: RoomState, expectedGeneration?: number): void {
     const queue = this.roomService.getCommandQueue(room.roomCode);
     void queue.enqueue(async () => {
       if (!room.gameState || room.gameState.phase !== 'HUNTER_SHOT') return;
+      if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
 
       const { nextState, winOutcome } = executeHunterShot(room.gameState, null);
       room.gameState = nextState;
@@ -959,10 +1097,11 @@ export class SocketGateway {
   /**
    * Xử lý timeout Mayor Succession (mất danh hiệu Trưởng làng).
    */
-  private handleMayorSuccessionTimeout(room: RoomState): void {
+  private handleMayorSuccessionTimeout(room: RoomState, expectedGeneration?: number): void {
     const queue = this.roomService.getCommandQueue(room.roomCode);
     void queue.enqueue(async () => {
       if (!room.gameState || room.gameState.phase !== 'MAYOR_SUCCESSION') return;
+      if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
 
       const { nextState, winOutcome } = executeMayorSuccession(room.gameState, null);
       room.gameState = nextState;
@@ -977,9 +1116,11 @@ export class SocketGateway {
       return;
     }
 
+    const expectedGeneration = room.gameGeneration;
+
     if (room.gameState?.phase === 'MAYOR_SUCCESSION') {
       this.timerManager.startMayorSuccessionTimer(room, () => {
-        this.handleMayorSuccessionTimeout(room);
+        this.handleMayorSuccessionTimeout(room, expectedGeneration);
       });
       this.broadcastRoom(room);
       return;
@@ -987,6 +1128,14 @@ export class SocketGateway {
 
     if (room.gameState?.phase === 'NIGHT') {
       this.startNewNight(room);
+      return;
+    }
+
+    if (room.gameState?.phase === 'DAY_MAYOR_ELECTION') {
+      this.timerManager.startMayorElectionTimer(room, () => {
+        this.finalizeMayorElection(room, expectedGeneration);
+      });
+      this.broadcastRoom(room);
       return;
     }
 
@@ -1006,8 +1155,18 @@ export class SocketGateway {
       return;
     }
 
+    const expectedGeneration = room.gameGeneration;
+
     if (room.gameState?.phase === 'NIGHT') {
       this.startNewNight(room);
+      return;
+    }
+
+    if (room.gameState?.phase === 'DAY_MAYOR_ELECTION') {
+      this.timerManager.startMayorElectionTimer(room, () => {
+        this.finalizeMayorElection(room, expectedGeneration);
+      });
+      this.broadcastRoom(room);
       return;
     }
 
@@ -1020,22 +1179,23 @@ export class SocketGateway {
     this.broadcastRoom(room);
   }
 
-  private handleTimerExpiry(room: RoomState): void {
+  private handleTimerExpiry(room: RoomState, expectedGeneration?: number): void {
     if (!room.gameState) return;
+    if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
     const phase = room.gameState.phase;
 
     if (phase === 'NIGHT') {
-      this.advanceNightTurn(room);
+      this.advanceNightTurn(room, expectedGeneration);
     } else if (phase === 'DAY_DISCUSS') {
-      this.finalizeDayVote(room);
+      this.finalizeDayVote(room, expectedGeneration);
     } else if (phase === 'DAY_RUNOFF') {
-      this.finalizeRunoffVote(room);
+      this.finalizeRunoffVote(room, expectedGeneration);
     } else if (phase === 'DAY_MAYOR_ELECTION') {
-      this.finalizeMayorElection(room);
+      this.finalizeMayorElection(room, expectedGeneration);
     } else if (phase === 'HUNTER_SHOT') {
-      this.handleHunterTimeout(room);
+      this.handleHunterTimeout(room, expectedGeneration);
     } else if (phase === 'MAYOR_SUCCESSION') {
-      this.handleMayorSuccessionTimeout(room);
+      this.handleMayorSuccessionTimeout(room, expectedGeneration);
     }
   }
 
@@ -1069,15 +1229,27 @@ export class SocketGateway {
         }
         break;
 
-      case 'wolf_pack':
+      case 'wolf_pack': {
         if (!acc.wolfPack) {
           acc.wolfPack = { individualVotes: {} };
         }
-        if (!acc.wolfPack.individualVotes) {
-          acc.wolfPack.individualVotes = {};
+        const maxTargets = gameState.wolfCubDoubleKillNextNight ? 2 : 1;
+        if (gameState.wolfCubDoubleKillNextNight && action.targetIds) {
+          if (!acc.wolfPack.multiVotes) {
+            acc.wolfPack.multiVotes = {};
+          }
+          acc.wolfPack.multiVotes[playerId] = action.isSkip
+            ? []
+            : Array.from(new Set(action.targetIds)).slice(0, maxTargets);
+        } else {
+          if (!acc.wolfPack.individualVotes) {
+            acc.wolfPack.individualVotes = {};
+          }
+          const singleTarget = action.targetId ?? action.targetIds?.[0] ?? null;
+          acc.wolfPack.individualVotes[playerId] = action.isSkip ? null : singleTarget;
         }
-        acc.wolfPack.individualVotes[playerId] = action.isSkip ? null : (action.targetId ?? null);
         break;
+      }
 
       case 'white_wolf':
         acc.whiteWolf = { targetId: action.targetId ?? null };
@@ -1088,10 +1260,21 @@ export class SocketGateway {
           acc.seer = { targetId: action.targetId };
           const target = gameState.players.find((p) => p.id === action.targetId);
           if (target) {
-            const def = ROLES_BY_ID[target.roleId];
+            const effectiveRoleId =
+              target.roleId === 'drunk' && gameState.roundNumber >= 3 && target.drunkRealRoleId
+                ? target.drunkRealRoleId
+                : target.roleId;
+            const def = ROLES_BY_ID[effectiveRoleId];
+            let result: string = def?.seerResult ?? 'VILLAGER';
+            if (room.settings.seerRevealMode === 'EXACT_ROLE') {
+              result = effectiveRoleId;
+            } else {
+              if (effectiveRoleId === 'lycan') result = 'WEREWOLF';
+              if (effectiveRoleId === 'minion') result = 'VILLAGER';
+            }
             room.seerInvestigationResult = {
               targetId: action.targetId,
-              result: def?.seerResult ?? 'VILLAGER',
+              result,
             };
           }
         }
@@ -1102,21 +1285,30 @@ export class SocketGateway {
           acc.sorcerer = { targetId: action.targetId };
           const target = gameState.players.find((p) => p.id === action.targetId);
           if (target) {
+            const effectiveRoleId =
+              target.roleId === 'drunk' && gameState.roundNumber >= 3 && target.drunkRealRoleId
+                ? target.drunkRealRoleId
+                : target.roleId;
             room.sorcererInvestigationResult = {
               targetId: action.targetId,
-              isSeer: target.roleId === 'seer',
+              isSeer: effectiveRoleId === 'seer',
             };
           }
         }
         break;
 
-      case 'witch':
+      case 'witch': {
+        const disallowBoth = room.settings.allowWitchBothPotionsSameNight === false;
+        const canHeal = Boolean(action.heal && !gameState.witchHealUsed);
+        const poisonTargetId =
+          disallowBoth && canHeal ? null : (action.poisonTargetId ?? null);
         acc.witch = {
           heal: action.heal,
           healTargetId: action.healTargetId ?? null,
-          poisonTargetId: action.poisonTargetId ?? null,
+          poisonTargetId,
         };
         break;
+      }
 
       case 'wild_child':
       case 'night_wild_child':
@@ -1160,10 +1352,9 @@ export class SocketGateway {
           acc.auraSeer = { targetId: action.targetId };
           const target = gameState.players.find((p) => p.id === action.targetId);
           if (target) {
-            const isSpecial = target.roleId !== 'villager' && target.roleId !== 'werewolf';
             room.auraInvestigationResult = {
               targetId: action.targetId,
-              result: isSpecial ? 'SPECIAL' : 'NORMAL',
+              result: getAuraSeerResult(target, gameState.roundNumber),
             };
           }
         }
@@ -1176,7 +1367,9 @@ export class SocketGateway {
           const neighbors = getAliveNeighbors(gameState.players, action.targetId);
           const group = neighbors ? neighbors.group : [];
           const inspectedPlayerIds = group.map((p) => p.id);
-          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+          const hasWerewolf = group.some((p) =>
+            isWerewolfForInvestigation(p, gameState.roundNumber)
+          );
           room.piInvestigationResult = {
             targetId: action.targetId,
             hasWerewolf,
@@ -1192,7 +1385,9 @@ export class SocketGateway {
           const neighbors = getAliveNeighbors(gameState.players, action.targetId);
           const group = neighbors ? neighbors.group : [];
           const inspectedPlayerIds = group.map((p) => p.id);
-          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+          const hasWerewolf = group.some((p) =>
+            isWerewolfForInvestigation(p, gameState.roundNumber)
+          );
           room.foxInvestigationResult = {
             targetId: action.targetId,
             hasWerewolf,
@@ -1277,6 +1472,14 @@ export class SocketGateway {
   }
 
   private findPlayerByToken(room: RoomState, token: string): RoomPlayer | undefined {
+    if (
+      room.host.isPlayer &&
+      room.host.playerId &&
+      room.host.hostToken &&
+      room.host.hostToken === token
+    ) {
+      return room.players.get(room.host.playerId);
+    }
     for (const player of room.players.values()) {
       if (player.playerToken && player.playerToken === token) {
         return player;

@@ -302,4 +302,20 @@ describe('Engine - Day Phase, Voting & Mayor System', () => {
     expect(nextState.mayorId).toBe('p2');
     expect(nextState.pendingMayorSuccessionPlayerId).toBeNull();
   });
+
+  it('should transition tallyMayorElection to DAY_DISCUSS when 0 ballots are cast', () => {
+    const game = createTestGame(
+      ['villager', 'villager', 'villager', 'werewolf', 'seer', 'witch'],
+      { hasMayor: true }
+    );
+    game.phase = 'DAY_MAYOR_ELECTION';
+    game.dayState = createInitialDayState();
+    // mayorBallots chưa được khởi tạo (0 phiếu)
+    expect(game.dayState.mayorBallots).toBeUndefined();
+
+    const { nextState, electedMayorId } = tallyMayorElection(game);
+    expect(electedMayorId).toBeNull();
+    expect(nextState.mayorId).toBeNull();
+    expect(nextState.phase).toBe('DAY_DISCUSS');
+  });
 });

@@ -247,4 +247,118 @@ describe('Realtime Backend - Room Lifecycle & Authentication', () => {
     expect(room.players.has(bobPlayerId)).toBe(false);
     expect(room.players.has(hostPlayerId)).toBe(true);
   });
+
+  it('PLAYER_HOST F5 recovery: disconnect đánh dấu offline và room:resume bằng hostToken khôi phục player socketId + nhận room:playerSnapshot', async () => {
+    const hostClient1 = createClient();
+    const createRes: any = await new Promise((resolve) => {
+      hostClient1.emit('room:create', { isPlayer: true, username: 'HostPlayer' }, resolve);
+    });
+    expect(createRes.ok).toBe(true);
+    const { roomCode, hostToken, playerId } = createRes.data;
+
+    // Thêm 5 người chơi nữa cho đủ 6 người
+    for (let i = 2; i <= 6; i++) {
+      const c = createClient();
+      await new Promise((resolve) => {
+        c.emit('room:join', { roomCode, username: `Player ${i}` }, resolve);
+      });
+    }
+
+    await new Promise((resolve) => {
+      hostClient1.emit(
+        'lobby:start',
+        {
+          roomCode,
+          token: hostToken,
+          customRoleIds: ['seer', 'werewolf', 'werewolf', 'villager', 'villager', 'villager'],
+        },
+        resolve
+      );
+    });
+
+    const room = roomService.getRoom(roomCode)!;
+    expect(room.players.get(playerId)?.isConnected).toBe(true);
+
+    // 1. Host F5 -> socket 1 disconnect
+    hostClient1.disconnect();
+    await new Promise((r) => setTimeout(r, 15));
+
+    expect(room.host.socketId).toBeNull();
+    expect(room.players.get(playerId)?.socketId).toBeNull();
+    expect(room.players.get(playerId)?.isConnected).toBe(false);
+
+    // 2. Host kết nối lại bằng socket 2 và room:resume với hostToken
+    const hostClient2 = createClient();
+    const emittedPrivateSnapshots: Array<{ target: string; event: string }> = [];
+    const origTo = mockIo.to.bind(mockIo);
+    mockIo.to = ((target: string) => {
+      const res = origTo(target);
+      return {
+        emit: (event: string, ...args: unknown[]) => {
+          if (event === 'room:playerSnapshot') {
+            emittedPrivateSnapshots.push({ target, event });
+          }
+          res.emit(event, ...args);
+        },
+      };
+    }) as typeof mockIo.to;
+
+    const resumeRes: any = await new Promise((resolve) => {
+      hostClient2.emit('room:resume', { roomCode, token: hostToken }, resolve);
+    });
+    expect(resumeRes.ok).toBe(true);
+    expect(resumeRes.data.isHost).toBe(true);
+    expect(resumeRes.data.isPlayer).toBe(true);
+
+    expect(room.players.get(playerId)?.isConnected).toBe(true);
+    expect(room.players.get(playerId)?.socketId).toBe(hostClient2.id);
+    expect(
+      emittedPrivateSnapshots.some((e) => e.target === hostClient2.id)
+    ).toBe(true);
+
+    // 3. PLAYER_HOST gửi night:action bằng hostToken sau khi resume vẫn hoạt động
+    const seerIdx = room.nightTurnPlan.findIndex((t) => t.turnKey === 'seer');
+    const hostRole = room.gameState!.players.find((p) => p.id === playerId)!.roleId;
+    if (hostRole === 'seer' && seerIdx >= 0) {
+      room.currentNightTurnIndex = seerIdx;
+      room.nightActionAcks.clear();
+      const target = room.gameState!.players.find((p) => p.id !== playerId)!;
+      const actionRes: any = await new Promise((resolve) => {
+        hostClient2.emit(
+          'night:action',
+          { roomCode, token: hostToken, roleId: 'seer', action: { targetId: target.id } },
+          resolve
+        );
+      });
+      expect(actionRes.ok).toBe(true);
+    }
+  });
+
+  it('xử lý an toàn payload null hoặc không phải object cho room:join, room:resume và room:leave', async () => {
+    const client = createClient();
+
+    const joinNullRes: any = await new Promise((resolve) => {
+      client.emit('room:join', null, resolve);
+    });
+    expect(joinNullRes.ok).toBe(false);
+    expect(joinNullRes.error.code).toBe('INVALID_SETTINGS');
+
+    const joinStrRes: any = await new Promise((resolve) => {
+      client.emit('room:join', 'invalid', resolve);
+    });
+    expect(joinStrRes.ok).toBe(false);
+    expect(joinStrRes.error.code).toBe('INVALID_SETTINGS');
+
+    const resumeNullRes: any = await new Promise((resolve) => {
+      client.emit('room:resume', null, resolve);
+    });
+    expect(resumeNullRes.ok).toBe(false);
+    expect(resumeNullRes.error.code).toBe('INVALID_TOKEN');
+
+    const leaveNullRes: any = await new Promise((resolve) => {
+      client.emit('room:leave', 12345, resolve);
+    });
+    expect(leaveNullRes.ok).toBe(false);
+    expect(leaveNullRes.error.code).toBe('INVALID_TOKEN');
+  });
 });
