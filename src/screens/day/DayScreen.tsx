@@ -372,24 +372,26 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
         </div>
 
         <div className="day-header-actions">
-          <nav aria-label="Chế độ xem ban ngày" className="day-mode-switch">
-            <button
-              type="button"
-              aria-pressed={mode === 'player'}
-              onClick={() => setMode('player')}
-              className={mode === 'player' ? 'day-mode-active' : ''}
-            >
-              BỎ PHIẾU
-            </button>
-            <button
-              type="button"
-              aria-pressed={mode === 'shared'}
-              onClick={() => setMode('shared')}
-              className={mode === 'shared' ? 'day-mode-active' : ''}
-            >
-              BÀN CHƠI
-            </button>
-          </nav>
+          {!isSingleDevice && (
+            <nav aria-label="Chế độ xem ban ngày" className="day-mode-switch">
+              <button
+                type="button"
+                aria-pressed={mode === 'player'}
+                onClick={() => setMode('player')}
+                className={mode === 'player' ? 'day-mode-active' : ''}
+              >
+                BỎ PHIẾU
+              </button>
+              <button
+                type="button"
+                aria-pressed={mode === 'shared'}
+                onClick={() => setMode('shared')}
+                className={mode === 'shared' ? 'day-mode-active' : ''}
+              >
+                BÀN CHƠI
+              </button>
+            </nav>
+          )}
           <button
             type="button"
             className="day-rules-button"
@@ -431,7 +433,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
         </div>
       </header>
 
-      <div className="day-main">
+      <div className={`day-main ${isSingleDevice ? 'is-single-device' : ''}`}>
+        <div className="day-col-status">
         {/* Nút giữ để xem vai bí mật của bản thân (Multi-device) */}
         {!isSingleDevice && privateView?.roleId && (
           <div className="day-role-peek-bar">
@@ -469,116 +472,75 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         )}
 
-        {/* Antique Sundial Countdown Clock */}
-        <section className={`day-clock-card ${isUrgent ? 'is-urgent' : ''}`}>
-          <span className="eyebrow">THỜI GIAN THẢO LUẬN</span>
+        {/* Khối 1: Đồng hồ & 1 dòng thông báo sáng duy nhất */}
+        {!isVerdictPendingNextNight && (
+          <section className={`day-clock-card ${isUrgent ? 'is-urgent' : ''}`}>
+            <span className="eyebrow">THỜI GIAN THẢO LUẬN</span>
 
-          <div className="day-clock-graphic">
-            <svg className="timer-svg" viewBox="0 0 160 160">
-              <circle
-                cx="80"
-                cy="80"
-                r={radius}
-                className="timer-ring-bg"
-                strokeWidth="6"
-                fill="none"
-              />
-              <circle
-                cx="80"
-                cy="80"
-                r={radius}
-                className={`timer-ring-progress ${isUrgent ? 'urgent-ring' : ''}`}
-                strokeWidth="6"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
-            <div className="clock-digits-wrap">
-              <div className="day-clock" aria-live="off">{formatTime(remainingTime)}</div>
-              <span className="clock-status-tag">
-                {isPaused ? 'TẠM DỪNG' : isUrgent ? 'SẮP HẾT GIỜ' : 'ĐANG THẢO LUẬN'}
-              </span>
+            <div className="day-clock-graphic">
+              <svg className="timer-svg" viewBox="0 0 160 160">
+                <circle
+                  cx="80"
+                  cy="80"
+                  r={radius}
+                  className="timer-ring-bg"
+                  strokeWidth="6"
+                  fill="none"
+                />
+                <circle
+                  cx="80"
+                  cy="80"
+                  r={radius}
+                  className={`timer-ring-progress ${isUrgent ? 'urgent-ring' : ''}`}
+                  strokeWidth="6"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+              <div className="clock-digits-wrap">
+                <div className="day-clock" aria-live="off">{formatTime(remainingTime)}</div>
+                <span className="clock-status-tag">
+                  {isPaused ? 'TẠM DỪNG' : isUrgent ? 'SẮP HẾT GIỜ' : 'ĐANG THẢO LUẬN'}
+                </span>
+              </div>
             </div>
-          </div>
 
-          {!isSpecialInstantPhase && (
-            <div className={`lock-indicator ${!effectiveVoteLocked ? 'is-unlocked' : 'is-locked'}`} aria-live="polite">
-              <span className="lock-icon" aria-hidden="true">{!effectiveVoteLocked ? '🔓' : '🔒'}</span>
-              <span>
-                {!effectiveVoteLocked ? (
-                  <strong className="unlocked-text">
-                    {isMayorElectionPhase
-                      ? 'HÒM PHIẾU ĐÃ MỞ · BẦU CHỌN TRƯỞNG LÀNG'
-                      : isRunoffPhase
-                      ? 'HÒM PHIẾU ĐÃ MỞ · BỎ PHIẾU LẠI'
-                      : 'HÒM PHIẾU ĐÃ MỞ · BẮT ĐẦU BỎ PHIẾU TREO CỔ'}
-                  </strong>
-                ) : (
-                  <>CHƯA ĐẾN GIỜ BỎ PHIẾU: <strong>CÒN {voteLockRemaining}S THẢO LUẬN</strong></>
+            {/* Điều khiển cho Host */}
+            {state.isHost && (
+              <div className="day-timer-actions">
+                <button
+                  type="button"
+                  className="action-btn-pause"
+                  onClick={() => (isPaused ? actions.hostResume() : actions.hostPause())}
+                >
+                  <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
+                  <span>{isPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
+                </button>
+                {(publicView?.extensionsUsed ?? 0) < 2 && (
+                  <button
+                    type="button"
+                    className="action-btn-extend"
+                    onClick={() => actions.hostExtendTime()}
+                  >
+                    <span aria-hidden="true">＋</span>
+                    <span>+30s</span>
+                  </button>
                 )}
-              </span>
-            </div>
-          )}
-
-          {/* Điều khiển cho Host */}
-          {state.isHost && (
-            <div className="day-timer-actions">
-              <button
-                type="button"
-                className="action-btn-pause"
-                onClick={() => (isPaused ? actions.hostResume() : actions.hostPause())}
-              >
-                <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
-                <span>{isPaused ? 'TIẾP TỤC' : 'TẠM DỪNG'}</span>
-              </button>
-              {(publicView?.extensionsUsed ?? 0) < 2 && (
-                <button
-                  type="button"
-                  className="action-btn-extend"
-                  onClick={() => actions.hostExtendTime()}
-                >
-                  <span aria-hidden="true">＋</span>
-                  <span>THÊM +30S</span>
-                </button>
-              )}
-              {effectiveVoteLocked && (
-                <button
-                  type="button"
-                  className="action-btn-extend"
-                  onClick={() => actions.hostUnlockVote()}
-                >
-                  <span aria-hidden="true">🔓</span>
-                  <span>MỞ VOTE NGAY</span>
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* Card Thông báo đầu ngày nổi bật tóm tắt sự kiện đêm qua */}
-        <section className="narration-card morning-briefing-card" aria-live="polite">
-          <div className="narration-avatar" aria-hidden="true">
-            <span className="narration-icon">📜</span>
-          </div>
-          <div className="narration-body">
-            <div className="narration-title-bar">
-              <strong>THÔNG BÁO ĐẦU NGÀY · NGÀY {publicView?.roundNumber || 1}</strong>
-            </div>
-            {publicView?.publicLogs && publicView.publicLogs.length > 0 ? (
-              <ul className="morning-briefing-list">
-                {publicView.publicLogs.slice(-4).map((log, idx, arr) => (
-                  <li key={`${idx}-${log.slice(0, 16)}`} className={idx === arr.length - 1 ? 'is-latest-log' : ''}>
-                    {log}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>Trời đã sáng, dân làng cùng nhau thảo luận để tìm ra Ma Sói.</p>
+              </div>
             )}
-          </div>
-        </section>
+
+            {/* 1 dòng thông báo sáng duy nhất */}
+            {!isSpecialInstantPhase && (
+              <p className="day-single-morning-line" aria-live="polite">
+                {publicView?.publicLogs && publicView.publicLogs.length > 0
+                  ? publicView.publicLogs[publicView.publicLogs.length - 1]
+                  : 'Trời đã sáng, dân làng cùng nhau thảo luận.'}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Banner Gấu gầm (Bear Tamer) - chỉ hiển thị khi gấu thực sự gầm để không lộ cái chết */}
         {publicView?.bearGrowled === true && (
@@ -640,14 +602,16 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         )}
 
-        {/* Thẻ Công Bố Phán Quyết & Di Ngôn (Single-device) */}
+        </div>
+
+        <div className="day-col-action">
+        {/* Khối 3 (khi đã chốt): Thẻ Kết quả duy nhất + Nút Sang Đêm tiếp theo */}
         {isVerdictPendingNextNight && dayVerdict && (
           <section className="day-verdict-card" aria-live="polite">
-            <span className="day-verdict-eyebrow">⚖️ CÔNG BỐ PHÁN QUYẾT · DI NGÔN</span>
+            <span className="day-verdict-eyebrow">⚖️ KẾT QUẢ BIỂU QUYẾT · NGÀY {publicView?.roundNumber || 1}</span>
             <h2 className="day-verdict-headline">{dayVerdict.headline}</h2>
-            <p className="day-verdict-detail">{dayVerdict.detail}</p>
             <p className="day-verdict-hint">
-              Dành thời gian cho người bị loại nói lời cuối cùng trước khi cả làng đi ngủ.
+              Dành thời gian nói lời cuối cùng trước khi cả làng đi ngủ.
             </p>
             {state.isHost && (
               <button
@@ -658,15 +622,15 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               >
                 {isProceedingNextNight
                   ? 'Đang chuyển sang đêm tiếp theo...'
-                  : 'Cả làng nhắm mắt · Sang Đêm tiếp theo 🌙'}
+                  : `Sang Đêm ${(publicView?.roundNumber || 1) + 1} →`}
               </button>
             )}
             {notice && <p role="status" className="vote-notice">{notice}</p>}
           </section>
         )}
 
-        {/* Kết quả biểu quyết gần nhất nếu có */}
-        {lastVoteTally && (
+        {/* Kết quả biểu quyết gần nhất (chỉ hiện ở Multi-device khi chưa pending verdict) */}
+        {!isSingleDevice && !isVerdictPendingNextNight && lastVoteTally && (
           <section className="last-tally-card">
             <strong>KẾT QUẢ BỎ PHIẾU GẦN NHẤT:</strong>
             <div className="tally-breakdown">
@@ -865,40 +829,44 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 <span className="heading-dot" />
                 <strong>
                   {isMayorElectionPhase
-                    ? '👑 BẦU CHỌN TRƯỞNG LÀNG (NGÀY 1)'
+                    ? 'Bầu Trưởng làng'
                     : isRunoffPhase
-                    ? '⚖️ VÒNG BỎ PHIẾU LẠI (HÒA PHIẾU)'
-                    : 'BỎ PHIẾU TREO CỔ'}
+                    ? 'Vòng bỏ phiếu lại'
+                    : 'Bỏ phiếu treo cổ'}
                 </strong>
+                {isSingleDevice && (
+                  <span className="day-heading-count">
+                    · {handVoteSummary.totalRecordedVotes}/{maxPossibleVotes} phiếu
+                  </span>
+                )}
               </div>
-              <span className={!effectiveVoteLocked ? 'unlocked-label' : 'locked-label'}>
-                {!effectiveVoteLocked ? (
-                  '✓ ĐANG MỞ PHIẾU'
-                ) : (
-                  <>
-                    🔒 ĐỢI {voteLockRemaining}S
+              <div className="day-heading-right">
+                {effectiveVoteLocked ? (
+                  <span className="locked-label">
+                    Mở phiếu sau {voteLockRemaining}s
                     {state.isHost && (
                       <button
                         type="button"
+                        className="day-early-unlock-link"
                         onClick={() => actions.hostUnlockVote()}
-                        style={{
-                          marginLeft: '8px',
-                          padding: '2px 8px',
-                          borderRadius: '999px',
-                          border: '1px solid rgba(212, 175, 55, 0.5)',
-                          background: 'rgba(212, 175, 55, 0.16)',
-                          color: '#f5d77f',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
                       >
-                        Mở ngay
+                        Mở phiếu sớm
                       </button>
                     )}
-                  </>
+                  </span>
+                ) : isSingleDevice && handVoteSummary.totalRecordedVotes > 0 ? (
+                  <button
+                    type="button"
+                    className="hand-vote-reset-btn"
+                    disabled={isSubmittingFinalize}
+                    onClick={() => setHandVotes({})}
+                  >
+                    Đặt lại
+                  </button>
+                ) : (
+                  <span className="unlocked-label">Đang mở phiếu</span>
                 )}
-              </span>
+              </div>
             </div>
 
             {isRunoffPhase && (
@@ -934,29 +902,15 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 : players;
 
               if (isSingleDevice) {
-                const { totalRecordedVotes, topCount, leaderText } = handVoteSummary;
+                const { topCount } = handVoteSummary;
+                const sortedCandidates = [...voteCandidates].sort(
+                  (a, b) => Number(b.isAlive) - Number(a.isAlive) || a.seatIndex - b.seatIndex
+                );
 
                 return (
-                  <div className="public-hand-vote-board">
-                    <div className="hand-vote-summary-bar">
-                      <div className="hand-vote-stats">
-                        <span className="hand-vote-total">
-                          Tổng phiếu đã ghi: <b>{totalRecordedVotes}</b> / {maxPossibleVotes}
-                        </span>
-                        <span className="hand-vote-leader">{leaderText}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="hand-vote-reset-btn"
-                        disabled={totalRecordedVotes === 0 || effectiveVoteLocked || isSubmittingFinalize}
-                        onClick={() => setHandVotes({})}
-                      >
-                        Đặt lại 0
-                      </button>
-                    </div>
-
+                  <div className={`public-hand-vote-board ${effectiveVoteLocked ? 'is-vote-locked' : ''}`}>
                     <div className="hand-vote-list">
-                      {voteCandidates.map((player) =>
+                      {sortedCandidates.map((player) =>
                         player.isAlive ? (
                           <div
                             key={player.id}
@@ -968,15 +922,15 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                               <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
                               <div className="hand-vote-name-wrap">
                                 <span className="vote-name">{player.name}</span>
-                                <small className="vote-weight">
-                                  {player.isMayor
-                                    ? player.voteWeight === 0
-                                      ? '👑 Trưởng làng (0 phiếu · mất quyền)'
-                                      : '👑 Trưởng làng (x2 phiếu)'
-                                    : player.voteWeight === 0
-                                    ? '🃏 Đã mất quyền vote'
-                                    : 'Ứng viên'}
-                                </small>
+                                {(player.isMayor || player.voteWeight === 0) && (
+                                  <small className="vote-weight">
+                                    {player.isMayor
+                                      ? player.voteWeight === 0
+                                        ? '👑 Trưởng làng · mất quyền vote'
+                                        : '👑 Trưởng làng (x2)'
+                                      : 'Mất quyền vote'}
+                                  </small>
+                                )}
                               </div>
                             </div>
 
@@ -997,7 +951,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                                 type="button"
                                 className="hand-vote-step-btn"
                                 aria-label={`Tăng phiếu cho ${player.name}`}
-                                disabled={effectiveVoteLocked || isSubmittingFinalize || totalRecordedVotes >= maxPossibleVotes}
+                                disabled={effectiveVoteLocked || isSubmittingFinalize || handVoteSummary.totalRecordedVotes >= maxPossibleVotes}
                                 onClick={() => handleAdjustHandVote(player.id, 1)}
                               >
                                 ＋
@@ -1149,33 +1103,42 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             </div>
           </section>
         ))}
-      </div>
 
-      {/* Footer Host chốt phán quyết */}
-      {state.isHost && !isSpecialInstantPhase && !isVerdictPendingNextNight && (
-        <footer className="day-bottom-bar">
-          <button
-            type="button"
-            className="finalize-button"
-            disabled={effectiveVoteLocked || isSubmittingFinalize}
-            onClick={() => setShowConfirmFinalize(true)}
-          >
-            <span className="gavel-icon" aria-hidden="true">⚒</span>
-            <span>
-              {isSubmittingFinalize
-                ? 'ĐANG CHỐT KẾT QUẢ...'
-                : !effectiveVoteLocked
-                ? isMayorElectionPhase
-                  ? 'CHỐT KẾT QUẢ BẦU TRƯỞNG LÀNG'
-                  : isRunoffPhase
-                  ? 'CHỐT KẾT QUẢ BỎ PHIẾU LẠI'
-                  : 'CHỐT KẾT QUẢ BỎ PHIẾU'
-                : `CHƯA ĐẾN GIỜ BỎ PHIẾU (${voteLockRemaining}S)`}
-            </span>
-          </button>
-          {notice && <p role="status" className="vote-notice">{notice}</p>}
-        </footer>
-      )}
+        {/* Khối 3: Nút hành động chính (ghim dưới cột phải) */}
+        {state.isHost && !isSpecialInstantPhase && !isVerdictPendingNextNight && (() => {
+          const singleLeader = handVoteSummary.leaders.length === 1 ? handVoteSummary.leaders[0] : null;
+          const primaryLabel = isSubmittingFinalize
+            ? 'Đang chốt kết quả...'
+            : isMayorElectionPhase
+            ? singleLeader
+              ? `Xác nhận bầu ${singleLeader.player.name}`
+              : 'Chốt kết quả bầu Trưởng làng'
+            : isRunoffPhase
+            ? singleLeader
+              ? `Xác nhận treo cổ ${singleLeader.player.name}`
+              : 'Bỏ qua treo cổ hôm nay'
+            : isSingleDevice
+            ? singleLeader
+              ? `Xác nhận treo cổ ${singleLeader.player.name}`
+              : 'Bỏ qua treo cổ hôm nay'
+            : 'Chốt kết quả bỏ phiếu';
+
+          return (
+            <div className="day-primary-action-bar">
+              <button
+                type="button"
+                className="finalize-button"
+                disabled={effectiveVoteLocked || isSubmittingFinalize}
+                onClick={() => setShowConfirmFinalize(true)}
+              >
+                <span>{primaryLabel}</span>
+              </button>
+              {notice && <p role="status" className="vote-notice">{notice}</p>}
+            </div>
+          );
+        })()}
+        </div>
+      </div>
 
       {/* Hộp thoại xác nhận chốt kết quả bỏ phiếu */}
       {showConfirmFinalize && (

@@ -1285,12 +1285,14 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
 
     let state = adapter.getState();
     expect(state.publicView?.phase).toBe('DAY_DISCUSS');
+    expect(state.publicView?.roundNumber).toBe(1);
     expect(state.publicView?.dayVerdict?.isPendingNextNight).toBe(true);
     expect(state.publicView?.dayVerdict?.headline).toContain(villager.name);
 
     await adapter.proceedToNextNight();
     state = adapter.getState();
     expect(state.publicView?.phase).toBe('NIGHT');
+    expect(state.publicView?.roundNumber).toBe(2);
     expect(state.publicView?.dayVerdict).toBeNull();
   });
 

@@ -1172,7 +1172,9 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'NIGHT') {
-      // Giữ ở màn hình Ban Ngày để mọi người đọc kết quả trước khi bấm sang Đêm tiếp theo
+      // Giữ ở màn hình Ban Ngày & giữ nguyên roundNumber của ngày hiện tại cho tới khi bấm sang Đêm tiếp theo
+      const currentDayRound = Math.max(1, this.roomState.gameState.roundNumber - 1);
+      this.roomState.gameState.roundNumber = currentDayRound;
       this.clearDayTimer();
       this.roomState.gameState.phase = 'DAY_DISCUSS';
       this.roomState.timers.deadlineAt = null;
@@ -1233,6 +1235,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   public async proceedToNextNight(): Promise<void> {
     if (!this.roomState.gameState) return;
     this.pendingDayVerdict = null;
+    this.roomState.gameState.roundNumber += 1;
     this.roomState.gameState.phase = 'NIGHT';
     this.startNewLocalNight();
     this.emitState();

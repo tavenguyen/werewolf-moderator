@@ -103,12 +103,74 @@
 }
 
 .day-main {
-  width: min(100%, 520px);
+  width: min(100%, 540px);
   margin: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 20px 0;
+}
+
+.day-col-status,
+.day-col-action {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 860px) {
+  .day-main.is-single-device {
+    width: min(100%, 960px);
+    display: grid;
+    grid-template-columns: 330px 1fr;
+    align-items: start;
+    gap: 20px;
+  }
+}
+
+.day-single-morning-line {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  line-height: 1.45;
+  color: #e2e8f0;
+  text-align: center;
+  width: 100%;
+}
+
+.day-heading-count {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.day-heading-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.day-early-unlock-link {
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: rgba(212, 175, 55, 0.14);
+  color: #f5d77f;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.public-hand-vote-board.is-vote-locked {
+  opacity: 0.62;
+  transition: opacity 0.2s ease;
+}
+
+.day-primary-action-bar {
+  margin-top: 4px;
 }
 
 /* Antique Sundial Clock Card */
