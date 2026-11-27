@@ -3,8 +3,9 @@
    ========================================================================= */
 
 .lobby-page-compact {
-  min-height: calc(100vh - 52px);
-  min-height: calc(100dvh - 52px);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg, #0B0E14);

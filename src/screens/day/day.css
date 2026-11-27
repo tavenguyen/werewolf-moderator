@@ -1,8 +1,10 @@
 .day-screen {
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px 110px;
+  padding: 14px 16px;
   color: var(--parchment, #ede7dc);
   background:
     radial-gradient(ellipse 70% 50% at 50% 15%, rgba(201, 134, 56, 0.08), transparent 70%),
@@ -105,10 +107,13 @@
 .day-main {
   width: min(100%, 540px);
   margin: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px 0;
+  padding: 14px 0;
 }
 
 .day-col-status,

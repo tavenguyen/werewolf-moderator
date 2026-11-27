@@ -4,10 +4,12 @@
   --night-subtle: #6e675f;
   --night-line: rgba(201, 134, 56, 0.15);
   --night-card: #12151c;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 20px 16px;
+  padding: 16px;
   color: var(--night-text);
   background: #090a0e;
   font-family: var(--font-body, "Be Vietnam Pro", sans-serif);

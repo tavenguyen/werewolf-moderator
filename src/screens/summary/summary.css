@@ -1,11 +1,15 @@
 .summary-screen {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(ellipse 70% 40% at 50% 10%, rgba(43, 88, 62, 0.1), transparent 70%),
     radial-gradient(ellipse 50% 50% at 50% 80%, rgba(201, 134, 56, 0.06), transparent 70%),
     var(--bg, #0d0f13);
   color: var(--parchment, #ede7dc);
-  padding: 24px 16px 110px;
+  padding: 18px 16px 84px;
   font-family: var(--font-body, "Be Vietnam Pro", sans-serif);
 }
 
@@ -55,6 +59,9 @@
 .summary-content {
   width: min(100%, 880px);
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;

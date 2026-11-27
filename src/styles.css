@@ -65,24 +65,21 @@
 }
 
 html {
-  overflow-x: hidden;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
-  background: var(--bg);
-  color: var(--parchment);
-  overflow-x: hidden;
-  selection-background-color: var(--lantern);
-  selection-color: #0d0f13;
-}
-
-body:has(.screen-home) {
   height: 100vh;
   height: 100dvh;
+  background: var(--bg);
+  color: var(--parchment);
   overflow: hidden;
+  selection-background-color: var(--lantern);
+  selection-color: #0d0f13;
 }
 
 button, input, select {
