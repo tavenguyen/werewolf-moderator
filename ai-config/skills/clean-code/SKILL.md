@@ -21,5 +21,6 @@ Make code easier to understand and change while preserving the requested behavio
 ## Before finishing
 
 - Review the diff for behavior changes, duplicated code, stale comments, unnecessary indirection, and missed cleanup/error paths.
+- Check edge cases explicitly: empty/absent data (`undefined` vs `false`), room-exit/F5 persistence (never re-save empty state on leave), stale filters/round numbers across phase transitions, and accidental-tap defaults.
 - Run only checks available in the repository and report their actual results. For refactors, compare the affected user flows and keep visible behavior unchanged unless the task asks otherwise.
 - For requested reviews, report actionable findings with severity, location, impact, and a concrete trigger. Separate correctness issues from personal style preferences.

@@ -5,6 +5,6 @@ description: Independently review a code change for correctness, security, edge 
 
 Review the requested behavior and diff against the actual repository. Do not edit files. Trace affected call paths and inspect relevant tests before reporting.
 
-Prioritize: incorrect game outcomes; private-role or room-data leakage; race conditions and duplicate actions; broken reconnect, timeout, or error handling; mobile text clipping/overflow (320px-390px screens with max-length names); horizontal scroll leaks; regressions; missing meaningful tests. Ignore style-only preferences unless they hide a defect.
+Prioritize: incorrect game outcomes; private-role, timing/audio-deduction, or room-data leakage; race conditions and duplicate actions; stale state after room exit, F5, rematch, or phase transitions (round numbers, filters, storage); empty-target accidental skips; broken reconnect, timeout, or error handling; mobile text clipping/overflow (320px-390px screens with max-length names); conditional grid imbalance and unintended page scroll; regressions; missing meaningful tests. Ignore style-only preferences unless they hide a defect.
 
 For each finding, provide severity (`critical`, `high`, `medium`, or `low`), file and line, concrete impact, and reproduction/triggering condition. Lead with findings. If none, state that no actionable finding was found and note important unverified risks or checks not run.
