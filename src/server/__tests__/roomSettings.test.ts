@@ -18,7 +18,7 @@ describe('Realtime Backend - Room Settings Customization', () => {
     expect(room?.settings.allowWolfSkip).toBe(false);
     expect(room?.settings.allowWolfFriendlyFire).toBe(false);
     expect(room?.settings.allowWitchSelfHeal).toBe(true);
-    expect(room?.settings.witchKnowsVictim).toBe(true);
+    expect(room?.settings.witchKnowsVictim).toBe(false);
     expect(room?.settings.witchHealMode).toBe('AOE');
     expect(room?.settings.witchWasteHealOnEmpty).toBe(false);
     expect(room?.settings.hasMayor).toBe(false);
@@ -30,6 +30,7 @@ describe('Realtime Backend - Room Settings Customization', () => {
       allowWolfFriendlyFire: true,
       allowBodyguardSelfProtect: false,
       allowWitchBothPotionsSameNight: false,
+      witchKnowsVictim: true,
       witchDoubleProtectKills: true,
       firstNightNoKill: true,
       seerRevealMode: 'EXACT_ROLE',

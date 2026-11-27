@@ -19,7 +19,7 @@ export const DEFAULT_CONFIGURABLE_SETTINGS: Partial<RoomSettings> = {
   allowBodyguardSelfProtect: true,
   allowWitchSelfHeal: true,
   allowWitchBothPotionsSameNight: true,
-  witchKnowsVictim: true,
+  witchKnowsVictim: false,
   witchHealMode: 'AOE',
   witchWasteHealOnEmpty: false,
   witchDoubleProtectKills: false,
@@ -60,11 +60,11 @@ export function getModifiedRulesCount(
   if (hasWitch) {
     if (settings.allowWitchSelfHeal === false) count++;
     if (settings.allowWitchBothPotionsSameNight === false) count++;
-    if (settings.witchKnowsVictim === false) {
+    if (settings.witchKnowsVictim === true) {
       count++;
-      if (settings.witchWasteHealOnEmpty === true) count++;
-    } else {
       if (settings.witchHealMode === 'SINGLE') count++;
+    } else {
+      if (settings.witchWasteHealOnEmpty === true) count++;
     }
     if (hasBodyguard && settings.witchDoubleProtectKills === true) count++;
   }
@@ -371,7 +371,7 @@ export default function RoomSettingsModal({
                     className={`settings-switch-control ${
                       currentSettings.witchKnowsVictim ? 'active' : ''
                     }`}
-                    onClick={() => handleToggle('witchKnowsVictim', true)}
+                    onClick={() => handleToggle('witchKnowsVictim', false)}
                     aria-label="Phù thủy biết nạn nhân"
                   >
                     <span className="settings-switch-thumb" />

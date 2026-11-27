@@ -53,7 +53,7 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   allowWolfSkip: false,
   allowWolfFriendlyFire: false,
   witchHealMode: 'AOE',
-  witchKnowsVictim: true,
+  witchKnowsVictim: false,
   witchWasteHealOnEmpty: false,
   allowWitchSelfHeal: true,
   tieVoteMode: 'ESCAPE',
