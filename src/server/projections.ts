@@ -98,7 +98,9 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     publicLogs: room.publicHistoryLogs ?? [],
     currentTurnInfo,
     lastVoteTally: room.lastVoteTally,
-    bearGrowled: gameState?.bearGrowled,
+    bearGrowled: gameState?.players.some((p) => p.roleId === 'bear_tamer')
+      ? gameState.bearGrowled
+      : undefined,
     princeRevealed: gameState?.princeRevealed,
     mutedPlayerId: gameState?.mutedPlayerId ?? null,
     doubleVoteDay: Boolean(gameState?.doubleVoteDay),

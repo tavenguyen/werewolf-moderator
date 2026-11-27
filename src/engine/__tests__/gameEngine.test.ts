@@ -138,4 +138,19 @@ describe('Game Engine - Full Lifecycle Integration', () => {
     expect(winOutcome?.winner).toBe('VILLAGER');
     expect(afterShot.phase).toBe('GAME_OVER');
   });
+
+  it('should keep bearGrowled undefined when bear_tamer is not in the deck', () => {
+    const game = createTestGame([
+      'werewolf',
+      'seer',
+      'witch',
+      'bodyguard',
+      'villager',
+      'villager',
+    ]);
+    const { nextState: dayState } = executeNightPhase(game, {
+      wolfPack: { targets: ['p5'] },
+    });
+    expect(dayState.bearGrowled).toBeUndefined();
+  });
 });

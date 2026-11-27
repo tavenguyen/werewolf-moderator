@@ -163,7 +163,10 @@ export function createInitialGameState(
  * - Nếu chính Bear Tamer bị biến thành Ma Sói (ví dụ bị nguyền), gấu ngửi thấy mùi sói và luôn gầm.
  * - Không gầm với Minion, Sorcerer hay Lycan.
  */
-export function evaluateBearGrowl(state: GameState): boolean {
+export function evaluateBearGrowl(state: GameState): boolean | undefined {
+  const hasBearTamerInGame = state.players.some((p) => p.roleId === 'bear_tamer');
+  if (!hasBearTamerInGame) return undefined;
+
   const bearTamer = state.players.find((p) => p.roleId === 'bear_tamer' && p.isAlive);
   if (!bearTamer) return false;
 
