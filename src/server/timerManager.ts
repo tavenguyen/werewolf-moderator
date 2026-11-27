@@ -398,4 +398,26 @@ export class TimerManager {
 
     return true;
   }
+
+  /**
+   * Mở khóa hòm phiếu ngay lập tức (bỏ qua thời gian khóa thảo luận ban đầu).
+   */
+  public unlockVoteEarly(room: RoomState): boolean {
+    const gameState = room.gameState;
+    if (!gameState || gameState.phase !== 'DAY_DISCUSS' || !gameState.dayState?.voteLocked) {
+      return false;
+    }
+
+    const unlockTimer = this.voteUnlockTimers.get(room.roomCode);
+    if (unlockTimer) {
+      clearTimeout(unlockTimer);
+      this.voteUnlockTimers.delete(room.roomCode);
+    }
+
+    room.timers.voteLockDeadlineAt = undefined;
+    room.timers.remainingVoteLockMs = undefined;
+    gameState.dayState.voteLocked = false;
+    gameState.dayState.voteLockRemainingSeconds = 0;
+    return true;
+  }
 }

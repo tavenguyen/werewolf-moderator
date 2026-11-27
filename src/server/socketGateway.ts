@@ -582,6 +582,26 @@ export class SocketGateway {
     );
 
     socket.on(
+      'host:unlockVote',
+      (payload: ClientHostControlPayload, cb?: (res: ServerResponse) => void) => {
+        this.runInQueue(payload.roomCode, cb, async (room) => {
+          if (room.host.hostToken !== payload.token) {
+            throw { code: 'NOT_HOST', message: 'Chỉ Host mới có quyền mở hòm phiếu sớm.' };
+          }
+          if (!room.gameState || room.gameState.phase !== 'DAY_DISCUSS') {
+            throw { code: 'INVALID_PHASE', message: 'Chỉ có thể mở khóa phiếu trong pha thảo luận ngày.' };
+          }
+          const ok = this.timerManager.unlockVoteEarly(room);
+          if (ok) {
+            room.publicHistoryLogs.push('Quản trò đã mở hòm phiếu sớm!');
+            this.broadcastRoom(room);
+          }
+          return { unlocked: ok };
+        });
+      }
+    );
+
+    socket.on(
       'host:emergencyEliminate',
       (payload: ClientEmergencyEliminatePayload, cb?: (res: ServerResponse) => void) => {
         this.runInQueue(payload.roomCode, cb, async (room) => {

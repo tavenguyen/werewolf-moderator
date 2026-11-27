@@ -1293,4 +1293,28 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(state.publicView?.phase).toBe('NIGHT');
     expect(state.publicView?.dayVerdict).toBeNull();
   });
+
+  it('hostUnlockVote mở khóa voteLocked ngay lập tức trong pha DAY_DISCUSS', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    roomState.gameState.phase = 'DAY_DISCUSS';
+    roomState.gameState.dayState = {
+      discussionSecondsRemaining: 180,
+      voteLockRemainingSeconds: 45,
+      voteLocked: true,
+      isPaused: false,
+      extensionsUsed: 0,
+      ballots: {},
+    };
+    roomState.timers.voteLockDeadlineAt = Date.now() + 45000;
+
+    await adapter.hostUnlockVote();
+    const state = adapter.getState();
+    expect(state.publicView?.voteLocked).toBe(false);
+    expect(state.publicView?.voteLockRemainingSeconds).toBe(0);
+    expect(roomState.timers.voteLockDeadlineAt).toBeUndefined();
+  });
 });

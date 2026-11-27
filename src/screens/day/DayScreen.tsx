@@ -543,6 +543,16 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                   <span>THÊM +30S</span>
                 </button>
               )}
+              {effectiveVoteLocked && (
+                <button
+                  type="button"
+                  className="action-btn-extend"
+                  onClick={() => actions.hostUnlockVote()}
+                >
+                  <span aria-hidden="true">🔓</span>
+                  <span>MỞ VOTE NGAY</span>
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -862,7 +872,32 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 </strong>
               </div>
               <span className={!effectiveVoteLocked ? 'unlocked-label' : 'locked-label'}>
-                {!effectiveVoteLocked ? '✓ ĐANG MỞ PHIẾU' : `🔒 ĐỢI ${voteLockRemaining}S`}
+                {!effectiveVoteLocked ? (
+                  '✓ ĐANG MỞ PHIẾU'
+                ) : (
+                  <>
+                    🔒 ĐỢI {voteLockRemaining}S
+                    {state.isHost && (
+                      <button
+                        type="button"
+                        onClick={() => actions.hostUnlockVote()}
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          border: '1px solid rgba(212, 175, 55, 0.5)',
+                          background: 'rgba(212, 175, 55, 0.16)',
+                          color: '#f5d77f',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Mở ngay
+                      </button>
+                    )}
+                  </>
+                )}
               </span>
             </div>
 

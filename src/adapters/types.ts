@@ -72,6 +72,7 @@ export interface GameSessionAdapter {
   hostPause(): Promise<void>;
   hostResume(): Promise<void>;
   hostExtendTime(): Promise<void>;
+  hostUnlockVote?(): Promise<void>;
   hostEmergencyEliminate(targetPlayerId: PlayerId): Promise<void>;
   hostRematch(): Promise<void>;
   abortGameToLobby?(): Promise<void>;

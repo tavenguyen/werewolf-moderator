@@ -361,4 +361,59 @@ describe('Realtime Backend - Room Lifecycle & Authentication', () => {
     expect(leaveNullRes.ok).toBe(false);
     expect(leaveNullRes.error.code).toBe('INVALID_TOKEN');
   });
+
+  it('host:unlockVote mở khóa hòm phiếu sớm và từ chối nếu không phải Host', async () => {
+    const hostClient = createClient();
+    const createRes: any = await new Promise((resolve) => {
+      hostClient.emit('room:create', { isPlayer: false }, resolve);
+    });
+    const { roomCode, hostToken } = createRes.data;
+
+    const guestClients: MockClientSocket[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const c = createClient();
+      guestClients.push(c);
+      await new Promise((resolve) => {
+        c.emit('room:join', { roomCode, username: `P${i}` }, resolve);
+      });
+    }
+
+    await new Promise((resolve) => {
+      hostClient.emit(
+        'lobby:start',
+        {
+          roomCode,
+          token: hostToken,
+          customRoleIds: ['seer', 'werewolf', 'werewolf', 'villager', 'villager', 'villager'],
+        },
+        resolve
+      );
+    });
+
+    const room = roomService.getRoom(roomCode)!;
+    room.gameState!.phase = 'DAY_DISCUSS';
+    room.gameState!.dayState = {
+      discussionSecondsRemaining: 180,
+      voteLockRemainingSeconds: 50,
+      voteLocked: true,
+      isPaused: false,
+      extensionsUsed: 0,
+      ballots: {},
+    };
+    timerManager.startDayDiscussTimer(room, () => undefined, () => undefined, 180, 50);
+
+    const nonHostRes: any = await new Promise((resolve) => {
+      guestClients[0].emit('host:unlockVote', { roomCode, token: 'wrong_token' }, resolve);
+    });
+    expect(nonHostRes.ok).toBe(false);
+    expect(nonHostRes.error.code).toBe('NOT_HOST');
+
+    const unlockRes: any = await new Promise((resolve) => {
+      hostClient.emit('host:unlockVote', { roomCode, token: hostToken }, resolve);
+    });
+    expect(unlockRes.ok).toBe(true);
+    expect(unlockRes.data.unlocked).toBe(true);
+    expect(room.gameState!.dayState!.voteLocked).toBe(false);
+    expect(room.gameState!.dayState!.voteLockRemainingSeconds).toBe(0);
+  });
 });

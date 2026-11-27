@@ -36,6 +36,7 @@ export interface GameSessionContextValue {
     hostPause: () => Promise<void>;
     hostResume: () => Promise<void>;
     hostExtendTime: () => Promise<void>;
+    hostUnlockVote: () => Promise<void>;
     hostEmergencyEliminate: (targetPlayerId: PlayerId) => Promise<void>;
     hostRematch: () => Promise<void>;
     abortGameToLobby: () => Promise<void>;
@@ -272,6 +273,11 @@ export function GameSessionProvider({
       },
       hostExtendTime: async () => {
         return activeAdapter.hostExtendTime();
+      },
+      hostUnlockVote: async () => {
+        if (activeAdapter.hostUnlockVote) {
+          return activeAdapter.hostUnlockVote();
+        }
       },
       hostEmergencyEliminate: async (targetPlayerId: PlayerId) => {
         return activeAdapter.hostEmergencyEliminate(targetPlayerId);

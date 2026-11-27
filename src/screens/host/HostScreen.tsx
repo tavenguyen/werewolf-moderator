@@ -484,6 +484,16 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
                     <span>+30 GIÂY THẢO LUẬN</span>
                   </button>
                 )}
+                {effectiveVoteLocked && (
+                  <button
+                    type="button"
+                    className="host-button host-control host-extend"
+                    onClick={() => actions.hostUnlockVote()}
+                  >
+                    <span aria-hidden="true">🔓</span>
+                    <span>MỞ VOTE NGAY</span>
+                  </button>
+                )}
               </div>
 
               <button

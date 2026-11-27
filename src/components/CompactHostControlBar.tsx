@@ -140,6 +140,19 @@ export default function CompactHostControlBar() {
             </button>
           )}
 
+          {/* Mở khóa vote ngay (khi đang khóa 60s đầu) */}
+          {phase === 'DAY_DISCUSS' && state.publicView?.voteLocked && (
+            <button
+              type="button"
+              className="compact-btn compact-btn-extend"
+              onClick={() => void actions.hostUnlockVote()}
+              title="Mở khóa hòm phiếu ngay lập tức"
+              aria-label="Mở vote ngay"
+            >
+              <span>🔓 Vote ngay</span>
+            </button>
+          )}
+
           {/* Mở nhanh mã QR (Multi-device) */}
           {state.deviceMode !== 'SINGLE_DEVICE' && (
             <button

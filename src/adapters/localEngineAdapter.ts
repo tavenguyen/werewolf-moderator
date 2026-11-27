@@ -1396,6 +1396,18 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.emitState();
   }
 
+  public async hostUnlockVote(): Promise<void> {
+    const gameState = this.roomState.gameState;
+    if (!gameState || gameState.phase !== 'DAY_DISCUSS' || !gameState.dayState?.voteLocked) {
+      return;
+    }
+    gameState.dayState.voteLocked = false;
+    gameState.dayState.voteLockRemainingSeconds = 0;
+    this.roomState.timers.voteLockDeadlineAt = undefined;
+    this.roomState.timers.remainingVoteLockMs = undefined;
+    this.emitState();
+  }
+
   public async hostExtendTime(): Promise<void> {
     if (!this.roomState.gameState?.dayState) return;
     const ext = this.roomState.gameState.dayState.extensionsUsed;

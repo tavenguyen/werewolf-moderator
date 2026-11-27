@@ -650,6 +650,15 @@ export class SocketAdapter implements GameSessionAdapter {
     await this.emitWithAck('host:extendTime', payload);
   }
 
+  public async hostUnlockVote(): Promise<void> {
+    if (!this.token) throw new Error('Chưa xác thực');
+    const payload: ClientHostControlPayload = {
+      roomCode: this.state.roomCode,
+      token: this.token,
+    };
+    await this.emitWithAck('host:unlockVote', payload);
+  }
+
   public async hostEmergencyEliminate(targetPlayerId: PlayerId): Promise<void> {
     if (!this.token) throw new Error('Chưa xác thực');
     const payload: ClientEmergencyEliminatePayload = {
