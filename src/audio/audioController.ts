@@ -392,7 +392,7 @@ export const NARRATION_VARIATIONS: Record<string, NarrationPrompt[]> = {
 export class AudioController {
   private bgmHowl: Howl | null = null;
   private currentVoiceHowl: Howl | null = null;
-  private audioStatus: AudioStatus = 'unlocked';
+  private audioStatus: AudioStatus = 'blocked';
   private deviceMode: AudioDeviceMode = 'MULTI_DEVICE';
   private isMuted: boolean = false;
   private bgmVolume: number = 0.2;
@@ -447,7 +447,9 @@ export class AudioController {
     // Kiểm tra trạng thái khởi tạo của AudioContext nếu Howler đã sinh
     if (Howler.ctx) {
       this.attachContextListener();
-      if (Howler.ctx.state === 'suspended') {
+      if (Howler.ctx.state === 'running') {
+        this.setAudioStatus('unlocked');
+      } else {
         this.setAudioStatus('blocked');
       }
     }

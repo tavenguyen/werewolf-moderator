@@ -108,7 +108,7 @@ interface RoleDisplayItem {
   isAlive: boolean;
 }
 
-export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
+export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreenProps) {
   const { state, actions } = useGameSession();
 
   const postGame = state.postGameView;
@@ -226,7 +226,26 @@ export default function SummaryScreen({ onNavigate }: SummaryScreenProps) {
           <i aria-hidden="true" />
           <strong>KẾT QUẢ VÁN ĐẤU <span>• PHÒNG #{roomCode}</span></strong>
         </div>
-        <span className="summary-badge-complete">VÁN ĐÃ KẾT THÚC</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {onOpenRules && (
+            <button
+              type="button"
+              onClick={() => onOpenRules('roles')}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.16)',
+                color: '#e2e8f0',
+                borderRadius: '6px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              📜 Luật &amp; Vai trò
+            </button>
+          )}
+          <span className="summary-badge-complete">VÁN ĐÃ KẾT THÚC</span>
+        </div>
       </header>
 
       <div className="summary-content">

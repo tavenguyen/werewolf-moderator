@@ -124,7 +124,7 @@ const INVESTIGATION_TURN_KEYS = new Set([
   'night_pi',
 ]);
 
-export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenProps) {
+export default function NightScreen({ onOpenRules }: NightScreenProps) {
   const { state, actions, deviceMode } = useGameSession();
 
   const [mode, setMode] = useState<'sleep' | 'action'>('sleep');
@@ -1085,6 +1085,26 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                 <small>HÃY HÀNH ĐỘNG TRONG YÊN LẶNG</small>
               </div>
             </div>
+            {onOpenRules && (
+              <button
+                type="button"
+                className="night-rules-quick-btn"
+                onClick={() => onOpenRules('roles')}
+                title="Tra cứu luật & vai trò"
+                style={{
+                  marginLeft: 'auto',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.16)',
+                  color: '#e2e8f0',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                📜 Luật
+              </button>
+            )}
           </div>
 
           {showingResult ? (

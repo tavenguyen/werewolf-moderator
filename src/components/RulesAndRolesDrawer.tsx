@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useGameSession } from '../adapters/useGameSession';
 import { gameRoles, type GameRole, type RoleSide } from '../screens/home/rolesData';
 import './rulesRolesDrawer.css';
 
@@ -36,8 +37,21 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
 }
 
 export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'roles' }: Props) {
+  const { state } = useGameSession();
+  const roomSettings = state.publicView?.settings;
+  const inGameRoleIds = useMemo(() => {
+    const deck = roomSettings?.customDeck;
+    if (!deck) return new Set<string>();
+    return new Set(
+      Object.entries(deck)
+        .filter(([, count]) => count > 0)
+        .map(([roleId]) => roleId),
+    );
+  }, [roomSettings?.customDeck]);
+  const hasInGameDeck = inGameRoleIds.size > 0;
+
   const [activeTab, setActiveTab] = useState<'rules' | 'roles'>(initialTab);
-  const [filterSide, setFilterSide] = useState<RoleSide | 'all'>('all');
+  const [filterSide, setFilterSide] = useState<RoleSide | 'all' | 'in_game'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<GameRole | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -104,7 +118,12 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
   const filteredRoles = useMemo(() => {
     const q = trimmedQuery.toLowerCase();
     return gameRoles.filter((role) => {
-      const matchSide = filterSide === 'all' || role.side === filterSide;
+      const matchSide =
+        filterSide === 'all'
+          ? true
+          : filterSide === 'in_game'
+          ? inGameRoleIds.has(role.id)
+          : role.side === filterSide;
       const matchSearch =
         !q ||
         role.name.toLowerCase().includes(q) ||
@@ -114,7 +133,7 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
         role.roomRuleNote.toLowerCase().includes(q);
       return matchSide && matchSearch;
     });
-  }, [filterSide, trimmedQuery]);
+  }, [filterSide, inGameRoleIds, trimmedQuery]);
 
   const segmentedSections = useMemo<RoleSection[]>(() => {
     if (!isSegmented) return [];
@@ -368,6 +387,20 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                     Không cần tạo tài khoản. Vai trò và phiếu bầu của từng người được giữ kín hoàn toàn trên máy cá nhân.
                   </p>
                 </div>
+
+                {roomSettings && (
+                  <div className="masa-rules-footnote" style={{ marginTop: '16px', flexDirection: 'column', gap: '8px' }}>
+                    <strong>Luật phòng #{state.roomCode} đang bật:</strong>
+                    <p style={{ margin: 0 }}>
+                      Bầu Trưởng làng: {roomSettings.hasMayor ? 'Có' : 'Không'} ·
+                      Lộ vai khi chết: {roomSettings.revealOnDeath ? 'Có' : 'Ẩn'} ·
+                      Bảo vệ tự cứu: {roomSettings.allowBodyguardSelfProtect ? 'Được' : 'Không'} ·
+                      Phù thủy 2 bình/đêm: {roomSettings.allowWitchBothPotionsSameNight ? 'Được' : 'Không'} ·
+                      Sói bỏ qua cắn: {roomSettings.allowWolfSkip ? 'Được' : 'Không'} ·
+                      Hòa phiếu: {roomSettings.tieVoteMode === 'RUNOFF' ? 'Bỏ phiếu lại' : 'Thoát nạn'}
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -380,6 +413,15 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                     >
                       TẤT CẢ ({gameRoles.length})
                     </button>
+                    {hasInGameDeck && (
+                      <button
+                        type="button"
+                        className={`gallery-filter-btn ${filterSide === 'in_game' ? 'active' : ''}`}
+                        onClick={() => setFilterSide('in_game')}
+                      >
+                        TRONG VÁN NÀY ({inGameRoleIds.size})
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={`gallery-filter-btn ${filterSide === 'village' ? 'active' : ''}`}
