@@ -643,7 +643,7 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                     className={`create-mode-btn ${deviceSelection === 'shared' ? 'is-active' : ''}`}
                     onClick={() => {
                       setDeviceSelection('shared');
-                      setHostRoleSelection('player');
+                      setHostRoleSelection('board');
                     }}
                   >
                     <span className="mode-btn-title">1 máy dùng chung</span>
@@ -656,31 +656,35 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
                   <label>Vai trò Quản trò (Host)</label>
                 </div>
                 <div className="create-mode-grid" role="radiogroup" aria-label="Vai trò Host">
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={hostRoleSelection === 'player'}
-                    className={`create-mode-btn ${hostRoleSelection === 'player' ? 'is-active' : ''}`}
-                    onClick={() => setHostRoleSelection('player')}
-                    title="Quản trò vừa chơi vừa điều phối qua thanh Control Bar"
-                  >
-                    <span className="mode-btn-title">Host kiêm Người chơi</span>
-                    <span className="mode-btn-sub">Có thanh Control Bar trên đầu</span>
-                  </button>
-
                   {deviceSelection !== 'shared' && (
                     <button
                       type="button"
                       role="radio"
-                      aria-checked={hostRoleSelection === 'board'}
-                      className={`create-mode-btn ${hostRoleSelection === 'board' ? 'is-active' : ''}`}
-                      onClick={() => setHostRoleSelection('board')}
-                      title="Đặt máy giữa bàn làm Bảng trung tâm điều khiển và phát loa"
+                      aria-checked={hostRoleSelection === 'player'}
+                      className={`create-mode-btn ${hostRoleSelection === 'player' ? 'is-active' : ''}`}
+                      onClick={() => setHostRoleSelection('player')}
+                      title="Quản trò vừa chơi vừa điều phối qua thanh Control Bar"
                     >
-                      <span className="mode-btn-title">Bảng trung tâm</span>
-                      <span className="mode-btn-sub">iPad / TV / Laptop 3 cột</span>
+                      <span className="mode-btn-title">Host kiêm Người chơi</span>
+                      <span className="mode-btn-sub">Có thanh Control Bar trên đầu</span>
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={hostRoleSelection === 'board'}
+                    className={`create-mode-btn ${hostRoleSelection === 'board' ? 'is-active' : ''}`}
+                    onClick={() => setHostRoleSelection('board')}
+                    title="Đặt máy giữa bàn làm Bảng trung tâm điều khiển và phát loa"
+                  >
+                    <span className="mode-btn-title">Bảng trung tâm</span>
+                    <span className="mode-btn-sub">
+                      {deviceSelection === 'shared'
+                        ? '1 máy đặt giữa bàn cho cả nhóm'
+                        : 'iPad / TV / Laptop 3 cột'}
+                    </span>
+                  </button>
                 </div>
 
                 <button
