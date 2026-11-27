@@ -727,6 +727,73 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
                 </div>
               </div>
 
+              {/* Thanh đo cân bằng Dân–Sói trực quan (Balance Meter) */}
+              {(() => {
+                const clampedBalance = Math.max(-20, Math.min(20, metrics.balanceScore));
+                const markerPct = 50 + (clampedBalance / 20) * 45;
+                return (
+                  <div
+                    className="lobby-balance-meter"
+                    aria-label={`Độ cân bằng Dân-Sói: ${metrics.balanceLabel} (${metrics.balanceScore > 0 ? `+${metrics.balanceScore}` : metrics.balanceScore})`}
+                    style={{ margin: '8px 0 10px' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                      <span>🐺 Phe Sói ({metrics.wolvesCount})</span>
+                      <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+                        {metrics.balanceLabel} ({metrics.balanceScore > 0 ? `+${metrics.balanceScore}` : metrics.balanceScore})
+                      </span>
+                      <span>☀️ Phe Dân ({metrics.villagersCount})</span>
+                    </div>
+                    <div
+                      style={{
+                        position: 'relative',
+                        height: '6px',
+                        borderRadius: '999px',
+                        background: 'linear-gradient(90deg, rgba(220,38,38,0.55) 0%, rgba(148,163,184,0.25) 50%, rgba(16,185,129,0.55) 100%)',
+                        overflow: 'visible',
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: `${markerPct}%`,
+                          transform: 'translate(-50%, -50%)',
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          background: '#f8fafc',
+                          border: '2px solid #d4af37',
+                          boxShadow: '0 0 6px rgba(212,175,55,0.65)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Tóm tắt luật phòng cho khách (non-host) */}
+              {!isHost && (
+                <div
+                  className="lobby-guest-rules-summary"
+                  style={{
+                    fontSize: '12px',
+                    color: '#cbd5e1',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <strong>Luật phòng đang áp dụng:</strong>{' '}
+                  {currentSettings.hasMayor ? 'Có Trưởng làng' : 'Không Trưởng làng'} ·{' '}
+                  {currentSettings.revealOnDeath ? 'Lộ vai khi chết' : 'Ẩn vai khi chết'} ·{' '}
+                  {currentSettings.tieVoteMode === 'RUNOFF' ? 'Hòa phiếu: Bỏ phiếu lại' : 'Hòa phiếu: Thoát nạn'}
+                </div>
+              )}
+
               {/* Dòng 2: Pill tags các lá đang chọn (viền mảnh theo phe, có dấu × để gỡ nhanh) */}
               <div className="deck-pills-row" aria-label="Các lá bài đang được chọn">
                 {selectedPills.map((pill) => (

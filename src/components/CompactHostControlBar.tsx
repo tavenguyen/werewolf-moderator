@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGameSession } from '../adapters/useGameSession';
 import { audioController, type AudioStatus } from '../audio/audioController';
+import { generateQrSvgString } from '../utils/qrCodeSvg';
 import type { PlayerId } from '../engine/types';
 import './compactHostControlBar.css';
 
@@ -10,6 +11,7 @@ export default function CompactHostControlBar() {
   const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
   const [audioStatus, setAudioStatus] = useState<AudioStatus>(() => audioController.getAudioStatus());
   const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     const unsubSub = audioController.subscribeSubtitle((sub) => {
@@ -138,6 +140,19 @@ export default function CompactHostControlBar() {
             </button>
           )}
 
+          {/* Mở nhanh mã QR (Multi-device) */}
+          {state.deviceMode !== 'SINGLE_DEVICE' && (
+            <button
+              type="button"
+              className="compact-btn"
+              onClick={() => setQrOpen((prev) => !prev)}
+              title="Mở nhanh mã QR mời vào bàn"
+              aria-label="Mở mã QR"
+            >
+              <span aria-hidden="true">▦</span>
+            </button>
+          )}
+
           {/* Trục xuất khẩn cấp */}
           <div className="compact-emergency-wrapper">
             <button
@@ -183,6 +198,47 @@ export default function CompactHostControlBar() {
           </div>
         </div>
       </div>
+      {qrOpen && state.deviceMode !== 'SINGLE_DEVICE' && (
+        <div
+          className="compact-qr-popover"
+          role="dialog"
+          aria-label={`Mã QR phòng ${state.roomCode}`}
+          style={{
+            position: 'fixed',
+            top: '52px',
+            right: '12px',
+            zIndex: 200,
+            background: '#14171f',
+            border: '1px solid rgba(212,175,55,0.45)',
+            borderRadius: '10px',
+            padding: '12px',
+            textAlign: 'center',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.75)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <strong style={{ fontSize: '12px', color: '#f5d77f' }}>PHÒNG #{state.roomCode}</strong>
+            <button
+              type="button"
+              onClick={() => setQrOpen(false)}
+              aria-label="Đóng mã QR"
+              style={{ background: 'none', border: 'none', color: '#e2e8f0', cursor: 'pointer', fontSize: '16px' }}
+            >
+              ×
+            </button>
+          </div>
+          <div
+            dangerouslySetInnerHTML={{
+              __html: generateQrSvgString(
+                typeof window !== 'undefined'
+                  ? `${window.location.origin}/?room=${state.roomCode}`
+                  : `http://localhost:5173/?room=${state.roomCode}`,
+                150
+              ),
+            }}
+          />
+        </div>
+      )}
     </aside>
   );
 }

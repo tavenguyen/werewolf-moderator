@@ -562,6 +562,30 @@ export class AudioController {
     return this.deviceMode;
   }
 
+  public getBgmVolume(): number {
+    return this.bgmVolume;
+  }
+
+  public setBgmVolume(volume: number): void {
+    const clamped = Math.max(0, Math.min(1, volume));
+    this.bgmVolume = clamped;
+    if (this.bgmHowl && !this.isMuted) {
+      this.bgmHowl.volume(this.isDucked ? clamped * 0.25 : clamped);
+    }
+  }
+
+  public getVoiceVolume(): number {
+    return this.voiceVolume;
+  }
+
+  public setVoiceVolume(volume: number): void {
+    const clamped = Math.max(0, Math.min(1, volume));
+    this.voiceVolume = clamped;
+    if (this.currentVoiceHowl && !this.isMuted) {
+      this.currentVoiceHowl.volume(clamped);
+    }
+  }
+
   private playSynthChime(startFreq: number, endFreq: number, rampSec: number, durationSec: number): void {
     if (this.deviceMode === 'SINGLE_DEVICE' || this.isMuted || typeof window === 'undefined') return;
 

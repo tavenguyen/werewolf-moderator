@@ -5,6 +5,7 @@ import { SocketGateway } from '../socketGateway';
 import { createMockIoServer, type MockSocketIOServer, type MockClientSocket } from './mockSocket';
 import {
   createPlayerPrivateView,
+  createPublicRoomView,
   getWolfPackVictimCandidate,
   getRawWolfPackVictim,
 } from '../projections';
@@ -1047,6 +1048,38 @@ describe('Realtime Backend - Projections & Targets for Phase 3 (wolf_accursed, b
         targetId: wolf.id,
         result: 'WEREWOLF',
       });
+    });
+
+    it('createPublicRoomView trả về voteProgress chính xác trong pha DAY_DISCUSS mà không lộ phiếu từng người', async () => {
+      const { roomCode } = await setupGame([
+        'werewolf',
+        'seer',
+        'witch',
+        'villager',
+        'villager',
+        'villager',
+      ]);
+      const room = roomService.getRoom(roomCode)!;
+      const p1 = room.gameState!.players[0];
+      const p2 = room.gameState!.players[1];
+      const p3 = room.gameState!.players[2];
+
+      p3.voteWeight = 0; // Thằng Ngốc mất quyền vote
+      room.gameState!.phase = 'DAY_DISCUSS';
+      room.gameState!.dayState = {
+        discussionSecondsRemaining: 120,
+        voteLockRemainingSeconds: 0,
+        voteLocked: false,
+        isPaused: false,
+        extensionsUsed: 0,
+        ballots: {
+          [p1.id]: p2.id,
+          [p2.id]: null,
+        },
+      };
+
+      const pub = createPublicRoomView(room);
+      expect(pub.voteProgress).toEqual({ submitted: 2, total: 5 });
     });
   });
 });

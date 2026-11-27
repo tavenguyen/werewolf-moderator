@@ -31,6 +31,8 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
   const [announcement, setAnnouncement] = useState('');
   const [subtitle, setSubtitle] = useState(() => audioController.getCurrentSubtitle());
   const [isMuted, setIsMuted] = useState(() => audioController.getIsMuted());
+  const [bgmVolume, setBgmVolume] = useState(() => Math.round(audioController.getBgmVolume() * 100));
+  const [voiceVolume, setVoiceVolume] = useState(() => Math.round(audioController.getVoiceVolume() * 100));
   const [audioStatus, setAudioStatus] = useState<AudioStatus>(() => audioController.getAudioStatus());
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -403,6 +405,11 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
                   )}
                 </span>
               </div>
+              {publicView?.voteProgress && state.deviceMode !== 'SINGLE_DEVICE' && (
+                <div className="host-vote-progress" role="status" style={{ marginTop: '8px', fontSize: '13px', color: '#d4af37' }}>
+                  📊 Đã bỏ phiếu: <strong>{publicView.voteProgress.submitted}/{publicView.voteProgress.total}</strong> người
+                </div>
+              )}
             </div>
           )}
 
@@ -512,6 +519,45 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             >
               {isMuted ? '🔇 ĐANG TẮT TIẾNG' : '🔊 ĐANG BẬT LOA'}
             </button>
+          </div>
+
+          <div className="host-slider-group">
+            <label className="host-slider">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                <span>Nhạc nền (BGM)</span>
+                <strong>{bgmVolume}%</strong>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={bgmVolume}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setBgmVolume(val);
+                  audioController.setBgmVolume(val / 100);
+                }}
+                aria-label="Âm lượng nhạc nền"
+              />
+            </label>
+            <label className="host-slider">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                <span>Giọng Quản trò</span>
+                <strong>{voiceVolume}%</strong>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={voiceVolume}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setVoiceVolume(val);
+                  audioController.setVoiceVolume(val / 100);
+                }}
+                aria-label="Âm lượng giọng Quản trò"
+              />
+            </label>
           </div>
 
           <div className="host-logs-scroll">

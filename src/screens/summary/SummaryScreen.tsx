@@ -360,15 +360,38 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
           </section>
         ) : (
           <section className="summary-timeline" aria-label="Diễn biến ván đấu">
-            {(postGame?.historyLogs ?? publicView?.publicLogs ?? []).map((log, index) => (
-              <article key={index} className="timeline-event">
-                <i className="timeline-dot night-dot" aria-hidden="true" />
-                <div className="timeline-heading">
-                  <strong>SỰ KIỆN #{index + 1}</strong>
+            {(() => {
+              const logs = postGame?.historyLogs ?? publicView?.publicLogs ?? [];
+              const groups: Array<{ label: string; items: string[] }> = [];
+              for (const log of logs) {
+                const phaseMatch = log.match(/(Đêm\s+(?:thứ\s+)?\d+|Ngày\s+(?:thứ\s+)?\d+)/i);
+                const groupLabel = phaseMatch ? phaseMatch[1].toUpperCase() : null;
+                if (groupLabel && (groups.length === 0 || groups[groups.length - 1].label !== groupLabel)) {
+                  groups.push({ label: groupLabel, items: [log] });
+                } else {
+                  if (groups.length === 0) {
+                    groups.push({ label: 'KHỞI ĐẦU VÁN ĐẤU', items: [] });
+                  }
+                  groups[groups.length - 1].items.push(log);
+                }
+              }
+              return groups.map((group, gIdx) => (
+                <div key={`${group.label}-${gIdx}`} className="timeline-round-group" style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '12px', letterSpacing: '0.08em', color: '#d4af37', margin: '0 0 8px' }}>
+                    {group.label}
+                  </h3>
+                  {group.items.map((log, lIdx) => (
+                    <article key={lIdx} className="timeline-event">
+                      <i className="timeline-dot night-dot" aria-hidden="true" />
+                      <div className="timeline-heading">
+                        <strong>SỰ KIỆN #{lIdx + 1}</strong>
+                      </div>
+                      <p>{log}</p>
+                    </article>
+                  ))}
                 </div>
-                <p>{log}</p>
-              </article>
-            ))}
+              ));
+            })()}
           </section>
         )}
       </div>

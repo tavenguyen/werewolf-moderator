@@ -58,6 +58,26 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     roleId: room.settings.revealOnDeath ? d.roleId : 'unknown',
   }));
 
+  let voteProgress: PublicRoomView['voteProgress'] = null;
+  if (
+    gameState &&
+    (gameState.phase === 'DAY_DISCUSS' ||
+      gameState.phase === 'DAY_RUNOFF' ||
+      gameState.phase === 'DAY_MAYOR_ELECTION')
+  ) {
+    const eligibleTotal = gameState.players.filter(
+      (p) => p.isAlive && (gameState.phase === 'DAY_MAYOR_ELECTION' || p.voteWeight > 0)
+    ).length;
+    const ballotMap =
+      gameState.phase === 'DAY_MAYOR_ELECTION'
+        ? gameState.dayState?.mayorBallots
+        : gameState.phase === 'DAY_RUNOFF'
+        ? gameState.dayState?.runoffBallots
+        : gameState.dayState?.ballots;
+    const submitted = ballotMap ? Object.keys(ballotMap).length : 0;
+    voteProgress = { submitted, total: eligibleTotal };
+  }
+
   return {
     roomCode: room.roomCode,
     gameGeneration: room.gameGeneration,
@@ -84,6 +104,7 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     doubleVoteDay: Boolean(gameState?.doubleVoteDay),
     runoffCandidates:
       gameState?.phase === 'DAY_RUNOFF' ? (gameState.dayState?.runoffCandidates ?? []) : undefined,
+    voteProgress,
   };
 }
 

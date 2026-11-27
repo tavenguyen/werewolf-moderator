@@ -162,6 +162,7 @@ export interface PublicRoomView {
   mutedPlayerId?: PlayerId | null;
   doubleVoteDay?: boolean;
   runoffCandidates?: PlayerId[];
+  voteProgress?: { submitted: number; total: number } | null;
 }
 
 export interface HostBoardView {
