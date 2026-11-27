@@ -630,24 +630,6 @@ export class SocketGateway {
             throw { code: 'NOT_HOST', message: 'Chỉ Host mới có quyền tái đấu.' };
           }
           this.roomService.rematch(payload.roomCode, payload.token);
-
-          if (!room.gameState) {
-            throw { code: 'INTERNAL_ERROR', message: 'Không thể tạo rematch GameState.' };
-          }
-
-          room.nightTurnPlan = generateNightTurnPlan(room.gameState);
-          room.currentNightTurnIndex = 0;
-          room.nightActionsAccumulator = {};
-          room.nightActionAcks.clear();
-          room.currentNightSeed = crypto.randomInt(1, 1_000_000);
-          room.seerInvestigationResult = undefined;
-          room.sorcererInvestigationResult = undefined;
-          room.auraInvestigationResult = undefined;
-          room.foxInvestigationResult = undefined;
-          room.piInvestigationResult = undefined;
-          room.lastVoteTally = undefined;
-
-          this.startCurrentNightTurnTimer(room);
           this.broadcastRoom(room);
           return { rematched: true };
         });

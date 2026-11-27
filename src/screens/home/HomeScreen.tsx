@@ -463,7 +463,13 @@ export default function HomeScreen({ onNavigate, onPlayerJoined, onOpenRules, is
       <footer className="home-footer">
         <div className="home-status-live">
           <span className="live-pulse-dot" aria-hidden="true" />
-          <span>{state.isConnected ? 'Sẵn sàng kết nối' : 'Đang đồng bộ'}</span>
+          <span>
+            {state.isConnected
+              ? 'Sẵn sàng kết nối'
+              : !state.publicView
+              ? 'Sẵn sàng'
+              : 'Đang đồng bộ'}
+          </span>
         </div>
 
         <div className="home-ambient-controls">

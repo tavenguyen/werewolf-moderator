@@ -163,6 +163,8 @@ export interface PublicRoomView {
   doubleVoteDay?: boolean;
   runoffCandidates?: PlayerId[];
   voteProgress?: { submitted: number; total: number } | null;
+  dayVerdict?: { headline: string; detail: string; isPendingNextNight: boolean } | null;
+  nightIntroUntil?: number | null;
 }
 
 export interface HostBoardView {

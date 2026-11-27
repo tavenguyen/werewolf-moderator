@@ -9,6 +9,7 @@ import {
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
+import QuickEndGameModal from '../../components/QuickEndGameModal';
 import type { PlayerId } from '../../engine/types';
 import './night.css';
 
@@ -50,61 +51,78 @@ function CircularSeatMap({
   variant = 'default',
   onSelect,
 }: CircularSeatMapProps) {
+  const [isRotated, setIsRotated] = useState(false);
   const isDense = targets.length >= 12;
 
   return (
-    <div
-      className={`circular-seat-map ${isDense ? 'is-dense' : ''}`}
-      data-count={targets.length}
-      role="group"
-      aria-label={ariaLabel}
-    >
-      <div className="circular-seat-center" aria-hidden="true">
-        <span>{centerIcon}</span>
-        <small>{targets.length} mục tiêu</small>
+    <div className="circular-seat-map-wrap">
+      <div className="circular-seat-toolbar">
+        <button
+          type="button"
+          className={`circular-rotate-btn ${isRotated ? 'is-rotated' : ''}`}
+          aria-pressed={isRotated}
+          onClick={() => setIsRotated((prev) => !prev)}
+        >
+          ↻ Xoay 180°
+        </button>
       </div>
-      {targets.map((tId, idx) => {
-        const targetP = players.find((p) => p.id === tId);
-        if (!targetP) return null;
+      <div
+        className={`circular-seat-map ${isDense ? 'is-dense' : ''}`}
+        data-count={targets.length}
+        role="group"
+        aria-label={ariaLabel}
+      >
+        <div className="circular-seat-center" aria-hidden="true">
+          <span>{centerIcon}</span>
+          <small>{targets.length} mục tiêu</small>
+        </div>
+        {targets.map((tId, idx) => {
+          const targetP = players.find((p) => p.id === tId);
+          if (!targetP) return null;
 
-        const orderIdx = selectedIds.indexOf(tId);
-        const isSelected = orderIdx !== -1;
-        const angle = (idx / Math.max(1, targets.length)) * 2 * Math.PI - Math.PI / 2;
-        const radiusPct = isDense
-          ? idx % 2 === 0
-            ? 44
-            : 31
-          : targets.length > 10
-          ? 40
-          : 37;
-        const leftPct = 50 + Math.cos(angle) * radiusPct;
-        const topPct = 50 + Math.sin(angle) * radiusPct;
+          const orderIdx = selectedIds.indexOf(tId);
+          const isSelected = orderIdx !== -1;
+          const baseAngle = (idx / Math.max(1, targets.length)) * 2 * Math.PI - Math.PI / 2;
+          const angle = isRotated ? baseAngle + Math.PI : baseAngle;
+          const radiusPct = isDense
+            ? idx % 2 === 0
+              ? 44
+              : 31
+            : targets.length > 10
+            ? 40
+            : 37;
+          const leftPct = 50 + Math.cos(angle) * radiusPct;
+          const topPct = 50 + Math.sin(angle) * radiusPct;
 
-        const variantClass =
-          isSelected && variant !== 'default' ? `${variant}-selected` : '';
-        const orderLabel = showOrderBadge && isSelected ? `, đã chọn #${orderIdx + 1}` : '';
+          const variantClass =
+            isSelected && variant !== 'default' ? `${variant}-selected` : '';
+          const orderLabel = showOrderBadge && isSelected ? `, đã chọn #${orderIdx + 1}` : '';
 
-        return (
-          <button
-            type="button"
-            key={`${variant}-${tId}`}
-            disabled={disabled}
-            aria-pressed={isSelected}
-            aria-label={`Ghế #${targetP.seatIndex} ${targetP.name}${orderLabel}`}
-            onClick={() => onSelect(tId)}
-            style={{ left: `${leftPct.toFixed(2)}%`, top: `${topPct.toFixed(2)}%` }}
-            className={`circular-seat-node ${isSelected ? 'selected' : ''} ${variantClass}`}
-          >
-            {showOrderBadge && isSelected && (
-              <span className="circular-seat-order-badge" aria-hidden="true">
-                #{orderIdx + 1}
-              </span>
-            )}
-            <span className="circular-seat-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
-            <span className="circular-seat-name">{targetP.name}</span>
-          </button>
-        );
-      })}
+          return (
+            <button
+              type="button"
+              key={`${variant}-${tId}`}
+              disabled={disabled}
+              aria-pressed={isSelected}
+              aria-label={`Ghế #${targetP.seatIndex} ${targetP.name}${orderLabel}`}
+              onClick={() => onSelect(tId)}
+              style={{ left: `${leftPct.toFixed(2)}%`, top: `${topPct.toFixed(2)}%` }}
+              className={`circular-seat-node ${isSelected ? 'selected' : ''} ${variantClass}`}
+            >
+              {showOrderBadge && isSelected && (
+                <span className="circular-seat-order-badge" aria-hidden="true">
+                  #{orderIdx + 1}
+                </span>
+              )}
+              <span className="circular-seat-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
+              <span className="circular-seat-name">{targetP.name}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="circular-seat-orientation" aria-hidden="true">
+        <span>▲ Cạnh dưới / Cổng sạc</span>
+      </div>
     </div>
   );
 }
@@ -186,6 +204,14 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
   const [avatarError, setAvatarError] = useState(false);
   const [isPeekingRole, setIsPeekingRole] = useState(false);
   const [peekAvatarError, setPeekAvatarError] = useState(false);
+  const [isCooldownAfterAction, setIsCooldownAfterAction] = useState(false);
+  const [introSecondsLeft, setIntroSecondsLeft] = useState(0);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showQuickEndModal, setShowQuickEndModal] = useState(false);
+  const [isQuickEnding, setIsQuickEnding] = useState(false);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
+  const turnStartedAtRef = useRef<number>(Date.now());
+  const actionFinishedAtRef = useRef<number | null>(null);
   const submitSleepTimerRef = useRef<number | null>(null);
   const resultTimerRef = useRef<number | null>(null);
   const autoAdvanceTimerRef = useRef<number | null>(null);
@@ -286,8 +312,11 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
     setShowingResult(false);
   }, [privateView?.turnKey, privateView?.playerId]);
 
-  // Luôn reset hasSubmitted và showingResult mỗi khi sang lượt mới (kể cả lượt giả / vai đã chết)
+  // Luôn reset hasSubmitted, showingResult và cooldown mỗi khi sang lượt mới (kể cả lượt giả / vai đã chết)
   useEffect(() => {
+    turnStartedAtRef.current = Date.now();
+    actionFinishedAtRef.current = null;
+    setIsCooldownAfterAction(false);
     setHasSubmitted(false);
     if (resultTimerRef.current !== null) {
       window.clearTimeout(resultTimerRef.current);
@@ -295,6 +324,56 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
     }
     setShowingResult(false);
   }, [currentTurnInfo?.turnIndex, privateView?.turnKey]);
+
+  // Bộ đếm Night Intro Buffer (Single-device)
+  useEffect(() => {
+    const introUntil = publicView?.nightIntroUntil;
+    if (!isSingleDevice || !introUntil || publicView?.phase !== 'NIGHT') {
+      setIntroSecondsLeft(0);
+      return;
+    }
+
+    const updateIntro = () => {
+      const remainingMs = introUntil - Date.now();
+      if (remainingMs <= 0) {
+        setIntroSecondsLeft(0);
+        return false;
+      }
+      setIntroSecondsLeft(Math.ceil(remainingMs / 1000));
+      return true;
+    };
+
+    if (!updateIntro()) return;
+    const interval = window.setInterval(() => {
+      if (!updateIntro()) {
+        window.clearInterval(interval);
+      }
+    }, 250);
+
+    return () => window.clearInterval(interval);
+  }, [isSingleDevice, publicView?.nightIntroUntil, publicView?.phase]);
+
+  const isNightIntroActive = isSingleDevice && introSecondsLeft > 0;
+
+  useEffect(() => {
+    if (!showHeaderMenu) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setShowHeaderMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowHeaderMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showHeaderMenu]);
 
   // Reset trạng thái thao tác khi sang lượt mới / đổi người chơi (hỗ trợ cả Multi-device nhiều lượt trong cùng đêm)
   useEffect(() => {
@@ -366,22 +445,39 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
     }
   }, [isSingleDevice, canAct, showingResult]);
 
-  // Single-device Smart Fake Delay: Tự động chuyển lượt khi ở Sleep Overlay, luôn chờ đủ narration + 3.5s đệm
+  // Single-device Smart Fake Delay & Anti-timing-leak: giữ phân phối thời gian đồng đều giữa lượt thật và lượt giả
   useEffect(() => {
     if (autoAdvanceTimerRef.current !== null) {
       window.clearTimeout(autoAdvanceTimerRef.current);
       autoAdvanceTimerRef.current = null;
     }
 
-    if (!isSingleDevice || mode !== 'sleep' || publicView?.phase !== 'NIGHT') {
+    if (!isSingleDevice || mode !== 'sleep' || publicView?.phase !== 'NIGHT' || isNightIntroActive) {
       return;
     }
 
-    const introLeadMs = currentTurnInfo?.turnIndex === 1 && !hasSubmitted ? 4500 : 0;
-    const audioDurationMs = NARRATION_PROMPTS[currentTurnInfo?.turnKey ?? '']?.durationMs ?? 5000;
-    const delayMs = hasSubmitted
-      ? 1400
-      : introLeadMs + audioDurationMs + 3500 + Math.floor(Math.random() * 5501);
+    const turnKey = currentTurnInfo?.turnKey ?? '';
+    const isInvestigationTurn = INVESTIGATION_TURN_KEYS.has(turnKey);
+    const audioDurationMs = NARRATION_PROMPTS[turnKey]?.durationMs ?? 5000;
+
+    let delayMs: number;
+    if (hasSubmitted) {
+      const floorPostNarrationMs = isInvestigationTurn
+        ? 12000 + Math.floor(Math.random() * 4001)
+        : 9000 + Math.floor(Math.random() * 4001);
+      const elapsedSinceTurnStart = Date.now() - turnStartedAtRef.current;
+      const remainingFloorMs = Math.max(0, audioDurationMs + floorPostNarrationMs - elapsedSinceTurnStart);
+      const elapsedSinceAction = Date.now() - (actionFinishedAtRef.current ?? Date.now());
+      const remainingCooldownMs = Math.max(0, 3500 - elapsedSinceAction);
+      delayMs = Math.max(remainingFloorMs, remainingCooldownMs);
+    } else {
+      const introLeadMs =
+        currentTurnInfo?.turnIndex === 1 && !publicView?.nightIntroUntil ? 4500 : 0;
+      const postNarrationWaitMs = isInvestigationTurn
+        ? 12000 + Math.floor(Math.random() * 4001)
+        : 7500 + Math.floor(Math.random() * 4501);
+      delayMs = introLeadMs + audioDurationMs + postNarrationWaitMs;
+    }
 
     autoAdvanceTimerRef.current = window.setTimeout(() => {
       autoAdvanceTimerRef.current = null;
@@ -400,6 +496,8 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
     isSingleDevice,
     mode,
     publicView?.phase,
+    publicView?.nightIntroUntil,
+    isNightIntroActive,
     currentTurnInfo?.turnIndex,
     currentTurnInfo?.turnKey,
     hasSubmitted,
@@ -687,19 +785,30 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
         }
         resultTimerRef.current = window.setTimeout(() => {
           resultTimerRef.current = null;
+          if (isSingleDevice) {
+            actionFinishedAtRef.current = Date.now();
+            setIsCooldownAfterAction(true);
+          }
           setShowingResult(false);
           setMode('sleep');
           setNotice('');
-        }, 5000);
+        }, 8000);
       } else {
         if (submitSleepTimerRef.current !== null) {
           window.clearTimeout(submitSleepTimerRef.current);
         }
-        submitSleepTimerRef.current = window.setTimeout(() => {
-          submitSleepTimerRef.current = null;
+        if (isSingleDevice) {
+          actionFinishedAtRef.current = Date.now();
+          setIsCooldownAfterAction(true);
           setMode('sleep');
           setNotice('');
-        }, 1000);
+        } else {
+          submitSleepTimerRef.current = window.setTimeout(() => {
+            submitSleepTimerRef.current = null;
+            setMode('sleep');
+            setNotice('');
+          }, 1000);
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi khi gửi hành động';
@@ -712,6 +821,10 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
       window.clearTimeout(resultTimerRef.current);
       resultTimerRef.current = null;
     }
+    if (isSingleDevice) {
+      actionFinishedAtRef.current = Date.now();
+      setIsCooldownAfterAction(true);
+    }
     setShowingResult(false);
     setMode('sleep');
     setNotice('');
@@ -720,6 +833,10 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
   const handleTapToAct = () => {
     if (!isSingleDevice) {
       setMode('action');
+      return;
+    }
+
+    if (isCooldownAfterAction || isNightIntroActive) {
       return;
     }
 
@@ -739,6 +856,36 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
         sleepNoticeTimerRef.current = null;
         setSleepNotice('');
       }, 2000);
+    }
+  };
+
+  const handleRevealAndEnd = async () => {
+    if (isQuickEnding) return;
+    setIsQuickEnding(true);
+    setNotice('');
+    try {
+      await actions.endGameToSummary?.();
+      setShowQuickEndModal(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể kết thúc ván lúc này';
+      setNotice(msg);
+    } finally {
+      setIsQuickEnding(false);
+    }
+  };
+
+  const handleAbortToLobby = async () => {
+    if (isQuickEnding) return;
+    setIsQuickEnding(true);
+    setNotice('');
+    try {
+      await actions.abortGameToLobby?.();
+      setShowQuickEndModal(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể đưa cả bàn về phòng chờ';
+      setNotice(msg);
+    } finally {
+      setIsQuickEnding(false);
     }
   };
 
@@ -795,34 +942,48 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
   const isCupidValid = cupidTargets.length === 2 && cupidTargets[0] !== cupidTargets[1];
   const isHoodlumValid = hoodlumTargets.length === 2 && hoodlumTargets[0] !== hoodlumTargets[1];
   const isWolfDoubleValid = wolfTargets.length === 2 && wolfTargets[0] !== wolfTargets[1];
-  const canConfirm = isWolfDoubleKill
+  const canConfirm = isMason
+    ? true
+    : isWolfDoubleKill
     ? isWolfDoubleValid
-    : isWolfSkipDisabled
+    : isWolfPack
     ? selectedTargetId !== null || wolfTargets.length > 0
-    : isWitch && isWitchHeal && isWitchSingleVictimChoice
-    ? Boolean(validWitchHealTargetId)
+    : isWitch
+    ? isWitchHeal
+      ? !isWitchSingleVictimChoice || Boolean(validWitchHealTargetId)
+      : Boolean(witchPoisonTargetId)
     : isCupid
     ? isCupidValid
     : isHoodlum
     ? isHoodlumValid
     : isPiedPiper
     ? isPiedPiperValid
-    : isDoppelganger || isCultLeader
-    ? Boolean(selectedTargetId)
-    : isWildChild || isDireWolf || isBigBadWolf || isAuraSeer || isPi || isSpellcaster
-    ? Boolean(selectedTargetId)
     : isWolfAccursed
     ? isCurseAction !== null || !accursedVictim
     : isTroublemaker
     ? isTroublemakerActive !== null
     : isFox
     ? Boolean(privateView?.skills?.foxLostPower) || isFoxSkip || Boolean(selectedTargetId)
-    : true;
+    : Boolean(selectedTargetId);
 
   return (
     <main className={`night-screen app-page ${mode === 'sleep' ? 'night-sleep mode-sleep' : ''}`}>
       {/* Compact Host Control Bar cho Host kiêm Người chơi */}
       {isPlayerHost && <CompactHostControlBar />}
+
+      {/* Night Intro Buffer Overlay (Single-device) */}
+      {isNightIntroActive && (
+        <div className="night-intro-overlay" role="status" aria-live="polite">
+          <div className="stealth-moon-wrap" aria-hidden="true">
+            <div className="stealth-moon-ring" />
+            <div className="sleep-icon">☾</div>
+          </div>
+          <h1 className="night-intro-title">
+            Đặt điện thoại ngửa giữa bàn · Cả làng nhắm mắt đi ngủ
+          </h1>
+          <p className="night-intro-countdown">{introSecondsLeft} giây</p>
+        </div>
+      )}
 
       <header className="screen-header night-header">
         <div className="phase-label">
@@ -833,26 +994,57 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
           </span>
         </div>
 
-        {!isSingleDevice && canAct && (
-          <nav aria-label="Chế độ ban đêm" className="segmented-control">
-            <button
-              type="button"
-              aria-pressed={mode === 'sleep'}
-              onClick={() => setMode('sleep')}
-              className={mode === 'sleep' ? 'segment active' : 'segment'}
-            >
-              Đêm tối
-            </button>
-            <button
-              type="button"
-              aria-pressed={mode === 'action'}
-              onClick={() => setMode('action')}
-              className={mode === 'action' ? 'segment active' : 'segment'}
-            >
-              Hành động
-            </button>
-          </nav>
-        )}
+        <div className="night-header-actions">
+          {!isSingleDevice && canAct && (
+            <nav aria-label="Chế độ ban đêm" className="segmented-control">
+              <button
+                type="button"
+                aria-pressed={mode === 'sleep'}
+                onClick={() => setMode('sleep')}
+                className={mode === 'sleep' ? 'segment active' : 'segment'}
+              >
+                Đêm tối
+              </button>
+              <button
+                type="button"
+                aria-pressed={mode === 'action'}
+                onClick={() => setMode('action')}
+                className={mode === 'action' ? 'segment active' : 'segment'}
+              >
+                Hành động
+              </button>
+            </nav>
+          )}
+          {isSingleDevice && state.isHost && (
+            <div className="night-more-menu-wrap" ref={headerMenuRef}>
+              <button
+                type="button"
+                className="night-more-menu-btn"
+                aria-haspopup="menu"
+                aria-expanded={showHeaderMenu}
+                aria-label="Tùy chọn quản trò"
+                onClick={() => setShowHeaderMenu((prev) => !prev)}
+              >
+                ⋮
+              </button>
+              {showHeaderMenu && (
+                <div className="night-more-dropdown" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="night-more-dropdown-item is-danger"
+                    onClick={() => {
+                      setShowHeaderMenu(false);
+                      setShowQuickEndModal(true);
+                    }}
+                  >
+                    Kết thúc ván...
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </header>
 
       {/* 1. Màn hình Đêm Tĩnh Lặng */}
@@ -895,21 +1087,28 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
                 </button>
               )}
 
+              {isCooldownAfterAction && (
+                <p className="sleep-turn-confirmation" role="status">
+                  ✓ Đã ghi nhận · Hãy đặt máy xuống và nhắm mắt lại
+                </p>
+              )}
+
               <button
                 type="button"
                 className="jump-to-action-btn neutral-tap-btn"
+                disabled={isCooldownAfterAction}
                 onClick={handleTapToAct}
               >
-                Chạm để thực hiện lượt
+                {isCooldownAfterAction ? 'Đang chờ cả làng nhắm mắt...' : 'Chạm để thực hiện lượt'}
               </button>
 
-              {sleepNotice && (
+              {sleepNotice && !isCooldownAfterAction && (
                 <p className="sleep-turn-notice" role="status">
                   {sleepNotice}
                 </p>
               )}
 
-              <p className="sleep-face-down-hint">Hãy úp điện thoại xuống bàn</p>
+              <p className="sleep-face-down-hint">Đặt điện thoại ngửa giữa bàn · Mọi người nhắm mắt</p>
             </>
           ) : (
             <>
@@ -1144,7 +1343,7 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
                   className="primary-confirm-btn"
                   onClick={handleDismissResult}
                 >
-                  <span>Đã nhớ · Úp màn hình</span>
+                  <span>{isSingleDevice ? 'Đã nhớ · Nhắm mắt lại' : 'Đã nhớ · Úp màn hình'}</span>
                 </button>
               </div>
             </div>
@@ -1604,43 +1803,32 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
               </div>
 
               {isSingleDevice ? (
-                <div className="circular-seat-map" role="group" aria-label="Sơ đồ ghế chọn mục tiêu">
-                  <div className="circular-seat-center" aria-hidden="true">
-                    <span>{isWolfPack ? '🐺' : '🎯'}</span>
-                    <small>{validTargets.length} mục tiêu</small>
-                  </div>
-                  {validTargets.map((tId, idx) => {
-                    const targetP = publicView?.players.find((p) => p.id === tId);
-                    if (!targetP) return null;
-                    const isSelected = isWolfDoubleKill
-                      ? wolfTargets.includes(tId)
+                <CircularSeatMap
+                  targets={validTargets}
+                  players={publicView?.players ?? []}
+                  selectedIds={
+                    isWolfDoubleKill
+                      ? wolfTargets
                       : isCupid
-                      ? cupidTargets.includes(tId)
+                      ? cupidTargets
                       : isHoodlum
-                      ? hoodlumTargets.includes(tId)
+                      ? hoodlumTargets
                       : isPiedPiper
-                      ? piedPiperTargets.includes(tId)
-                      : selectedTargetId === tId;
-                    const angle = (idx / Math.max(1, validTargets.length)) * 2 * Math.PI - Math.PI / 2;
-                    const radiusPct = validTargets.length > 10 ? 40 : 37;
-                    const leftPct = 50 + Math.cos(angle) * radiusPct;
-                    const topPct = 50 + Math.sin(angle) * radiusPct;
-                    return (
-                      <button
-                        type="button"
-                        key={tId}
-                        aria-pressed={isSelected}
-                        aria-label={`Ghế #${targetP.seatIndex} ${targetP.name}`}
-                        onClick={() => handleSelectTarget(tId)}
-                        style={{ left: `${leftPct.toFixed(2)}%`, top: `${topPct.toFixed(2)}%` }}
-                        className={`circular-seat-node ${isSelected ? 'selected' : ''}`}
-                      >
-                        <span className="circular-seat-num">#{String(targetP.seatIndex).padStart(2, '0')}</span>
-                        <span className="circular-seat-name">{targetP.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                      ? piedPiperTargets
+                      : selectedTargetId
+                      ? [selectedTargetId]
+                      : []
+                  }
+                  showOrderBadge={isWolfDoubleKill || isCupid || isHoodlum || isPiedPiper}
+                  centerIcon={
+                    isWolfPack ? '🐺' : isCupid ? '💘' : isPiedPiper ? '🎵' : '🎯'
+                  }
+                  ariaLabel="Sơ đồ ghế chọn mục tiêu"
+                  variant={
+                    isCupid || isHoodlum ? 'hoodlum' : isPiedPiper ? 'piedpiper' : 'default'
+                  }
+                  onSelect={handleSelectTarget}
+                />
               ) : (
                 <div className="target-grid">
                   {validTargets.map((tId) => {
@@ -1794,10 +1982,12 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
                       ? isWolfDoubleValid
                         ? 'XÁC NHẬN CẮN 2 NẠN NHÂN'
                         : `CHỌN ĐỦ 2 NẠN NHÂN (${wolfTargets.length}/2)`
-                      : isWolfSkipDisabled && selectedTargetId === null && wolfTargets.length === 0
+                      : isWolfPack && selectedTargetId === null && wolfTargets.length === 0
                       ? 'CHỌN 1 NẠN NHÂN ĐỂ CẮN'
                       : isWitch && isWitchHeal && isWitchSingleVictimChoice && !validWitchHealTargetId
                       ? 'CHỌN 1 NẠN NHÂN ĐỂ CỨU'
+                      : isWitch && !isWitchHeal && !witchPoisonTargetId
+                      ? 'CHỌN BÌNH CỨU HOẶC ĐỘC'
                       : isCupid
                       ? isCupidValid
                         ? 'XÁC NHẬN GHÉP ĐÔI'
@@ -1829,8 +2019,12 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
                         ? `XÁC NHẬN THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
                         : `CHỌN ĐỦ NGƯỜI THÔI MIÊN (${piedPiperTargets.length}/${maxPiedPiperTargets})`
                       : isCultLeader
-                      ? 'XÁC NHẬN KẾT NẠP TÍN ĐỒ'
-                      : 'XÁC NHẬN HÀNH ĐỘNG'}
+                      ? selectedTargetId
+                        ? 'XÁC NHẬN KẾT NẠP TÍN ĐỒ'
+                        : 'CHỌN 1 NGƯỜI CHƠI'
+                      : selectedTargetId
+                      ? 'XÁC NHẬN HÀNH ĐỘNG'
+                      : 'CHỌN 1 NGƯỜI CHƠI'}
                   </span>
                 </button>
 
@@ -1864,6 +2058,14 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
         <span>•</span>
         <span>KHÔNG GÂY TIẾNG ĐỘNG</span>
       </footer>
+
+      <QuickEndGameModal
+        isOpen={showQuickEndModal}
+        onClose={() => setShowQuickEndModal(false)}
+        onRevealAndEnd={handleRevealAndEnd}
+        onAbortToLobby={handleAbortToLobby}
+        isBusy={isQuickEnding}
+      />
     </main>
   );
 }

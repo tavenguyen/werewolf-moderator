@@ -75,7 +75,7 @@ function AppContent() {
     setScreen((currentScreen) => {
       if (phase === 'LOBBY') {
         if (
-          (currentScreen !== 'home' && currentScreen !== 'lobby' && currentScreen !== 'host') ||
+          (currentScreen !== 'home' && currentScreen !== 'lobby') ||
           (currentScreen === 'home' && isAutoResumed)
         ) {
           return 'lobby';

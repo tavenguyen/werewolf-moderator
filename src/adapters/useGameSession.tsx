@@ -38,6 +38,9 @@ export interface GameSessionContextValue {
     hostExtendTime: () => Promise<void>;
     hostEmergencyEliminate: (targetPlayerId: PlayerId) => Promise<void>;
     hostRematch: () => Promise<void>;
+    abortGameToLobby: () => Promise<void>;
+    endGameToSummary: () => Promise<void>;
+    proceedToNextNight: () => Promise<void>;
     setLocalActivePlayer: (playerId: PlayerId) => void;
     advanceLocalTurn: () => void;
     addOfflinePlayer: (name: string) => void;
@@ -276,6 +279,23 @@ export function GameSessionProvider({
       hostRematch: async () => {
         audioController.stopAll();
         return activeAdapter.hostRematch();
+      },
+      abortGameToLobby: async () => {
+        audioController.stopAll();
+        if (activeAdapter.abortGameToLobby) {
+          return activeAdapter.abortGameToLobby();
+        }
+      },
+      endGameToSummary: async () => {
+        audioController.stopAll();
+        if (activeAdapter.endGameToSummary) {
+          return activeAdapter.endGameToSummary();
+        }
+      },
+      proceedToNextNight: async () => {
+        if (activeAdapter.proceedToNextNight) {
+          return activeAdapter.proceedToNextNight();
+        }
       },
       setLocalActivePlayer: (playerId: PlayerId) => {
         if (activeAdapter.setLocalActivePlayer) {

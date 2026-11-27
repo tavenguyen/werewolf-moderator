@@ -4,7 +4,6 @@ import {
   executeHunterShot,
   executeMayorSuccession,
   executeNightPhase,
-  createRematchGameState,
   DEFAULT_ROOM_SETTINGS,
 } from '../engine/gameEngine';
 import { processDeathCascade } from '../engine/deathCascade';
@@ -30,7 +29,7 @@ import type {
 } from './types';
 import type { PlayerId, RoomSettings } from '../engine/types';
 import type { RoomPlayer, RoomState } from '../server/types';
-import { audioController } from '../audio/audioController';
+import { audioController, NARRATION_PROMPTS } from '../audio/audioController';
 
 const LOCAL_STORAGE_KEY = 'werewolf_local_game_session';
 
@@ -42,6 +41,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   private nextPlayerIdSeq: number = 1;
   private dayTimerInterval: number | null = null;
   private nightIntroTimer: ReturnType<typeof setTimeout> | null = null;
+  private nightIntroUntil: number | null = null;
+  private pendingDayVerdict: { headline: string; detail: string; isPendingNextNight: boolean } | null = null;
 
   constructor() {
     this.roomState = this.createEmptyRoomState('7290', false);
@@ -113,7 +114,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         isPaused: false,
         phase: 'LOBBY',
       },
-      publicHistoryLogs: ['Phòng chơi 1 máy dùng chung offline đã sẵn sàng.'],
+      publicHistoryLogs: [],
     };
   }
 
@@ -131,12 +132,24 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   private emitState(shouldPersist = true): void {
     const publicView = createPublicRoomView(this.roomState);
+    publicView.dayVerdict = this.pendingDayVerdict;
+    publicView.nightIntroUntil = this.nightIntroUntil;
     const hostView = createHostBoardView(this.roomState);
-    const postGameView = createPostGameView(this.roomState);
+    let postGameView = createPostGameView(this.roomState);
+    if (postGameView && !postGameView.winOutcome) {
+      postGameView = {
+        ...postGameView,
+        winOutcome: {
+          winner: 'DRAW',
+          reason: 'Quản trò đã kết thúc ván chơi.',
+          winningPlayerIds: [],
+        },
+      };
+    }
 
     let privateView = null;
     const playerId = this.activeLocalPlayerId ?? Array.from(this.roomState.players.keys())[0];
-    if (playerId) {
+    if (this.roomState.gameState && playerId) {
       privateView = createPlayerPrivateView(this.roomState, playerId);
     }
 
@@ -196,6 +209,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         foxInvestigationResult: this.roomState.foxInvestigationResult,
         piInvestigationResult: this.roomState.piInvestigationResult,
         publicHistoryLogs: this.roomState.publicHistoryLogs,
+        pendingDayVerdict: this.pendingDayVerdict,
         savedAt: Date.now(),
         expiresAt: Date.now() + 3 * 60 * 60 * 1000, // Hạn 3 giờ
       };
@@ -239,11 +253,13 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
       this.clearNightIntroTimer();
       this.clearDayTimer();
+      this.nightIntroUntil = null;
+      this.pendingDayVerdict = data.pendingDayVerdict ?? null;
 
       this.roomState.roomCode = data.roomCode;
       this.roomState.gameGeneration = data.gameGeneration || 1;
       this.roomState.settings = data.settings || { ...DEFAULT_ROOM_SETTINGS };
-      this.roomState.gameState = data.gameState;
+      this.roomState.gameState = data.gameState ?? null;
       this.roomState.currentNightTurnIndex = data.currentNightTurnIndex || 0;
       this.roomState.nightTurnPlan = data.nightTurnPlan || [];
       this.roomState.nightActionsAccumulator = data.nightActionsAccumulator || {};
@@ -294,7 +310,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         (restoredPhase === 'DAY_DISCUSS' ||
           restoredPhase === 'DAY_MAYOR_ELECTION' ||
           restoredPhase === 'DAY_RUNOFF') &&
-        !this.roomState.timers.isPaused
+        !this.roomState.timers.isPaused &&
+        !this.pendingDayVerdict?.isPendingNextNight
       ) {
         this.startLocalDayTimer(true);
       }
@@ -425,6 +442,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       clearTimeout(this.nightIntroTimer);
       this.nightIntroTimer = null;
     }
+    this.nightIntroUntil = null;
   }
 
   private startNightIntroAndFirstTurn(): void {
@@ -432,28 +450,55 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     audioController.resetLastPlayedTurn();
     audioController.playNightBGM();
 
+    const nightStartPromptDuration = NARRATION_PROMPTS.night_start?.durationMs ?? 5000;
+    const introDurationMs = Math.max(5000, nightStartPromptDuration) + 3500;
+    this.nightIntroUntil = Date.now() + introDurationMs;
+
     let announced = false;
-    const announceFirst = () => {
+    let audioDone = false;
+    let bufferDone = false;
+
+    const tryAnnounceFirst = () => {
       if (announced) return;
+      if (!audioDone || !bufferDone) return;
       announced = true;
       this.clearNightIntroTimer();
       if (
         this.roomState.gameState?.phase === 'NIGHT' &&
         this.roomState.currentNightTurnIndex === 0
       ) {
+        this.emitState(false);
         this.announceCurrentNightTurn();
       }
     };
 
-    audioController.playTurnNarration('night_start', () => {
-      if (typeof window === 'undefined' || typeof window.Audio === 'undefined') {
-        announceFirst();
-      }
-    });
+    const forceFinish = () => {
+      audioDone = true;
+      bufferDone = true;
+      tryAnnounceFirst();
+    };
 
     if (typeof window !== 'undefined') {
-      this.nightIntroTimer = setTimeout(announceFirst, 4500);
+      this.nightIntroTimer = setTimeout(forceFinish, introDurationMs);
     }
+
+    audioController.playTurnNarration('night_start', () => {
+      audioDone = true;
+      if (announced) return;
+      if (typeof window === 'undefined' || typeof window.Audio === 'undefined') {
+        bufferDone = true;
+        tryAnnounceFirst();
+        return;
+      }
+      if (this.nightIntroTimer !== null) {
+        clearTimeout(this.nightIntroTimer);
+        this.nightIntroTimer = null;
+      }
+      this.nightIntroTimer = setTimeout(() => {
+        bufferDone = true;
+        tryAnnounceFirst();
+      }, 3500);
+    });
   }
 
   private announceCurrentNightTurn(): void {
@@ -737,7 +782,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.clearNightIntroTimer();
 
     audioController.stopNightBGM();
-    audioController.playTurnNarration('night_end');
 
     const { nextState, winOutcome } = executeNightPhase(
       this.roomState.gameState,
@@ -756,8 +800,17 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       (d) => d.roundNumber === this.roomState.gameState!.roundNumber && d.phase === 'NIGHT'
     );
     if (roundDeaths.length > 0) {
+      const victimNames = roundDeaths
+        .map(
+          (d) =>
+            this.roomState.players.get(d.playerId)?.name ??
+            this.roomState.gameState!.players.find((p) => p.id === d.playerId)?.name ??
+            d.playerId
+        )
+        .filter(Boolean)
+        .join(', ');
       this.roomState.publicHistoryLogs.push(
-        `Trời đã sáng. Đêm qua có ${roundDeaths.length} người ngã xuống!`
+        `Trời đã sáng. Đêm qua ${victimNames} đã ngã xuống!`
       );
     } else {
       this.roomState.publicHistoryLogs.push('Trời đã sáng. Một đêm bình yên, không ai ngã xuống!');
@@ -775,8 +828,28 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.gameState.phase === 'DAY_DISCUSS' ||
       this.roomState.gameState.phase === 'DAY_MAYOR_ELECTION'
     ) {
-      this.startLocalDayTimer();
+      this.startLocalDayTimer(false, undefined, true);
     }
+
+    const resolvedRound = this.roomState.gameState.roundNumber;
+    const resolvedGeneration = this.roomState.gameGeneration;
+    const resolvedPhase = this.roomState.gameState.phase;
+    audioController.playTurnNarration('night_end', () => {
+      const current = this.roomState.gameState;
+      if (
+        !current ||
+        this.roomState.gameGeneration !== resolvedGeneration ||
+        current.roundNumber !== resolvedRound ||
+        current.phase !== resolvedPhase
+      ) {
+        return;
+      }
+      if (current.phase === 'DAY_MAYOR_ELECTION') {
+        audioController.playTurnNarration('mayor_election');
+      } else if (current.phase === 'DAY_DISCUSS') {
+        audioController.playTurnNarration('day_discuss');
+      }
+    });
 
     this.emitState();
   }
@@ -788,7 +861,11 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     }
   }
 
-  private startLocalDayTimer(isResume: boolean = false, customDurationSec?: number): void {
+  private startLocalDayTimer(
+    isResume: boolean = false,
+    customDurationSec?: number,
+    skipNarration: boolean = false
+  ): void {
     this.clearDayTimer();
 
     const durationSec = customDurationSec ?? this.roomState.settings.dayDiscussionSeconds ?? 180;
@@ -800,14 +877,19 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.timers.remainingBeforePause = undefined;
 
       // DAY_RUNOFF never locks voting
-      const isRunoff = this.roomState.gameState?.phase === 'DAY_RUNOFF';
+      const phase = this.roomState.gameState?.phase;
+      const isRunoff = phase === 'DAY_RUNOFF';
       if (this.roomState.gameState?.dayState) {
         this.roomState.gameState.dayState.voteLocked = !isRunoff && lockSec > 0;
         this.roomState.gameState.dayState.voteLockRemainingSeconds = isRunoff ? 0 : lockSec;
       }
 
-      if (!isRunoff) {
-        audioController.playTurnNarration('day_discuss');
+      if (!isRunoff && !skipNarration) {
+        if (phase === 'DAY_MAYOR_ELECTION') {
+          audioController.playTurnNarration('mayor_election');
+        } else {
+          audioController.playTurnNarration('day_discuss');
+        }
       }
     } else if (this.roomState.timers.deadlineAt === null) {
       this.roomState.timers.deadlineAt = Date.now() + durationSec * 1000;
@@ -1076,20 +1158,83 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.pendingDayVerdict = null;
       this.clearDayTimer();
       this.clearNightIntroTimer();
     } else if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+      this.pendingDayVerdict = null;
       if (this.roomState.gameState.pendingHunterShotPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      this.pendingDayVerdict = null;
       if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'NIGHT') {
-      this.startNewLocalNight();
+      // Giữ ở màn hình Ban Ngày để mọi người đọc kết quả trước khi bấm sang Đêm tiếp theo
+      this.clearDayTimer();
+      this.roomState.gameState.phase = 'DAY_DISCUSS';
+      this.roomState.timers.deadlineAt = null;
+      this.roomState.timers.isPaused = false;
+      this.roomState.timers.phase = 'DAY_DISCUSS';
+
+      if (targetsToExecute.length === 0) {
+        this.pendingDayVerdict = {
+          headline: 'Không ai bị treo cổ',
+          detail: 'Hòa phiếu hoặc bỏ phiếu trắng — cả làng bình an bước vào đêm mới.',
+          isPendingNextNight: true,
+        };
+      } else {
+        const deadParts: string[] = [];
+        const revealParts: string[] = [];
+        for (const tId of targetsToExecute) {
+          const p = nextState.players.find((pl) => pl.id === tId);
+          if (!p) continue;
+          if (!p.isAlive) {
+            const roleName = ROLES_BY_ID[p.roleId]?.nameVi ?? p.roleId;
+            deadParts.push(
+              this.roomState.settings.revealOnDeath ? `${p.name} (${roleName})` : p.name
+            );
+          } else if (p.roleId === 'prince') {
+            revealParts.push(`${p.name} lật bài Hoàng tử thoát chết!`);
+          } else if (p.roleId === 'village_idiot') {
+            revealParts.push(`${p.name} lật bài Thằng ngốc thoát chết nhưng mất quyền bỏ phiếu!`);
+          }
+        }
+
+        const headline =
+          deadParts.length > 0
+            ? `${deadParts.join(', ')} đã bị treo cổ`
+            : revealParts.length > 0
+              ? 'Lật bài thoát chết!'
+              : 'Không ai bị treo cổ';
+
+        const detailParts: string[] = [];
+        if (deadParts.length > 0) {
+          detailParts.push(`${deadParts.join(', ')} đã bị loại khỏi làng.`);
+        }
+        if (revealParts.length > 0) {
+          detailParts.push(revealParts.join(' '));
+        }
+
+        this.pendingDayVerdict = {
+          headline,
+          detail:
+            detailParts.join(' ') || 'Đã có kết quả biểu quyết ban ngày. Sẵn sàng sang đêm mới.',
+          isPendingNextNight: true,
+        };
+      }
     }
 
+    this.emitState();
+  }
+
+  public async proceedToNextNight(): Promise<void> {
+    if (!this.roomState.gameState) return;
+    this.pendingDayVerdict = null;
+    this.roomState.gameState.phase = 'NIGHT';
+    this.startNewLocalNight();
     this.emitState();
   }
 
@@ -1309,54 +1454,67 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.emitState();
   }
 
-  public async hostRematch(): Promise<void> {
+  private resetRoomToLobby(): void {
     this.clearNightIntroTimer();
     this.clearDayTimer();
-    if (!this.roomState.gameState) return;
+    audioController.stopAll();
 
-    const count = this.roomState.players.size;
-    const customDeckRoles: string[] = [];
-    if (this.roomState.settings.customDeck) {
-      for (const [roleId, qty] of Object.entries(this.roomState.settings.customDeck)) {
-        const n = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
-        for (let i = 0; i < n; i++) {
-          customDeckRoles.push(roleId);
-        }
-      }
+    this.roomState.gameState = null;
+    this.roomState.gameGeneration += 1;
+    for (const p of this.roomState.players.values()) {
+      p.isAlive = true;
     }
 
-    const baseRoles =
-      customDeckRoles.length === count && customDeckRoles.length > 0
-        ? customDeckRoles
-        : (getSmartPreset(count)?.roles ?? []);
-    const roles = [...baseRoles].sort(() => Math.random() - 0.5);
-
-    this.roomState.gameState.settings = { ...this.roomState.settings };
-    this.roomState.gameState = createRematchGameState(this.roomState.gameState, roles);
-    this.roomState.gameState.phase = 'FIRST_NIGHT_SETUP';
-    this.roomState.gameGeneration += 1;
     this.roomState.currentNightTurnIndex = 0;
     this.roomState.nightTurnPlan = [];
     this.roomState.nightActionsAccumulator = {};
     this.roomState.nightActionAcks.clear();
-    this.roomState.timers = {
-      timerId: null,
-      deadlineAt: null,
-      serverCutoffAt: null,
-      isPaused: false,
-      phase: 'FIRST_NIGHT_SETUP',
-    };
-    this.roomState.publicHistoryLogs = ['Bắt đầu ván tái đấu mới!'];
+    this.roomState.currentNightSeed = undefined;
+    this.roomState.publicHistoryLogs = [];
     this.roomState.seerInvestigationResult = undefined;
     this.roomState.sorcererInvestigationResult = undefined;
     this.roomState.auraInvestigationResult = undefined;
     this.roomState.foxInvestigationResult = undefined;
     this.roomState.piInvestigationResult = undefined;
     this.roomState.lastVoteTally = undefined;
+    this.roomState.timers = {
+      timerId: null,
+      deadlineAt: null,
+      serverCutoffAt: null,
+      isPaused: false,
+      phase: 'LOBBY',
+    };
+
+    this.pendingDayVerdict = null;
+    this.nightIntroUntil = null;
     const playersList = Array.from(this.roomState.players.values()).sort(
       (a, b) => a.seatIndex - b.seatIndex
     );
-    this.activeLocalPlayerId = playersList[0]?.id;
-    this.emitState();
+    this.activeLocalPlayerId = this.roomState.host.playerId ?? playersList[0]?.id;
+
+    this.state.postGameView = null;
+    this.state.privateView = null;
+    this.emitState(true);
+  }
+
+  public async hostRematch(): Promise<void> {
+    this.resetRoomToLobby();
+  }
+
+  public async abortGameToLobby(): Promise<void> {
+    this.resetRoomToLobby();
+  }
+
+  public async endGameToSummary(): Promise<void> {
+    this.clearNightIntroTimer();
+    this.clearDayTimer();
+    audioController.stopNightBGM();
+    this.pendingDayVerdict = null;
+    this.nightIntroUntil = null;
+
+    if (this.roomState.gameState) {
+      this.roomState.gameState.phase = 'GAME_OVER';
+    }
+    this.emitState(true);
   }
 }

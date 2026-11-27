@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { DEFAULT_ROOM_SETTINGS, createInitialGameState, createRematchGameState } from '../engine/gameEngine';
+import { DEFAULT_ROOM_SETTINGS, createInitialGameState } from '../engine/gameEngine';
 import { getSmartPreset } from '../engine/presets';
 import { CommandQueue } from './commandQueue';
 import type { PlayerId, RoomSettings } from '../engine/types';
@@ -496,7 +496,8 @@ export class RoomService {
 
   /**
    * Tái đấu (Rematch):
-   * Giữ nguyên roster, tokens, tăng gameGeneration, chia role mới.
+   * Đưa phòng về lại LOBBY để Host/người chơi có thể chỉnh lại cấu hình trước khi bắt đầu ván mới.
+   * Giữ nguyên roster, tokens, settings (bao gồm customDeck), tăng gameGeneration và hồi sinh toàn bộ players.
    */
   public rematch(roomCode: string, hostToken: string): void {
     const room = this.rooms.get(roomCode);
@@ -506,36 +507,7 @@ export class RoomService {
       throw new Error('Chỉ có thể tái đấu khi ván chơi đã kết thúc (GAME_OVER).');
     }
 
-    const playerCount = room.players.size;
-    const customDeckRoles: string[] = [];
-    if (room.settings.customDeck) {
-      for (const [roleId, qty] of Object.entries(room.settings.customDeck)) {
-        const n = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
-        for (let i = 0; i < n; i++) {
-          customDeckRoles.push(roleId);
-        }
-      }
-    }
-
-    let roleIds: string[];
-    if (customDeckRoles.length === playerCount && customDeckRoles.length > 0) {
-      roleIds = [...customDeckRoles];
-    } else {
-      const preset = getSmartPreset(playerCount);
-      if (!preset) {
-        throw new Error(`Không tìm thấy preset cấu hình vai trò cho ${playerCount} người chơi.`);
-      }
-      roleIds = [...preset.roles];
-    }
-
-    for (let i = roleIds.length - 1; i > 0; i--) {
-      const j = crypto.randomInt(0, i + 1);
-      const temp = roleIds[i];
-      roleIds[i] = roleIds[j];
-      roleIds[j] = temp;
-    }
-
-    // Reset các biến vòng lặp đêm
+    // Reset các biến vòng lặp đêm/ngày & kết quả điều tra
     room.currentNightTurnIndex = 0;
     room.nightTurnPlan = [];
     room.nightActionsAccumulator = {};
@@ -549,19 +521,20 @@ export class RoomService {
     room.foxInvestigationResult = undefined;
     room.piInvestigationResult = undefined;
 
-    // Reset timers
+    // Reset timers về trạng thái LOBBY
     if (room.timers.timerId) {
       clearTimeout(room.timers.timerId);
-      room.timers.timerId = null;
     }
-    room.timers.deadlineAt = null;
-    room.timers.serverCutoffAt = null;
-    room.timers.isPaused = false;
+    room.timers = {
+      timerId: null,
+      deadlineAt: null,
+      serverCutoffAt: null,
+      isPaused: false,
+      phase: 'LOBBY',
+    };
 
-    // Khởi tạo GameState mới qua pure function engine
-    room.gameState.settings = { ...room.settings };
-    room.gameState = createRematchGameState(room.gameState, roleIds);
-    room.gameState.phase = 'NIGHT';
+    // Trả phòng về LOBBY (gameState = null), giữ nguyên room.settings và tăng thế hệ ván
+    room.gameState = null;
     room.gameGeneration += 1;
 
     // Đánh dấu lại trạng thái sống của toàn bộ players

@@ -74,6 +74,8 @@ export interface GameSessionAdapter {
   hostExtendTime(): Promise<void>;
   hostEmergencyEliminate(targetPlayerId: PlayerId): Promise<void>;
   hostRematch(): Promise<void>;
+  abortGameToLobby?(): Promise<void>;
+  endGameToSummary?(): Promise<void>;
 
   // Dành riêng cho chế độ Single-device 1 máy chung
   setLocalActivePlayer?(playerId: PlayerId): void;
@@ -81,4 +83,5 @@ export interface GameSessionAdapter {
   addOfflinePlayer?(name: string): void;
   removeOfflinePlayer?(playerId: PlayerId): void;
   submitPublicHandVotes?(tallies: Record<PlayerId, number>): Promise<void>;
+  proceedToNextNight?(): Promise<void>;
 }

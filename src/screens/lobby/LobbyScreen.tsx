@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGameSession } from '../../adapters/useGameSession';
+import { audioController } from '../../audio/audioController';
 import { ROLES, ROLES_BY_ID } from '../../engine/roles';
 import { searchRoles } from '../../engine/roleSearch';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
@@ -352,6 +353,9 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
 
   const handleStartGame = async () => {
     if (!metrics.isReadyToStart || !isHost) return;
+    if (isSingleDevice) {
+      void audioController.unlockAudio();
+    }
     try {
       const roleIds = convertSelectionToRoleIds(selectedRoles);
       await actions.startGame(roleIds);
@@ -432,7 +436,7 @@ export default function LobbyScreen({ onNavigate, onOpenRules }: Props) {
           >
             Luật &amp; Vai trò
           </button>
-          {isHost && (
+          {isHost && !isSingleDevice && (
             <button
               className="header-link-btn host-btn"
               onClick={() => onNavigate?.('host')}

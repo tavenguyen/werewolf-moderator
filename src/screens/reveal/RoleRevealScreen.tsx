@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
+import { audioController } from '../../audio/audioController';
+import QuickEndGameModal from '../../components/QuickEndGameModal';
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
 import './reveal.css';
@@ -57,14 +59,12 @@ export default function RoleRevealScreen({}: Props) {
           setCurrentIndex(0);
           setIsConfirmedReady(false);
           setHasViewed(false);
-          setCanUndoPass(false);
           setIsHolding(false);
         }
       } else {
         setCurrentIndex(0);
         setIsConfirmedReady(false);
         setHasViewed(false);
-        setCanUndoPass(false);
         setIsHolding(false);
       }
     } catch {
@@ -89,11 +89,12 @@ export default function RoleRevealScreen({}: Props) {
   // Bước đệm xác nhận danh tính trước khi mở khóa vùng nhấn giữ
   const [isConfirmedReady, setIsConfirmedReady] = useState(false);
 
-  // Cho phép người vừa bấm "Đã nhớ" lùi lại nếu người kế tiếp chưa xác nhận
-  const [canUndoPass, setCanUndoPass] = useState(false);
-
   // Đã xem vai ít nhất 1 lần trong lượt này -> mở khóa nút chuyền máy
   const [hasViewed, setHasViewed] = useState(false);
+
+  // Modal xác nhận kết thúc/huỷ ván sớm
+  const [endGameModalOpen, setEndGameModalOpen] = useState(false);
+  const [isEndingGame, setIsEndingGame] = useState(false);
 
   // Fallback hiển thị icon nếu ảnh bị lỗi tải
   const [imgLoadError, setImgLoadError] = useState(false);
@@ -235,28 +236,18 @@ export default function RoleRevealScreen({}: Props) {
   const handleConfirmReady = () => {
     if (handoffStage !== 'idle') return;
     setIsConfirmedReady(true);
-    setCanUndoPass(false);
-  };
-
-  const handleUndoPass = () => {
-    if (!canUndoPass || currentIndex <= 0 || handoffStage !== 'idle') return;
-    stopHold();
-    const prevIdx = currentIndex - 1;
-    const prevP = players[prevIdx];
-    if (prevP && actions.setLocalActivePlayer) {
-      actions.setLocalActivePlayer(prevP.id);
-    }
-    setCurrentIndex(prevIdx);
-    setIsConfirmedReady(true);
-    setHasViewed(true);
-    setCanUndoPass(false);
   };
 
   // =========================================================================
   // NÚT DUY NHẤT ĐỂ CHUYỂN NGƯỜI ("Đã nhớ · Chuyền cho..." / "Bắt đầu Đêm 1")
   // =========================================================================
   const handlePassOrStartNight = () => {
-    if (handoffStage !== 'idle') return;
+    if (handoffStage !== 'idle' || !hasViewed || isHolding) return;
+
+    if (isLastPlayer) {
+      // Mở khóa Web Audio ngay trong user gesture cuối cùng trước khi vào Đêm 1
+      void audioController.unlockAudio();
+    }
 
     // Úp bài và chìm mờ vào bóng tối (350ms)
     stopHold();
@@ -285,7 +276,6 @@ export default function RoleRevealScreen({}: Props) {
         setCurrentIndex(nextIdx);
         setIsConfirmedReady(false);
         setHasViewed(false); // Reset để người tiếp theo bắt buộc phải xác nhận & nhấn giữ xem vai
-        setCanUndoPass(true);
         setHandoffStage('emerging');
 
         timerEmergingRef.current = window.setTimeout(() => {
@@ -304,10 +294,23 @@ export default function RoleRevealScreen({}: Props) {
       {/* Quầng sáng mờ ảo ở tâm như ánh trăng/nến */}
       <div className="ritual-ambient-glow" aria-hidden="true" />
 
-      {/* 1. Tiến độ nhỏ ở mép trên: 1 / 6 (mờ, không gây xao nhãng) */}
-      <div className="ritual-progress" aria-hidden="true">
-        {currentIndex + 1} / {totalCount}
-      </div>
+      {/* 1. Thanh trên: Tiến độ 1 / 6 ở giữa + nút Huỷ ván kín đáo góc phải */}
+      <header className="ritual-top-bar">
+        <span aria-hidden="true" />
+        <div className="ritual-progress" aria-hidden="true">
+          {currentIndex + 1} / {totalCount}
+        </div>
+        <button
+          type="button"
+          className="ritual-abort-btn"
+          onClick={() => {
+            stopHold();
+            setEndGameModalOpen(true);
+          }}
+        >
+          Huỷ ván
+        </button>
+      </header>
 
       {/* 2. Trung tâm: Tên người nhận + Lá bài 2:3 */}
       <div className="ritual-center-container">
@@ -421,26 +424,14 @@ export default function RoleRevealScreen({}: Props) {
       {/* 3. Mép dưới: Bước xác nhận / Gợi ý giữ bài / Nút chuyền máy */}
       <div className="ritual-bottom-area">
         {!isConfirmedReady ? (
-          <div className="ritual-confirm-actions">
-            <button
-              type="button"
-              className="ritual-pass-btn"
-              onClick={handleConfirmReady}
-              disabled={handoffStage !== 'idle'}
-            >
-              Tôi là {currentPlayer.name} · Sẵn sàng xem vai
-            </button>
-
-            {canUndoPass && currentIndex > 0 && handoffStage === 'idle' && (
-              <button
-                type="button"
-                className="ritual-undo-btn"
-                onClick={handleUndoPass}
-              >
-                Xem lại vai vừa rồi
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            className="ritual-pass-btn"
+            onClick={handleConfirmReady}
+            disabled={handoffStage !== 'idle'}
+          >
+            Tôi là {currentPlayer.name} · Sẵn sàng xem vai
+          </button>
         ) : !isRoleReady ? (
           <div className="ritual-bottom-hint" role="status">
             Đang chia lá bài...
@@ -453,6 +444,7 @@ export default function RoleRevealScreen({}: Props) {
           <button
             type="button"
             className={`ritual-pass-btn ${isLastPlayer ? 'is-final' : ''}`}
+            disabled={!hasViewed || isHolding || handoffStage !== 'idle'}
             onClick={handlePassOrStartNight}
           >
             {isLastPlayer
@@ -461,6 +453,34 @@ export default function RoleRevealScreen({}: Props) {
           </button>
         )}
       </div>
+
+      <QuickEndGameModal
+        isOpen={endGameModalOpen}
+        onClose={() => {
+          if (!isEndingGame) setEndGameModalOpen(false);
+        }}
+        isBusy={isEndingGame}
+        onRevealAndEnd={async () => {
+          if (isEndingGame || !actions.endGameToSummary) return;
+          setIsEndingGame(true);
+          try {
+            await actions.endGameToSummary();
+            setEndGameModalOpen(false);
+          } finally {
+            setIsEndingGame(false);
+          }
+        }}
+        onAbortToLobby={async () => {
+          if (isEndingGame || !actions.abortGameToLobby) return;
+          setIsEndingGame(true);
+          try {
+            await actions.abortGameToLobby();
+            setEndGameModalOpen(false);
+          } finally {
+            setIsEndingGame(false);
+          }
+        }}
+      />
     </main>
   );
 }

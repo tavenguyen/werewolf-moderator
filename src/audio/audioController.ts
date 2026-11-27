@@ -492,18 +492,29 @@ export class AudioController {
     if (typeof window === 'undefined') return true;
 
     try {
-      if (Howler.ctx) {
-        if (Howler.ctx.state === 'suspended' || (Howler.ctx.state as string) === 'interrupted') {
-          await Howler.ctx.resume();
-        }
-        this.attachContextListener();
-        if (Howler.ctx.state === 'running') {
-          this.setAudioStatus('unlocked');
-          return true;
-        }
+      if (!Howler.ctx) {
+        // Khởi tạo Howler.ctx ngay trong user gesture để tránh iOS/mobile chặn Howl.play() về sau
+        Howler.volume(Howler.volume());
       }
-      this.setAudioStatus('unlocked');
-      return true;
+
+      const ctx = Howler.ctx;
+      if (!ctx) {
+        this.setAudioStatus('blocked');
+        return false;
+      }
+
+      if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+        await ctx.resume();
+      }
+      this.attachContextListener();
+
+      if (ctx.state === 'running') {
+        this.setAudioStatus('unlocked');
+        return true;
+      }
+
+      this.setAudioStatus((ctx.state as string) === 'interrupted' ? 'interrupted' : 'blocked');
+      return false;
     } catch {
       this.setAudioStatus('blocked');
       return false;

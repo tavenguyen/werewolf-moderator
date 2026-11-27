@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
 import { formatTime } from '../../utils/formatTime';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
+import QuickEndGameModal from '../../components/QuickEndGameModal';
 import type { PlayerId } from '../../engine/types';
 import './day.css';
 
@@ -32,8 +33,15 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   const [remainingTime, setRemainingTime] = useState(180);
   const [isPeekingRole, setIsPeekingRole] = useState(false);
   const [peekAvatarError, setPeekAvatarError] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showQuickEndModal, setShowQuickEndModal] = useState(false);
+  const [isQuickEnding, setIsQuickEnding] = useState(false);
+  const [isProceedingNextNight, setIsProceedingNextNight] = useState(false);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
 
   const phase = publicView?.phase ?? 'DAY_DISCUSS';
+  const dayVerdict = publicView?.dayVerdict;
+  const isVerdictPendingNextNight = Boolean(isSingleDevice && dayVerdict?.isPendingNextNight);
   const isHunterShotPhase = phase === 'HUNTER_SHOT';
   const isMayorSuccessionPhase = phase === 'MAYOR_SUCCESSION';
   const isMayorElectionPhase = phase === 'DAY_MAYOR_ELECTION';
@@ -109,8 +117,29 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     setIsSubmittingSpecial(false);
     setShowConfirmFinalize(false);
     setIsSubmittingFinalize(false);
+    setIsProceedingNextNight(false);
     setNotice('');
   }, [publicView?.roundNumber, publicView?.phase, state.playerId]);
+
+  useEffect(() => {
+    if (!showHeaderMenu) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setShowHeaderMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowHeaderMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showHeaderMenu]);
 
   // Reset bảng đếm phiếu giơ tay khi sang ngày mới hoặc đổi phase
   useEffect(() => {
@@ -233,6 +262,84 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     }
   };
 
+  const handleProceedToNextNight = async () => {
+    if (isProceedingNextNight) return;
+    setIsProceedingNextNight(true);
+    setNotice('');
+    try {
+      await actions.proceedToNextNight?.();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể chuyển sang đêm tiếp theo';
+      setNotice(msg);
+      setIsProceedingNextNight(false);
+    }
+  };
+
+  const handleRevealAndEnd = async () => {
+    if (isQuickEnding) return;
+    setIsQuickEnding(true);
+    setNotice('');
+    try {
+      await actions.endGameToSummary?.();
+      setShowQuickEndModal(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể kết thúc ván lúc này';
+      setNotice(msg);
+    } finally {
+      setIsQuickEnding(false);
+    }
+  };
+
+  const handleAbortToLobby = async () => {
+    if (isQuickEnding) return;
+    setIsQuickEnding(true);
+    setNotice('');
+    try {
+      await actions.abortGameToLobby?.();
+      setShowQuickEndModal(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể đưa cả bàn về phòng chờ';
+      setNotice(msg);
+    } finally {
+      setIsQuickEnding(false);
+    }
+  };
+
+  const maxPossibleVotes = isMayorElectionPhase
+    ? livingPlayers.length
+    : livingPlayers.reduce((sum, p) => sum + (p.voteWeight ?? 1), 0);
+
+  const handVoteSummary = (() => {
+    const rawRunoffIds =
+      isRunoffPhase && publicView?.runoffCandidates && publicView.runoffCandidates.length > 0
+        ? publicView.runoffCandidates
+        : isRunoffPhase && privateView?.validTargets && privateView.validTargets.length > 0
+        ? privateView.validTargets
+        : null;
+    const runoffCandidateIds = rawRunoffIds ? new Set(rawRunoffIds) : null;
+    const candidates = (runoffCandidateIds
+      ? players.filter((p) => runoffCandidateIds.has(p.id))
+      : players
+    ).filter((p) => p.isAlive);
+
+    const totalRecordedVotes = candidates.reduce((sum, p) => sum + (handVotes[p.id] ?? 0), 0);
+    const sortedLeaders = candidates
+      .map((p) => ({ player: p, count: handVotes[p.id] ?? 0 }))
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const topCount = sortedLeaders[0]?.count ?? 0;
+    const leaders = sortedLeaders.filter((item) => item.count === topCount);
+
+    const leaderText =
+      leaders.length === 0
+        ? 'Hòa phiếu / Chưa có phiếu'
+        : leaders.length === 1
+        ? `Đang dẫn đầu: #${leaders[0].player.seatIndex} ${leaders[0].player.name} (${leaders[0].count} phiếu)`
+        : `Đang hòa phiếu (${leaders.length} người · ${topCount} phiếu)`;
+
+    return { totalRecordedVotes, topCount, leaders, leaderText };
+  })();
+
   const isUrgent = remainingTime <= 30;
   const progressMax = isMayorElectionPhase ? 45 : isRunoffPhase ? 30 : 180;
   const radius = 64;
@@ -292,6 +399,35 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             <span aria-hidden="true">📜</span>
             <span>Luật &amp; Vai trò</span>
           </button>
+          {isSingleDevice && state.isHost && (
+            <div className="day-more-menu-wrap" ref={headerMenuRef}>
+              <button
+                type="button"
+                className="day-more-menu-btn"
+                aria-haspopup="menu"
+                aria-expanded={showHeaderMenu}
+                aria-label="Tùy chọn quản trò"
+                onClick={() => setShowHeaderMenu((prev) => !prev)}
+              >
+                ⋮
+              </button>
+              {showHeaderMenu && (
+                <div className="day-more-dropdown" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="day-more-dropdown-item is-danger"
+                    onClick={() => {
+                      setShowHeaderMenu(false);
+                      setShowQuickEndModal(true);
+                    }}
+                  >
+                    Kết thúc ván...
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -434,27 +570,13 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         </section>
 
-        {/* Banner Gấu gầm (Bear Tamer) */}
-        {publicView?.bearGrowled !== undefined && (
-          <div
-            className={`day-event-banner ${publicView.bearGrowled ? 'bear-growled' : 'bear-calm'}`}
-            role="status"
-          >
-            <span className="banner-icon" aria-hidden="true">
-              {publicView.bearGrowled ? '🐻' : '🌿'}
-            </span>
+        {/* Banner Gấu gầm (Bear Tamer) - chỉ hiển thị khi gấu thực sự gầm để không lộ cái chết */}
+        {publicView?.bearGrowled === true && (
+          <div className="day-event-banner bear-growled" role="status">
+            <span className="banner-icon" aria-hidden="true">🐻</span>
             <div className="banner-text">
-              {publicView.bearGrowled ? (
-                <>
-                  <strong>GẤU ĐÃ GẦM LÊN!</strong>
-                  <span>Người thuần gấu cảm nhận được Ma Sói đang ngồi cạnh bên!</span>
-                </>
-              ) : (
-                <>
-                  <strong>GẤU VẪN YÊN LẶNG</strong>
-                  <span>Không có Ma Sói nào ngồi cạnh người nuôi gấu.</span>
-                </>
-              )}
+              <strong>GẤU ĐÃ GẦM LÊN!</strong>
+              <span>Người thuần gấu cảm nhận được Ma Sói đang ngồi cạnh bên!</span>
             </div>
           </div>
         )}
@@ -498,14 +620,39 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         )}
 
-        {/* Cảnh báo riêng cho người bị câm */}
-        {(privateView?.skills?.isMuted || state.playerId === publicView?.mutedPlayerId) && (
+        {/* Cảnh báo riêng cho người bị câm (chỉ hiện ở Multi-device) */}
+        {!isSingleDevice && (privateView?.skills?.isMuted || state.playerId === publicView?.mutedPlayerId) && (
           <div className="personal-mute-warning" role="alert" style={{ background: '#2d1515', border: '1px solid #dc2626', borderRadius: 8, padding: 12, margin: '8px 0', color: '#fca5a5' }}>
             <strong>🔇 BẠN ĐANG BỊ CẤM NÓI!</strong>
             <p style={{ margin: '4px 0 0', fontSize: 13 }}>
               Bạn không được nói trong suốt buổi thảo luận sáng nay, nhưng vẫn có quyền bỏ phiếu treo cổ như bình thường.
             </p>
           </div>
+        )}
+
+        {/* Thẻ Công Bố Phán Quyết & Di Ngôn (Single-device) */}
+        {isVerdictPendingNextNight && dayVerdict && (
+          <section className="day-verdict-card" aria-live="polite">
+            <span className="day-verdict-eyebrow">⚖️ CÔNG BỐ PHÁN QUYẾT · DI NGÔN</span>
+            <h2 className="day-verdict-headline">{dayVerdict.headline}</h2>
+            <p className="day-verdict-detail">{dayVerdict.detail}</p>
+            <p className="day-verdict-hint">
+              Dành thời gian cho người bị loại nói lời cuối cùng trước khi cả làng đi ngủ.
+            </p>
+            {state.isHost && (
+              <button
+                type="button"
+                className="day-verdict-next-btn"
+                disabled={isProceedingNextNight}
+                onClick={() => void handleProceedToNextNight()}
+              >
+                {isProceedingNextNight
+                  ? 'Đang chuyển sang đêm tiếp theo...'
+                  : 'Cả làng nhắm mắt · Sang Đêm tiếp theo 🌙'}
+              </button>
+            )}
+            {notice && <p role="status" className="vote-notice">{notice}</p>}
+          </section>
         )}
 
         {/* Kết quả biểu quyết gần nhất nếu có */}
@@ -542,6 +689,13 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           const hunterTargets = privateView?.validTargets?.length
             ? players.filter((p) => privateView.validTargets.includes(p.id))
             : livingPlayers;
+          const deaths = publicView?.deaths ?? [];
+          const hunterDeath =
+            [...deaths].reverse().find((d) => d.roleId === 'hunter') ??
+            (deaths.length > 0 ? deaths[deaths.length - 1] : undefined);
+          const deadHunter = hunterDeath
+            ? players.find((p) => p.id === hunterDeath.playerId)
+            : undefined;
           return (
             <section className="day-players-panel special-phase-panel hunter-shot-panel" aria-live="polite">
               <div className="day-panel-heading">
@@ -554,7 +708,9 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 )}
               </div>
               <p className="special-phase-desc">
-                Thợ săn đã bị hạ gục và có quyền nổ một phát súng cuối cùng kéo theo 1 người chơi còn sống.
+                {deadHunter
+                  ? `Thợ săn ${deadHunter.name} (#${deadHunter.seatIndex}) vừa ngã xuống và có quyền nổ một phát súng cuối cùng kéo theo 1 người chơi còn sống.`
+                  : 'Thợ săn đã bị hạ gục và có quyền nổ một phát súng cuối cùng kéo theo 1 người chơi còn sống.'}
               </p>
 
               {canShoot ? (
@@ -692,7 +848,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
         })()}
 
         {/* Danh sách người chơi / Bỏ phiếu */}
-        {!isSpecialInstantPhase && (mode === 'player' ? (
+        {!isSpecialInstantPhase && !isVerdictPendingNextNight && (mode === 'player' ? (
           <section className="day-players-panel">
             <div className="day-panel-heading">
               <div className="heading-group">
@@ -743,30 +899,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 : players;
 
               if (isSingleDevice) {
-                const livingCandidates = voteCandidates.filter((p) => p.isAlive);
-                const totalRecordedVotes = livingCandidates.reduce(
-                  (sum, p) => sum + (handVotes[p.id] ?? 0),
-                  0
-                );
-                const maxPossibleVotes = isMayorElectionPhase
-                  ? livingPlayers.length
-                  : livingPlayers
-                      .filter((p) => p.voteWeight > 0)
-                      .reduce((sum, p) => sum + p.voteWeight, 0);
-
-                const sortedLeaders = livingCandidates
-                  .map((p) => ({ player: p, count: handVotes[p.id] ?? 0 }))
-                  .filter((item) => item.count > 0)
-                  .sort((a, b) => b.count - a.count);
-                const topCount = sortedLeaders[0]?.count ?? 0;
-                const leaders = sortedLeaders.filter((item) => item.count === topCount);
-
-                const leaderSummary =
-                  leaders.length === 0
-                    ? 'Chưa có phiếu giơ tay nào'
-                    : leaders.length === 1
-                    ? `Đang dẫn đầu: #${leaders[0].player.seatIndex} ${leaders[0].player.name} (${leaders[0].count} phiếu)`
-                    : `Đang hòa phiếu (${leaders.length} người · ${topCount} phiếu)`;
+                const { totalRecordedVotes, topCount, leaderText } = handVoteSummary;
 
                 return (
                   <div className="public-hand-vote-board">
@@ -775,7 +908,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                         <span className="hand-vote-total">
                           Tổng phiếu đã ghi: <b>{totalRecordedVotes}</b> / {maxPossibleVotes}
                         </span>
-                        <span className="hand-vote-leader">{leaderSummary}</span>
+                        <span className="hand-vote-leader">{leaderText}</span>
                       </div>
                       <button
                         type="button"
@@ -829,7 +962,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                                 type="button"
                                 className="hand-vote-step-btn"
                                 aria-label={`Tăng phiếu cho ${player.name}`}
-                                disabled={effectiveVoteLocked || isSubmittingFinalize}
+                                disabled={effectiveVoteLocked || isSubmittingFinalize || totalRecordedVotes >= maxPossibleVotes}
                                 onClick={() => handleAdjustHandVote(player.id, 1)}
                               >
                                 ＋
@@ -984,7 +1117,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
       </div>
 
       {/* Footer Host chốt phán quyết */}
-      {state.isHost && !isSpecialInstantPhase && (
+      {state.isHost && !isSpecialInstantPhase && !isVerdictPendingNextNight && (
         <footer className="day-bottom-bar">
           <button
             type="button"
@@ -1024,6 +1157,11 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                 ? 'Hệ thống sẽ chốt kết quả theo số phiếu giơ tay đã ghi nhận trên bảng.'
                 : 'Hòm phiếu sẽ đóng ngay lập tức và công bố kết quả kiểm phiếu.'}
             </p>
+            {isSingleDevice && (
+              <p className="day-confirm-summary" role="status">
+                {handVoteSummary.leaderText}
+              </p>
+            )}
             <div className="day-confirm-actions">
               <button
                 type="button"
@@ -1144,6 +1282,13 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         );
       })()}
+      <QuickEndGameModal
+        isOpen={showQuickEndModal}
+        onClose={() => setShowQuickEndModal(false)}
+        onRevealAndEnd={handleRevealAndEnd}
+        onAbortToLobby={handleAbortToLobby}
+        isBusy={isQuickEnding}
+      />
     </main>
   );
 }

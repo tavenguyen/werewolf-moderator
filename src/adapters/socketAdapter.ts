@@ -152,7 +152,16 @@ export class SocketAdapter implements GameSessionAdapter {
 
     // Projections
     this.socket.on('room:publicSnapshot', (view: PublicRoomView) => {
-      this.updateState({ publicView: view, roomCode: view.roomCode });
+      if (view.phase === 'LOBBY') {
+        this.updateState({
+          publicView: view,
+          roomCode: view.roomCode,
+          postGameView: null,
+          privateView: null,
+        });
+      } else {
+        this.updateState({ publicView: view, roomCode: view.roomCode });
+      }
     });
 
     this.socket.on('timer:snapshot', (snapshot: TimerSnapshotPayload) => {

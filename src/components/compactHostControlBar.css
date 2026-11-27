@@ -63,18 +63,26 @@
 }
 
 .subtitle-text {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #fff3db;
   font-weight: 500;
 }
 
 .subtitle-icon {
   font-size: 13px;
+  margin-right: 6px;
 }
 
 .subtitle-placeholder {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #8c8273;
   font-style: italic;
 }

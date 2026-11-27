@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
@@ -115,10 +115,24 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
   const publicView = state.publicView;
   const roomCode = state.roomCode || '7290';
 
+  const enteredAtRef = useRef(Date.now());
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<'cards' | 'timeline'>('cards');
   const [notice, setNotice] = useState('');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [showEarlyRematchConfirm, setShowEarlyRematchConfirm] = useState(false);
+  const [isRematching, setIsRematching] = useState(false);
+
+  useEffect(() => {
+    if (!showEarlyRematchConfirm) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isRematching) {
+        setShowEarlyRematchConfirm(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showEarlyRematchConfirm, isRematching]);
 
   // Chuẩn bị danh sách vai trò người chơi
   const rolesList: RoleDisplayItem[] = (() => {
@@ -200,18 +214,33 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
 
   const allRevealed = openCards.size === rolesList.length;
 
+  const executeRematch = async () => {
+    if (isRematching) return;
+    setIsRematching(true);
+    setNotice('');
+    try {
+      await actions.hostRematch();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván mới lúc này';
+      setNotice(msg);
+      setIsRematching(false);
+    } finally {
+      setShowEarlyRematchConfirm(false);
+    }
+  };
+
   const handleRematch = async () => {
     if (!state.isHost) {
       setNotice('Chỉ quản trò mới có thể bắt đầu ván mới.');
       return;
     }
 
-    try {
-      await actions.hostRematch();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván mới lúc này';
-      setNotice(msg);
+    if (Date.now() - enteredAtRef.current < 5000) {
+      setShowEarlyRematchConfirm(true);
+      return;
     }
+
+    await executeRematch();
   };
 
   const handleExit = async () => {
@@ -398,14 +427,20 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
 
       <footer className="summary-footer">
         {state.isHost ? (
-          <button className="summary-rematch" onClick={handleRematch}>
+          <button
+            type="button"
+            className="summary-rematch"
+            disabled={isRematching}
+            onClick={() => void handleRematch()}
+          >
             <span className="rematch-icon" aria-hidden="true">🎲</span>
-            <span>CHIA LẠI BÀI &amp; CHƠI TIẾP</span>
+            <span>{isRematching ? 'ĐANG QUAY LẠI LOBBY...' : 'CHƠI VÁN MỚI (VỀ LOBBY)'}</span>
           </button>
         ) : (
-          <span className="summary-waiting-rematch">Đang đợi quản trò bắt đầu ván mới...</span>
+          <span className="summary-waiting-rematch">Đang đợi quản trò đưa cả bàn về phòng chờ...</span>
         )}
         <button
+          type="button"
           className="summary-exit"
           onClick={handleExit}
           aria-label="Rời phòng"
@@ -414,6 +449,88 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
           ⟵
         </button>
       </footer>
+
+      {showEarlyRematchConfirm && (
+        <div
+          role="presentation"
+          onClick={() => {
+            if (!isRematching) setShowEarlyRematchConfirm(false);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 900,
+            background: 'rgba(6, 8, 12, 0.82)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="early-rematch-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              background: '#131720',
+              border: '1px solid rgba(212, 175, 55, 0.35)',
+              borderRadius: '14px',
+              padding: '20px',
+              color: '#e2e8f0',
+              boxShadow: '0 18px 48px rgba(0, 0, 0, 0.75)',
+            }}
+          >
+            <h2 id="early-rematch-title" style={{ margin: '0 0 10px', fontSize: '16px', color: '#f8fafc' }}>
+              Quay lại Phòng chờ ngay?
+            </h2>
+            <p style={{ margin: '0 0 18px', fontSize: '13.5px', lineHeight: 1.5, color: '#cbd5e1' }}>
+              Bạn vừa xem bảng tổng kết chưa đầy 5 giây. Quay lại Phòng chờ ngay?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                disabled={isRematching}
+                onClick={() => setShowEarlyRematchConfirm(false)}
+                style={{
+                  minHeight: '40px',
+                  padding: '0 14px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                  background: 'transparent',
+                  color: '#cbd5e1',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Ở lại xem tiếp
+              </button>
+              <button
+                type="button"
+                disabled={isRematching}
+                onClick={() => void executeRematch()}
+                style={{
+                  minHeight: '40px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(212, 175, 55, 0.55)',
+                  background: 'linear-gradient(135deg, #b8732a, #d69343)',
+                  color: '#0d0f13',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {isRematching ? 'Đang chuyển...' : 'Về Phòng chờ'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

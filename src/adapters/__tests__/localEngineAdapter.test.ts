@@ -108,6 +108,9 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
 
       // Chốt biểu quyết
       await adapter.finalizePublicVote();
+      if (adapter.getState().publicView?.dayVerdict?.isPendingNextNight) {
+        await adapter.proceedToNextNight();
+      }
       const afterState = adapter.getState();
       expect(['NIGHT', 'GAME_OVER', 'HUNTER_SHOT']).toContain(afterState.publicView?.phase ?? '');
     }
@@ -199,7 +202,7 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     }
   });
 
-  it('thực hiện tái đấu Rematch tạo thế hệ ván mới', async () => {
+  it('thực hiện tái đấu Rematch trả về LOBBY và tạo thế hệ ván mới', async () => {
     const adapter = createPopulatedAdapter(8);
     await adapter.startGame();
     await adapter.startFirstNight();
@@ -207,6 +210,11 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
 
     let state = adapter.getState();
     expect(state.publicView?.gameGeneration).toBe(2);
+    expect(state.publicView?.phase).toBe('LOBBY');
+    expect(state.postGameView).toBeNull();
+
+    await adapter.startGame();
+    state = adapter.getState();
     expect(state.publicView?.phase).toBe('FIRST_NIGHT_SETUP');
 
     await adapter.startFirstNight();
@@ -590,6 +598,9 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
 
     const p4 = roomState.gameState.players.find((p: any) => p.id === 'player_4');
     expect(p4.isAlive).toBe(false);
+    if (adapter.getState().publicView?.dayVerdict?.isPendingNextNight) {
+      await adapter.proceedToNextNight();
+    }
     expect(['NIGHT', 'GAME_OVER']).toContain(adapter.getState().publicView?.phase ?? '');
   });
 
@@ -959,38 +970,59 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     }
   });
 
-  it('hostRematch giữ lại settings.customDeck (fallback getSmartPreset nếu rỗng) và dọn sạch timer/state ván trước', async () => {
-    const adapter = createPopulatedAdapter(6);
-    const customDeck = { werewolf: 1, seer: 1, witch: 1, villager: 3 };
-    await adapter.updateSettings({ customDeck });
-    await adapter.startGame(['werewolf', 'seer', 'witch', 'villager', 'villager', 'villager']);
-    await adapter.startFirstNight();
+  it('hostRematch trả về LOBBY, giữ lại settings.customDeck, dọn sạch state/postGameView và ghi đè localStorage', async () => {
+    const originalStorage = (globalThis as Record<string, unknown>).localStorage;
+    const storageMap = new Map<string, string>();
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => storageMap.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        storageMap.set(k, v);
+      },
+      removeItem: (k: string) => {
+        storageMap.delete(k);
+      },
+    };
 
-    const roomState = (adapter as unknown as { roomState: any }).roomState;
-    roomState.seerInvestigationResult = { targetId: 'player_1', result: 'WEREWOLF' };
-    roomState.nightActionAcks.add('player_2');
-    roomState.lastVoteTally = { tallies: { player_1: 2 }, abstainCount: 0 };
+    try {
+      const adapter = createPopulatedAdapter(6);
+      const customDeck = { werewolf: 1, seer: 1, witch: 1, villager: 3 };
+      await adapter.updateSettings({ customDeck });
+      await adapter.startGame(['werewolf', 'seer', 'witch', 'villager', 'villager', 'villager']);
+      await adapter.startFirstNight();
 
-    await adapter.hostRematch();
+      const roomState = (adapter as unknown as { roomState: any }).roomState;
+      roomState.seerInvestigationResult = { targetId: 'player_1', result: 'WEREWOLF' };
+      roomState.nightActionAcks.add('player_2');
+      roomState.lastVoteTally = { tallies: { player_1: 2 }, abstainCount: 0 };
+      roomState.players.get('player_1').isAlive = false;
 
-    expect(adapter.getState().publicView?.phase).toBe('FIRST_NIGHT_SETUP');
-    expect(adapter.getState().publicView?.gameGeneration).toBe(2);
-    expect(roomState.seerInvestigationResult).toBeUndefined();
-    expect(roomState.nightActionAcks.size).toBe(0);
-    expect(roomState.nightTurnPlan.length).toBe(0);
-    expect(roomState.lastVoteTally).toBeUndefined();
-    expect((adapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).toBeNull();
+      await adapter.hostRematch();
 
-    const roleCounts: Record<string, number> = {};
-    for (const p of roomState.gameState.players) {
-      roleCounts[p.roleId] = (roleCounts[p.roleId] ?? 0) + 1;
+      const state = adapter.getState();
+      expect(state.publicView?.phase).toBe('LOBBY');
+      expect(state.publicView?.gameGeneration).toBe(2);
+      expect(state.postGameView).toBeNull();
+      expect(state.privateView).toBeNull();
+      expect(roomState.gameState).toBeNull();
+      expect(roomState.settings.customDeck).toEqual(customDeck);
+      expect(roomState.players.size).toBe(6);
+      expect(roomState.players.get('player_1').isAlive).toBe(true);
+      expect(roomState.seerInvestigationResult).toBeUndefined();
+      expect(roomState.nightActionAcks.size).toBe(0);
+      expect(roomState.nightTurnPlan.length).toBe(0);
+      expect(roomState.lastVoteTally).toBeUndefined();
+      expect((adapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).toBeNull();
+
+      const saved = JSON.parse(storageMap.get('werewolf_local_game_session') ?? '{}');
+      expect(saved.gameState).toBeNull();
+      expect(saved.timers?.phase).toBe('LOBBY');
+    } finally {
+      if (originalStorage === undefined) {
+        delete (globalThis as Record<string, unknown>).localStorage;
+      } else {
+        (globalThis as Record<string, unknown>).localStorage = originalStorage;
+      }
     }
-    expect(roleCounts).toEqual(customDeck);
-
-    // Fallback getSmartPreset nếu customDeck rỗng
-    await adapter.updateSettings({ customDeck: {} });
-    await adapter.hostRematch();
-    expect(roomState.gameState.players.length).toBe(6);
   });
 
   it('hostEmergencyEliminate chuyển HUNTER_SHOT / MAYOR_SUCCESSION, cập nhật activeLocalPlayerId ban đêm và dừng timer khi GAME_OVER', async () => {
@@ -1215,5 +1247,50 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
         (globalThis as Record<string, unknown>).localStorage = originalStorage;
       }
     }
+  });
+
+  it('abortGameToLobby đưa ván đang chơi về LOBBY và endGameToSummary kết thúc sang GAME_OVER', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.updateSettings({ customDeck: { werewolf: 1, seer: 1, witch: 1, villager: 3 } });
+    await adapter.startGame(['werewolf', 'seer', 'witch', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    await adapter.abortGameToLobby();
+    let state = adapter.getState();
+    expect(state.publicView?.phase).toBe('LOBBY');
+    expect(state.postGameView).toBeNull();
+    expect(state.privateView).toBeNull();
+    expect(state.publicView?.players.length).toBe(6);
+
+    await adapter.startGame(['werewolf', 'seer', 'witch', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+    await adapter.endGameToSummary();
+
+    state = adapter.getState();
+    expect(state.publicView?.phase).toBe('GAME_OVER');
+    expect(state.postGameView).not.toBeNull();
+    expect(state.postGameView?.winOutcome?.winner).toBe('DRAW');
+  });
+
+  it('submitPublicHandVotes giữ dayVerdict (isPendingNextNight: true) và proceedToNextNight chuyển sang NIGHT', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    const villager = roomState.gameState.players.find((p: any) => p.roleId === 'villager');
+    roomState.gameState.phase = 'DAY_DISCUSS';
+
+    await adapter.submitPublicHandVotes({ [villager.id]: 4 });
+
+    let state = adapter.getState();
+    expect(state.publicView?.phase).toBe('DAY_DISCUSS');
+    expect(state.publicView?.dayVerdict?.isPendingNextNight).toBe(true);
+    expect(state.publicView?.dayVerdict?.headline).toContain(villager.name);
+
+    await adapter.proceedToNextNight();
+    state = adapter.getState();
+    expect(state.publicView?.phase).toBe('NIGHT');
+    expect(state.publicView?.dayVerdict).toBeNull();
   });
 });

@@ -146,31 +146,26 @@ describe('Realtime Backend - Rematch Lifecycle', () => {
       expect(roomPlayer.isAlive).toBe(true);
     }
 
-    // 3. Trạng thái ván mới sạch sẽ
-    expect(room.gameState).toBeDefined();
-    expect(room.gameState!.generation).toBe(oldGeneration + 1);
-    expect(room.gameState!.phase).toBe('NIGHT');
-    expect(room.gameState!.roundNumber).toBe(1);
-    expect(room.gameState!.deaths).toEqual([]);
-    expect(room.gameState!.witchHealUsed).toBe(false);
-    expect(room.gameState!.witchPoisonUsed).toBe(false);
-
-    // 4. Lượt đêm mới được tạo
-    expect(room.nightTurnPlan.length).toBeGreaterThan(0);
+    // 3. Phòng trở về LOBBY sạch sẽ để chỉnh lại cấu hình trước khi bắt đầu ván mới
+    expect(room.gameState).toBeNull();
+    expect(room.timers.phase).toBe('LOBBY');
+    expect(room.timers.deadlineAt).toBeNull();
+    expect(room.nightTurnPlan).toEqual([]);
     expect(room.currentNightTurnIndex).toBe(0);
-    expect(room.timers.deadlineAt).toBeDefined();
+    expect(room.publicHistoryLogs).toEqual([]);
   });
 
-  it('rematch tôn trọng settings.customDeck và dọn sạch toàn bộ *InvestigationResult', async () => {
+  it('rematch giữ lại settings.customDeck và dọn sạch toàn bộ *InvestigationResult', async () => {
     const { hostClient, roomCode, hostToken, players, room } = await setupGameOverGame();
 
-    room.settings.customDeck = {
+    const customDeck = {
       werewolf: 1,
       seer: 1,
       aura_seer: 1,
       fox: 1,
       villager: 2,
     };
+    room.settings.customDeck = customDeck;
     room.seerInvestigationResult = { targetId: players[0].id, result: 'WEREWOLF' };
     room.sorcererInvestigationResult = { targetId: players[0].id, isSeer: false };
     room.auraInvestigationResult = { targetId: players[0].id, result: 'SPECIAL' };
@@ -182,16 +177,13 @@ describe('Realtime Backend - Rematch Lifecycle', () => {
     });
     expect(rematchRes.ok).toBe(true);
 
+    expect(room.gameState).toBeNull();
+    expect(room.timers.phase).toBe('LOBBY');
     expect(room.seerInvestigationResult).toBeUndefined();
     expect(room.sorcererInvestigationResult).toBeUndefined();
     expect(room.auraInvestigationResult).toBeUndefined();
     expect(room.foxInvestigationResult).toBeUndefined();
     expect(room.piInvestigationResult).toBeUndefined();
-
-    const roleCounts: Record<string, number> = {};
-    for (const p of room.gameState!.players) {
-      roleCounts[p.roleId] = (roleCounts[p.roleId] ?? 0) + 1;
-    }
-    expect(roleCounts).toEqual(room.settings.customDeck);
+    expect(room.settings.customDeck).toEqual(customDeck);
   });
 });
