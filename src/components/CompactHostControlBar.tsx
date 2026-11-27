@@ -30,7 +30,10 @@ export default function CompactHostControlBar() {
   };
 
   const isPaused = state.publicView?.isPaused ?? false;
-  const isDayPhase = state.publicView?.phase === 'DAY_DISCUSS';
+  const phase = state.publicView?.phase;
+  const isNightPhase = phase === 'NIGHT';
+  const isTimedDayPhase =
+    phase === 'DAY_DISCUSS' || phase === 'DAY_RUNOFF' || phase === 'DAY_MAYOR_ELECTION';
   const extensionsUsed = state.publicView?.extensionsUsed ?? 0;
   const isHostPlayer = state.hostMode === 'PLAYER_HOST' || Boolean(state.hostView?.isHostPlayer);
   const hostPlayerId = state.playerId || state.privateView?.playerId || state.hostView?.hostPlayerId;
@@ -57,7 +60,10 @@ export default function CompactHostControlBar() {
   };
 
   return (
-    <aside className="compact-host-bar" aria-label="Thanh điều khiển Quản trò">
+    <aside
+      className={`compact-host-bar ${isNightPhase ? 'is-night-stealth' : ''}`}
+      aria-label="Thanh điều khiển Quản trò"
+    >
       <div className="compact-host-inner">
         {/* Tag Host Badge */}
         <div className="compact-host-badge" title="Bạn là Quản trò kiêm Người chơi">
@@ -106,8 +112,8 @@ export default function CompactHostControlBar() {
             <span aria-hidden="true">{isMuted ? '🔇' : '🔊'}</span>
           </button>
 
-          {/* Pause / Resume (chỉ khả dụng ban ngày) */}
-          {isDayPhase && (
+          {/* Pause / Resume (khả dụng các pha ngày có đồng hồ) */}
+          {isTimedDayPhase && (
             <button
               type="button"
               className={`compact-btn ${isPaused ? 'is-paused' : ''}`}
@@ -120,7 +126,7 @@ export default function CompactHostControlBar() {
           )}
 
           {/* +30s Gia hạn (tối đa 2 lần ban ngày) */}
-          {isDayPhase && extensionsUsed < 2 && (
+          {isTimedDayPhase && extensionsUsed < 2 && (
             <button
               type="button"
               className="compact-btn compact-btn-extend"

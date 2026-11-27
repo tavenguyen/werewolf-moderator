@@ -128,7 +128,6 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const { state, actions, deviceMode } = useGameSession();
 
   const [mode, setMode] = useState<'sleep' | 'action'>('sleep');
-  const [advancePressed, setAdvancePressed] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState<PlayerId | null>(null);
   const [cupidTargets, setCupidTargets] = useState<PlayerId[]>([]);
   const [hoodlumTargets, setHoodlumTargets] = useState<PlayerId[]>([]);
@@ -189,7 +188,6 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
   const [peekAvatarError, setPeekAvatarError] = useState(false);
   const submitSleepTimerRef = useRef<number | null>(null);
   const resultTimerRef = useRef<number | null>(null);
-  const advancePopTimerRef = useRef<number | null>(null);
   const autoAdvanceTimerRef = useRef<number | null>(null);
   const sleepNoticeTimerRef = useRef<number | null>(null);
   const isAdvancingRef = useRef(false);
@@ -239,9 +237,6 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
       }
       if (resultTimerRef.current !== null) {
         window.clearTimeout(resultTimerRef.current);
-      }
-      if (advancePopTimerRef.current !== null) {
-        window.clearTimeout(advancePopTimerRef.current);
       }
       if (autoAdvanceTimerRef.current !== null) {
         window.clearTimeout(autoAdvanceTimerRef.current);
@@ -745,56 +740,6 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
         setSleepNotice('');
       }, 2000);
     }
-  };
-
-  const handleAdvanceLocal = () => {
-    if (isAdvancingRef.current) return;
-    isAdvancingRef.current = true;
-
-    if (autoAdvanceTimerRef.current !== null) {
-      window.clearTimeout(autoAdvanceTimerRef.current);
-      autoAdvanceTimerRef.current = null;
-    }
-    if (submitSleepTimerRef.current !== null) {
-      window.clearTimeout(submitSleepTimerRef.current);
-      submitSleepTimerRef.current = null;
-    }
-    if (resultTimerRef.current !== null) {
-      window.clearTimeout(resultTimerRef.current);
-      resultTimerRef.current = null;
-    }
-    if (advancePopTimerRef.current !== null) {
-      window.clearTimeout(advancePopTimerRef.current);
-    }
-    setAdvancePressed(true);
-    advancePopTimerRef.current = window.setTimeout(() => {
-      advancePopTimerRef.current = null;
-      setAdvancePressed(false);
-    }, 250);
-    if (!isSingleDevice) {
-      try {
-        navigator.vibrate?.(40);
-      } catch {
-        // ignore
-      }
-    }
-    actions.advanceLocalTurn();
-    setAvatarError(false);
-    setHasSubmitted(false);
-    setShowingResult(false);
-    setSelectedTargetId(null);
-    setCupidTargets([]);
-    setHoodlumTargets([]);
-    setPiedPiperTargets([]);
-    setWolfTargets([]);
-    setWitchPoisonTargetId(null);
-    setIsWitchHeal(false);
-    setWitchHealTargetId(null);
-    setIsCurseAction(null);
-    setIsTroublemakerActive(null);
-    setIsFoxSkip(false);
-    setNotice('');
-    setSleepNotice('');
   };
 
   const handleSelectTarget = (tId: PlayerId) => {
@@ -1742,26 +1687,41 @@ export default function NightScreen({ onOpenRules: _onOpenRules }: NightScreenPr
                         Đã chọn dùng Bình Cứu — luật phòng không cho dùng thêm Bình Độc trong cùng đêm.
                       </p>
                     )}
-                    <div className="target-grid">
-                      {validTargets.map((tId) => {
-                        const targetP = publicView?.players.find((p) => p.id === tId);
-                        if (!targetP) return null;
-                        const isPoisoned = witchPoisonTargetId === tId;
-                        return (
-                          <button
-                            type="button"
-                            key={`poison-${tId}`}
-                            disabled={isPoisonBlockedByHeal}
-                            aria-pressed={isPoisoned}
-                            onClick={() => setWitchPoisonTargetId(isPoisoned ? null : tId)}
-                            className={`target-card ${isPoisoned ? 'selected poison-selected' : ''}`}
-                          >
-                            <span className="target-name">Đầu độc #{targetP.seatIndex} {targetP.name}</span>
-                            <span>{isPoisoned ? '☠' : '○'}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {isSingleDevice ? (
+                      <CircularSeatMap
+                        targets={validTargets}
+                        players={publicView?.players ?? []}
+                        selectedIds={witchPoisonTargetId ? [witchPoisonTargetId] : []}
+                        centerIcon="☠️"
+                        ariaLabel="Chọn mục tiêu đầu độc"
+                        disabled={isPoisonBlockedByHeal}
+                        variant="poison"
+                        onSelect={(tId) =>
+                          setWitchPoisonTargetId((prev) => (prev === tId ? null : tId))
+                        }
+                      />
+                    ) : (
+                      <div className="target-grid">
+                        {validTargets.map((tId) => {
+                          const targetP = publicView?.players.find((p) => p.id === tId);
+                          if (!targetP) return null;
+                          const isPoisoned = witchPoisonTargetId === tId;
+                          return (
+                            <button
+                              type="button"
+                              key={`poison-${tId}`}
+                              disabled={isPoisonBlockedByHeal}
+                              aria-pressed={isPoisoned}
+                              onClick={() => setWitchPoisonTargetId(isPoisoned ? null : tId)}
+                              className={`target-card ${isPoisoned ? 'selected poison-selected' : ''}`}
+                            >
+                              <span className="target-name">Đầu độc #{targetP.seatIndex} {targetP.name}</span>
+                              <span>{isPoisoned ? '☠' : '○'}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}

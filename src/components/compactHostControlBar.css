@@ -12,6 +12,13 @@
   padding: 6px 12px;
 }
 
+.compact-host-bar.is-night-stealth {
+  background: rgba(0, 0, 0, 0.92);
+  border-bottom-color: #1a1a1a;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
 .compact-host-inner {
   max-width: 1200px;
   margin: 0 auto;

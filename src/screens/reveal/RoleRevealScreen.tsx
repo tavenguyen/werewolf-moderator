@@ -325,11 +325,14 @@ export default function RoleRevealScreen({}: Props) {
           onKeyDown={(e) => {
             if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && !isCardLocked) {
               e.preventDefault();
-              startHoldWithDelay();
-            }
-          }}
-          onKeyUp={(e) => {
-            if (e.key === ' ' || e.key === 'Enter') {
+              if (isHolding) {
+                stopHold();
+              } else {
+                clearHoldDelayTimer();
+                setIsHolding(true);
+                setHasViewed(true);
+              }
+            } else if (e.key === 'Escape' && isHolding) {
               e.preventDefault();
               stopHold();
             }
@@ -345,8 +348,8 @@ export default function RoleRevealScreen({}: Props) {
               : !isRoleReady
               ? 'Đang chia lá bài'
               : isHolding
-              ? `Đang xem vai của ${currentPlayer.name}. Thả tay để úp bài lại.`
-              : `Nhấn và giữ ít nhất 250ms để xem vai của ${currentPlayer.name}`
+              ? `Đang xem vai của ${currentPlayer.name}. Thả tay hoặc nhấn Enter/Space để úp bài lại.`
+              : `Nhấn giữ 250ms hoặc nhấn Enter/Space để xem vai của ${currentPlayer.name}`
           }
         >
           {/* Sương mỏng & bụi sáng bùng lên phía sau thẻ khi đang giữ mở bài */}

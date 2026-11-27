@@ -182,11 +182,17 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
   };
 
   const handleFinalizeVote = async () => {
+    if (isSubmittingFinalize) return;
+    setIsSubmittingFinalize(true);
     try {
       await actions.finalizePublicVote();
+      setConfirmFinalizeOpen(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể chốt phán quyết lúc này';
       setAnnouncement(msg);
+      setConfirmFinalizeOpen(false);
+    } finally {
+      setIsSubmittingFinalize(false);
     }
   };
 
@@ -233,9 +239,11 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             <span aria-hidden="true">⛶</span>
             <span>Toàn màn hình</span>
           </button>
-          <button className="host-mobile-nav" onClick={() => onNavigate?.('day')}>
-            Xem màn ngày ➔
-          </button>
+          {isHostPlayer && (
+            <button className="host-mobile-nav" onClick={() => onNavigate?.('day')}>
+              Xem màn ngày ➔
+            </button>
+          )}
         </div>
       </header>
 
@@ -303,16 +311,32 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
           </div>
         </aside>
 
-        {/* Center Column: Big Clock & Debate Controls */}
-        <section className={`host-panel host-main-panel ${isUrgent ? 'host-urgent' : ''}`}>
+        {/* Center Column: Phase-Aware Big Clock & Controls */}
+        <section className={`host-panel host-main-panel ${isUrgent && isTimedDayPhase ? 'host-urgent' : ''}`}>
           <div className="host-panel-title host-center-title">
             <div className="host-title-left">
               <span className="phase-badge">
-                {publicView?.phase === 'NIGHT'
-                  ? `TRỜI TỐI · ĐÊM THỨ ${publicView.roundNumber}`
+                {isNightPhase
+                  ? `TRỜI TỐI · ĐÊM THỨ ${publicView?.roundNumber || 1}`
+                  : isGameOverPhase
+                  ? 'KẾT THÚC VÁN ĐẤU'
                   : `TRỜI SÁNG · NGÀY THỨ ${publicView?.roundNumber || 1}`}
               </span>
-              <strong>ĐỒNG HỒ BIỂU QUYẾT TOÀN BÀN</strong>
+              <strong>
+                {isNightPhase
+                  ? 'TIẾN ĐỘ BAN ĐÊM'
+                  : isMayorElectionPhase
+                  ? 'BẦU TRƯỞNG LÀNG'
+                  : isRunoffPhase
+                  ? 'VÒNG BỎ PHIẾU LẠI'
+                  : isHunterShotPhase
+                  ? 'PHÁT SÚNG THỢ SĂN'
+                  : isMayorSuccessionPhase
+                  ? 'TRUYỀN HUY HIỆU TRƯỞNG LÀNG'
+                  : isGameOverPhase
+                  ? 'VÁN ĐẤU ĐÃ KẾT THÚC'
+                  : 'ĐỒNG HỒ BIỂU QUYẾT TOÀN BÀN'}
+              </strong>
             </div>
             <span className="host-stable">
               <i aria-hidden="true" />
@@ -320,19 +344,67 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             </span>
           </div>
 
-          <div className="host-clock-block">
-            <div className="host-clock" aria-live="off">{formatTime(remainingTime)}</div>
-            <div className={`host-lock ${!voteLocked ? 'unlocked' : 'locked'}`}>
-              <span aria-hidden="true">{!voteLocked ? '🔓' : '🔒'}</span>
-              <span>
-                {voteLocked ? (
-                  <>CHƯA ĐẾN GIỜ BỎ PHIẾU: CÒN <b>{voteLockRemaining}S THẢO LUẬN</b></>
-                ) : (
-                  <b className="unlocked-highlight">HÒM PHIẾU ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU BỎ PHIẾU</b>
-                )}
-              </span>
+          {isNightPhase ? (
+            <div className="host-clock-block">
+              <div className="host-clock" aria-live="polite">
+                {publicView?.currentTurnInfo?.turnIndex ?? 0}/{publicView?.currentTurnInfo?.totalTurns ?? 0}
+              </div>
+              <div className="host-lock locked">
+                <span aria-hidden="true">🌙</span>
+                <span>
+                  {publicView?.currentTurnInfo?.titleVi
+                    ? `LƯỢT HIỆN TẠI: ${publicView.currentTurnInfo.titleVi.toUpperCase()}`
+                    : 'ĐANG GỌI CÁC VAI TRÒ BAN ĐÊM'}
+                </span>
+              </div>
             </div>
-          </div>
+          ) : isGameOverPhase ? (
+            <div className="host-clock-block">
+              <div className="host-clock" aria-live="off">KẾT THÚC</div>
+              <div className="host-lock unlocked">
+                <span aria-hidden="true">🏆</span>
+                <span>VÁN ĐẤU ĐÃ KẾT THÚC · MỜI XEM BẢNG TỔNG KẾT</span>
+              </div>
+            </div>
+          ) : isHunterShotPhase || isMayorSuccessionPhase ? (
+            <div className="host-clock-block">
+              <div className="host-clock" aria-live="off">{formatTime(remainingTime)}</div>
+              <div className="host-lock locked">
+                <span aria-hidden="true">{isHunterShotPhase ? '🎯' : '👑'}</span>
+                <span>
+                  {isHunterShotPhase
+                    ? 'ĐANG CHỜ THỢ SĂN CHỌN MỤC TIÊU BẮN KÈO'
+                    : 'ĐANG CHỜ TRƯỞNG LÀNG CHỌN NGƯỜI KẾ NHIỆM'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="host-clock-block">
+              <div className="host-clock" aria-live="off">{formatTime(remainingTime)}</div>
+              <div className={`host-lock ${!effectiveVoteLocked ? 'unlocked' : 'locked'}`}>
+                <span aria-hidden="true">{!effectiveVoteLocked ? '🔓' : '🔒'}</span>
+                <span>
+                  {effectiveVoteLocked ? (
+                    <>CHƯA ĐẾN GIỜ BỎ PHIẾU: CÒN <b>{voteLockRemaining}S THẢO LUẬN</b></>
+                  ) : isMayorElectionPhase ? (
+                    <b className="unlocked-highlight">HÒM PHIẾU ĐÃ MỞ · ĐANG BẦU TRƯỞNG LÀNG</b>
+                  ) : isRunoffPhase ? (
+                    <b className="unlocked-highlight">
+                      VÒNG BỎ PHIẾU LẠI
+                      {publicView?.runoffCandidates?.length
+                        ? ` (${publicView.runoffCandidates
+                            .map((id) => players.find((p) => p.id === id)?.name)
+                            .filter(Boolean)
+                            .join(' vs ')})`
+                        : ''}
+                    </b>
+                  ) : (
+                    <b className="unlocked-highlight">HÒM PHIẾU ĐÃ MỞ · CẢ LÀNG BẮT ĐẦU BỎ PHIẾU</b>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Cảnh báo âm thanh bị chặn bởi Autoplay chính sách trình duyệt di động */}
           {audioStatus !== 'unlocked' && (
@@ -386,39 +458,46 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
 
           {announcement && <p className="host-notice" role="status">{announcement}</p>}
 
-          <div className="host-controls">
-            <div className="host-control-row">
-              <button
-                className="host-button host-control"
-                onClick={handleTogglePause}
-              >
-                <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
-                <span>{isPaused ? 'TIẾP TỤC ĐẾM GIỜ' : 'TẠM DỪNG ĐẾM GIỜ'}</span>
-              </button>
-              {(publicView?.extensionsUsed ?? 0) < 2 && (
+          {isTimedDayPhase && (
+            <div className="host-controls">
+              <div className="host-control-row">
                 <button
-                  className="host-button host-control host-extend"
-                  onClick={handleExtendTime}
+                  className="host-button host-control"
+                  onClick={handleTogglePause}
                 >
-                  <span aria-hidden="true">＋</span>
-                  <span>+30 GIÂY THẢO LUẬN</span>
+                  <span aria-hidden="true">{isPaused ? '▶' : '⏸'}</span>
+                  <span>{isPaused ? 'TIẾP TỤC ĐẾM GIỜ' : 'TẠM DỪNG ĐẾM GIỜ'}</span>
                 </button>
-              )}
-            </div>
+                {(publicView?.extensionsUsed ?? 0) < 2 && (
+                  <button
+                    className="host-button host-control host-extend"
+                    onClick={handleExtendTime}
+                  >
+                    <span aria-hidden="true">＋</span>
+                    <span>+30 GIÂY THẢO LUẬN</span>
+                  </button>
+                )}
+              </div>
 
-            <button
-              disabled={voteLocked}
-              className="host-finalize"
-              onClick={handleFinalizeVote}
-            >
-              <span aria-hidden="true">⚒</span>
-              <span>
-                {voteLocked
-                  ? `ĐANG KHÓA CHỐT VOTE (${voteLockRemaining}S)`
-                  : 'CHỐT KẾT QUẢ BIỂU QUYẾT TREO CỔ'}
-              </span>
-            </button>
-          </div>
+              <button
+                ref={finalizeTrigger}
+                disabled={effectiveVoteLocked || isSubmittingFinalize}
+                className="host-finalize"
+                onClick={() => setConfirmFinalizeOpen(true)}
+              >
+                <span aria-hidden="true">⚒</span>
+                <span>
+                  {effectiveVoteLocked
+                    ? `ĐANG KHÓA CHỐT VOTE (${voteLockRemaining}S)`
+                    : isMayorElectionPhase
+                    ? 'CHỐT PHIẾU BẦU TRƯỞNG LÀNG'
+                    : isRunoffPhase
+                    ? 'CHỐT KẾT QUẢ VOTE LẠI'
+                    : 'CHỐT KẾT QUẢ BIỂU QUYẾT TREO CỔ'}
+                </span>
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Right Column: Audio & Privacy Guard & Timeline Logs */}
@@ -467,6 +546,71 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
           )}
         </aside>
       </div>
+
+      {/* Confirm Finalize Modal */}
+      {confirmFinalizeOpen && (
+        <div
+          className="host-modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (isSubmittingFinalize) return;
+            setConfirmFinalizeOpen(false);
+            finalizeTrigger.current?.focus();
+          }}
+        >
+          <section
+            className="host-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="host-confirm-finalize-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="host-modal-heading">
+              <h2 id="host-confirm-finalize-title">Xác nhận chốt kết quả biểu quyết?</h2>
+              <button
+                type="button"
+                disabled={isSubmittingFinalize}
+                onClick={() => {
+                  setConfirmFinalizeOpen(false);
+                  finalizeTrigger.current?.focus();
+                }}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+            <p className="host-qr-desc">
+              {isMayorElectionPhase
+                ? 'Hệ thống sẽ tổng hợp phiếu bầu để chọn Trưởng làng mới.'
+                : isRunoffPhase
+                ? 'Hệ thống sẽ chốt kết quả bỏ phiếu lại ngay lập tức.'
+                : 'Hệ thống sẽ khóa hòm phiếu và công bố kết quả treo cổ ngay lập tức.'}
+            </p>
+            <div className="host-control-row" style={{ marginTop: '16px' }}>
+              <button
+                ref={confirmCancelRef}
+                type="button"
+                className="host-button host-control"
+                disabled={isSubmittingFinalize}
+                onClick={() => {
+                  setConfirmFinalizeOpen(false);
+                  finalizeTrigger.current?.focus();
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="host-finalize"
+                disabled={isSubmittingFinalize}
+                onClick={handleFinalizeVote}
+              >
+                {isSubmittingFinalize ? 'Đang chốt...' : 'Xác nhận'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* QR Modal */}
       {qrOpen && (

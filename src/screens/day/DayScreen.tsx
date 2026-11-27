@@ -60,13 +60,26 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
 
   // Cập nhật đếm ngược theo deadlineAt từ session (đóng băng khi Pause)
   useEffect(() => {
+    if (publicView?.isPaused && publicView.pausedRemainingSeconds != null) {
+      setRemainingTime(publicView.pausedRemainingSeconds);
+      return;
+    }
+
     if (!publicView?.deadlineAt) {
-      setRemainingTime(180);
+      const fallbackSeconds = isMayorElectionPhase
+        ? 45
+        : isRunoffPhase
+        ? 30
+        : isHunterShotPhase
+        ? 15
+        : isMayorSuccessionPhase
+        ? 10
+        : 180;
+      setRemainingTime(fallbackSeconds);
       return;
     }
 
     if (publicView.isPaused) {
-      // Khi đang Pause, đóng băng hiển thị không cập nhật đếm lùi
       return;
     }
 
@@ -79,7 +92,15 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     updateTimer();
     const interval = window.setInterval(updateTimer, 500);
     return () => window.clearInterval(interval);
-  }, [publicView?.deadlineAt, publicView?.isPaused]);
+  }, [
+    publicView?.deadlineAt,
+    publicView?.isPaused,
+    publicView?.pausedRemainingSeconds,
+    isMayorElectionPhase,
+    isRunoffPhase,
+    isHunterShotPhase,
+    isMayorSuccessionPhase,
+  ]);
 
   // Reset voteSubmitted khi sang ngày mới, đổi phase, hoặc khi đổi người chơi ở chế độ 1 máy
   useEffect(() => {
@@ -213,9 +234,11 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   };
 
   const isUrgent = remainingTime <= 30;
+  const progressMax = isMayorElectionPhase ? 45 : isRunoffPhase ? 30 : 180;
   const radius = 64;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (Math.min(remainingTime, 180) / 180) * circumference;
+  const strokeDashoffset =
+    circumference - (Math.min(remainingTime, progressMax) / progressMax) * circumference;
 
   return (
     <main className="day-screen app-page">
@@ -344,16 +367,24 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             </div>
           </div>
 
-          <div className={`lock-indicator ${!voteLocked ? 'is-unlocked' : 'is-locked'}`} aria-live="polite">
-            <span className="lock-icon" aria-hidden="true">{!voteLocked ? '🔓' : '🔒'}</span>
-            <span>
-              {!voteLocked ? (
-                <strong className="unlocked-text">HÒM PHIẾU ĐÃ MỞ · BẮT ĐẦU BỎ PHIẾU TREO CỔ</strong>
-              ) : (
-                <>CHƯA ĐẾN GIỜ BỎ PHIẾU: <strong>CÒN {voteLockRemaining}S THẢO LUẬN</strong></>
-              )}
-            </span>
-          </div>
+          {!isSpecialInstantPhase && (
+            <div className={`lock-indicator ${!effectiveVoteLocked ? 'is-unlocked' : 'is-locked'}`} aria-live="polite">
+              <span className="lock-icon" aria-hidden="true">{!effectiveVoteLocked ? '🔓' : '🔒'}</span>
+              <span>
+                {!effectiveVoteLocked ? (
+                  <strong className="unlocked-text">
+                    {isMayorElectionPhase
+                      ? 'HÒM PHIẾU ĐÃ MỞ · BẦU CHỌN TRƯỞNG LÀNG'
+                      : isRunoffPhase
+                      ? 'HÒM PHIẾU ĐÃ MỞ · BỎ PHIẾU LẠI'
+                      : 'HÒM PHIẾU ĐÃ MỞ · BẮT ĐẦU BỎ PHIẾU TREO CỔ'}
+                  </strong>
+                ) : (
+                  <>CHƯA ĐẾN GIỜ BỎ PHIẾU: <strong>CÒN {voteLockRemaining}S THẢO LUẬN</strong></>
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Điều khiển cho Host */}
           {state.isHost && (
@@ -770,7 +801,13 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                               <div className="hand-vote-name-wrap">
                                 <span className="vote-name">{player.name}</span>
                                 <small className="vote-weight">
-                                  {player.isMayor ? '👑 Trưởng làng (x2 phiếu)' : 'Ứng viên'}
+                                  {player.isMayor
+                                    ? player.voteWeight === 0
+                                      ? '👑 Trưởng làng (0 phiếu · mất quyền)'
+                                      : '👑 Trưởng làng (x2 phiếu)'
+                                    : player.voteWeight === 0
+                                    ? '🃏 Đã mất quyền vote'
+                                    : 'Ứng viên'}
                                 </small>
                               </div>
                             </div>
@@ -863,7 +900,9 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                             {isMayorElectionPhase
                               ? 'Ứng viên Trưởng làng'
                               : player.isMayor
-                              ? '👑 Trưởng làng (2 phiếu)'
+                              ? player.voteWeight === 0
+                                ? '👑 Trưởng làng (0 phiếu · mất quyền)'
+                                : '👑 Trưởng làng (2 phiếu)'
                               : player.voteWeight === 0
                               ? '🃏 Đã mất quyền vote'
                               : '1 phiếu'}
