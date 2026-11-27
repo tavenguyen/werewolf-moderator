@@ -376,7 +376,23 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       }
     }
     this.roomState = this.createEmptyRoomState('7290', false);
-    this.emitState(false);
+    this.state = {
+      ...this.state,
+      roomCode: '',
+      publicView: null,
+      privateView: null,
+      hostView: null,
+      postGameView: null,
+      timerSnapshot: null,
+      error: null,
+    };
+    for (const listener of this.listeners) {
+      try {
+        listener(this.state);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   public async updateSettings(settings: Partial<RoomSettings>): Promise<void> {

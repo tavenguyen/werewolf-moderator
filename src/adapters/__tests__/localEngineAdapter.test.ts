@@ -1341,6 +1341,8 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
       await adapter.leaveRoom();
       expect(adapter.hasRecoverableSession()).toBe(false);
       expect(await adapter.resumeSession()).toBe(false);
+      expect(adapter.getState().publicView).toBeNull();
+      expect(adapter.getState().roomCode).toBe('');
     } finally {
       if (prevLocalStorage === undefined) {
         delete (globalThis as Record<string, unknown>).localStorage;

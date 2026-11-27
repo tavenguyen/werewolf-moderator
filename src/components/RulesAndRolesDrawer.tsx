@@ -38,20 +38,29 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
 
 export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'roles' }: Props) {
   const { state } = useGameSession();
-  const roomSettings = state.publicView?.settings;
+  const hasActiveRoom = Boolean(state.roomCode && state.publicView);
+  const roomSettings = hasActiveRoom ? state.publicView?.settings : undefined;
+  const knownRoleIds = useMemo(() => new Set(gameRoles.map((r) => r.id)), []);
   const inGameRoleIds = useMemo(() => {
+    if (!hasActiveRoom) return new Set<string>();
     const deck = roomSettings?.customDeck;
     if (!deck) return new Set<string>();
     return new Set(
       Object.entries(deck)
-        .filter(([, count]) => count > 0)
+        .filter(([roleId, count]) => knownRoleIds.has(roleId) && Number.isFinite(count) && count > 0)
         .map(([roleId]) => roleId),
     );
-  }, [roomSettings?.customDeck]);
-  const hasInGameDeck = inGameRoleIds.size > 0;
+  }, [hasActiveRoom, knownRoleIds, roomSettings?.customDeck]);
+  const hasInGameDeck = hasActiveRoom && inGameRoleIds.size > 0;
 
   const [activeTab, setActiveTab] = useState<'rules' | 'roles'>(initialTab);
   const [filterSide, setFilterSide] = useState<RoleSide | 'all' | 'in_game'>('all');
+
+  useEffect(() => {
+    if (filterSide === 'in_game' && !hasInGameDeck) {
+      setFilterSide('all');
+    }
+  }, [filterSide, hasInGameDeck]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<GameRole | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
