@@ -125,12 +125,12 @@
 }
 
 @media (min-width: 860px) {
-  .day-main.is-single-device {
-    width: min(100%, 960px);
+  .day-main.is-desktop-split {
+    width: min(100%, 860px);
     display: grid;
-    grid-template-columns: 330px 1fr;
-    align-items: start;
-    gap: 20px;
+    grid-template-columns: 320px 1fr;
+    align-items: center;
+    gap: 24px;
   }
 }
 
