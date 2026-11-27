@@ -54,6 +54,18 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+html {
+  overflow-x: hidden;
 }
 
 body {
@@ -71,24 +83,6 @@ body:has(.screen-home) {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-}
-
-/* Khóa và ẩn hoàn toàn scrollbar khi ở màn hình Lobby */
-html:has(.screen-lobby),
-html:has(.lobby-page-compact),
-body:has(.screen-lobby),
-body:has(.lobby-page-compact) {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-html:has(.screen-lobby)::-webkit-scrollbar,
-html:has(.lobby-page-compact)::-webkit-scrollbar,
-body:has(.screen-lobby)::-webkit-scrollbar,
-body:has(.lobby-page-compact)::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
 }
 
 button, input, select {
