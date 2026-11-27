@@ -10,7 +10,7 @@
 }
 
 .summary-header {
-  max-width: 760px;
+  max-width: 880px;
   margin: 0 auto 20px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
@@ -53,11 +53,126 @@
 }
 
 .summary-content {
-  width: min(100%, 540px);
+  width: min(100%, 880px);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+}
+
+.summary-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.summary-role-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #141821;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.summary-role-row.side-wolf {
+  border-color: rgba(185, 55, 61, 0.35);
+}
+
+.summary-role-row.side-village {
+  border-color: rgba(62, 123, 87, 0.35);
+}
+
+.summary-role-row.side-third {
+  border-color: rgba(108, 100, 153, 0.4);
+}
+
+.summary-role-row.is-dead {
+  opacity: 0.72;
+}
+
+.summary-role-art {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+  font-size: 20px;
+}
+
+.summary-role-art .summary-role-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.summary-role-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summary-role-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.summary-seat {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.summary-player-name {
+  font-size: 14px;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summary-role-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.summary-role-name {
+  font-size: 12.5px;
+  color: #e09f53;
+  font-weight: 600;
+}
+
+.summary-role-origin {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.summary-exit-btn {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  font: 600 13px var(--font-body);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.summary-exit-btn:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.14);
 }
 
 /* Winner Banner */

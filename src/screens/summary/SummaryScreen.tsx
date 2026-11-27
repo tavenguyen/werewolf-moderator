@@ -116,25 +116,39 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
   const roomCode = state.roomCode || '7290';
 
   const enteredAtRef = useRef(Date.now());
-  const [openCards, setOpenCards] = useState<Set<string>>(new Set());
-  const [tab, setTab] = useState<'cards' | 'timeline'>('cards');
+  const [tab, setTab] = useState<'roles' | 'timeline'>('roles');
   const [notice, setNotice] = useState('');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [showEarlyRematchConfirm, setShowEarlyRematchConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isRematching, setIsRematching] = useState(false);
 
   useEffect(() => {
-    if (!showEarlyRematchConfirm) return;
+    if (!showEarlyRematchConfirm && !showExitConfirm) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !isRematching) {
         setShowEarlyRematchConfirm(false);
+        setShowExitConfirm(false);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showEarlyRematchConfirm, isRematching]);
+  }, [showEarlyRematchConfirm, showExitConfirm, isRematching]);
 
-  // Chuẩn bị danh sách vai trò người chơi
+  const deathsByPlayerId = new Map(
+    (publicView?.deaths ?? []).map((d) => [d.playerId, d] as const)
+  );
+
+  const formatPlayerStatus = (playerId: string, isAlive: boolean): string => {
+    if (isAlive) return 'Sống';
+    const d = deathsByPlayerId.get(playerId);
+    if (!d) return 'Đã chết';
+    if (d.cause === 'VILLAGE_VOTE') return `Treo cổ Ngày ${d.roundNumber}`;
+    if (d.phase === 'NIGHT') return `Chết Đêm ${d.roundNumber}`;
+    return `Chết Ngày ${d.roundNumber}`;
+  };
+
+  // Chuẩn bị danh sách vai trò người chơi (mở sẵn 100%)
   const rolesList: RoleDisplayItem[] = (() => {
     if (postGame && postGame.allRoles && postGame.allRoles.length > 0) {
       return postGame.allRoles.map((p) => {
@@ -167,7 +181,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
           finalRoleName: finalDef?.nameVi ?? p.finalRoleId,
           finalRoleId: p.finalRoleId,
           symbol,
-          status: p.isAlive ? 'Còn sống' : 'Đã chết',
+          status: formatPlayerStatus(p.id, p.isAlive),
           side,
           sideName,
           isAlive: p.isAlive,
@@ -185,7 +199,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
       finalRoleName: 'Chưa công bố',
       finalRoleId: '',
       symbol: '❓',
-      status: p.isAlive ? 'Còn sống' : 'Đã chết',
+      status: formatPlayerStatus(p.id, p.isAlive),
       side: 'village' as const,
       sideName: 'Bí mật',
       isAlive: p.isAlive,
@@ -194,25 +208,6 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
 
   const winner = postGame?.winOutcome?.winner;
   const winnerBanner = winner ? WINNER_BANNER_MAP[winner] : DEFAULT_WINNER_BANNER;
-
-  const flip = (id: string) => {
-    setOpenCards((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const revealAll = () => {
-    if (openCards.size < rolesList.length) {
-      setOpenCards(new Set(rolesList.map((p) => p.id)));
-    } else {
-      setOpenCards(new Set());
-    }
-  };
-
-  const allRevealed = openCards.size === rolesList.length;
 
   const executeRematch = async () => {
     if (isRematching) return;
@@ -273,7 +268,6 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
               📜 Luật &amp; Vai trò
             </button>
           )}
-          <span className="summary-badge-complete">VÁN ĐÃ KẾT THÚC</span>
         </div>
       </header>
 
@@ -284,16 +278,12 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
             <span className="summary-trophy">{winnerBanner.icon}</span>
           </div>
           <div className="summary-winner-copy">
-            <span className="winner-eyebrow">{winnerBanner.eyebrow}</span>
             <h1>{winnerBanner.title}</h1>
             <p>
               {postGame?.winOutcome?.reason ||
-                'Ván đấu đã kết thúc. Toàn bộ vai trò trong làng đã được hé lộ.'}
+                'Toàn bộ vai trò trong ván đấu đã được mở.'}
             </p>
           </div>
-          <button className="summary-reveal-all" onClick={revealAll}>
-            {allRevealed ? 'ÚP TẤT CẢ' : 'LẬT TẤT CẢ ✦'}
-          </button>
         </section>
 
         {notice && <p className="screen-notice" role="status" style={{ margin: '12px auto' }}>{notice}</p>}
@@ -302,12 +292,12 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
         <div className="summary-tabs" role="tablist" aria-label="Nội dung tổng kết">
           <button
             role="tab"
-            aria-selected={tab === 'cards'}
-            className={tab === 'cards' ? 'active' : ''}
-            onClick={() => setTab('cards')}
+            aria-selected={tab === 'roles'}
+            className={tab === 'roles' ? 'active' : ''}
+            onClick={() => setTab('roles')}
           >
             <span aria-hidden="true">🎴</span>
-            <span>THẺ BÀI ({openCards.size}/{rolesList.length})</span>
+            <span>VAI TRÒ TOÀN BÀN ({rolesList.length})</span>
           </button>
           <button
             role="tab"
@@ -320,77 +310,71 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
           </button>
         </div>
 
-        {tab === 'cards' ? (
-          <section className="summary-cards" aria-label="Vai trò người chơi">
-            {rolesList.map((player, index) => {
-              const isOpen = openCards.has(player.id);
+        {tab === 'roles' ? (
+          <section className="summary-roles-grid" aria-label="Vai trò người chơi">
+            {rolesList.map((player) => {
               const roleImage = player.finalRoleId ? getRoleImage(player.finalRoleId) : undefined;
               const imgErrorKey = `${player.id}:${player.finalRoleId}`;
               return (
-                <button
+                <article
                   key={player.id}
-                  className={`summary-card ${isOpen ? 'is-open' : ''}`}
-                  onClick={() => flip(player.id)}
-                  aria-pressed={isOpen}
-                  aria-label={`${isOpen ? 'Ẩn' : 'Lật'} thẻ bài của ${player.name}`}
-                  style={{ animationDelay: `${index * 60}ms` }}
+                  className={`summary-role-row side-${player.side} ${player.isAlive ? 'is-alive' : 'is-dead'}`}
                 >
-                  <span className="summary-card-inner">
-                    {/* Front Face: Rustic Tarot Card Back */}
-                    <span className="summary-card-face summary-card-front" aria-hidden={isOpen}>
-                      <span className="tarot-card-border">
-                        <span className="tarot-corner tl" />
-                        <span className="tarot-corner tr" />
-                        <span className="tarot-corner bl" />
-                        <span className="tarot-corner br" />
-                        <small className="card-seat-tag">GHẾ #{String(player.seatIndex).padStart(2, '0')}</small>
-                        <span className="tarot-emblem" aria-hidden="true">☾</span>
-                        <b className="card-player-name">{player.name}</b>
-                        <small className="summary-card-hint">CHẠM ĐỂ LẬT BÀI</small>
-                      </span>
-                    </span>
-
-                    {/* Back Face: Revealed Secret Role */}
-                    <span className={`summary-card-face summary-card-back side-${player.side}`} aria-hidden={!isOpen}>
-                      <span className="role-revealed-wrap">
-                        <span className="role-side-tag">{player.sideName}</span>
-                        <span className="role-symbol-display" aria-hidden="true">
-                          {roleImage && !failedImages[imgErrorKey] ? (
-                            <img
-                              src={roleImage}
-                              alt=""
-                              className="summary-role-img"
-                              loading="lazy"
-                              decoding="async"
-                              draggable={false}
-                              onError={() =>
-                                setFailedImages((prev) =>
-                                  prev[imgErrorKey] ? prev : { ...prev, [imgErrorKey]: true }
-                                )
-                              }
-                            />
-                          ) : (
-                            player.symbol
-                          )}
-                        </span>
-                        <b className="role-title-display">{player.finalRoleName}</b>
-                        {player.initialRoleName !== player.finalRoleName && (
-                          <small className="initial-role-tag">Ban đầu: {player.initialRoleName}</small>
-                        )}
-                        <span className={`status-pill ${player.isAlive ? 'status-alive' : 'status-dead'}`}>
-                          {player.status}
-                        </span>
-                      </span>
-                    </span>
+                  <div className="summary-role-art" aria-hidden="true">
+                    {roleImage && !failedImages[imgErrorKey] ? (
+                      <img
+                        src={roleImage}
+                        alt=""
+                        className="summary-role-img"
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                        onError={() =>
+                          setFailedImages((prev) =>
+                            prev[imgErrorKey] ? prev : { ...prev, [imgErrorKey]: true }
+                          )
+                        }
+                      />
+                    ) : (
+                      <span>{player.symbol}</span>
+                    )}
+                  </div>
+                  <div className="summary-role-meta">
+                    <div className="summary-role-top">
+                      <span className="summary-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                      <strong className="summary-player-name">{player.name}</strong>
+                    </div>
+                    <div className="summary-role-bottom">
+                      <span className="summary-role-name">{player.finalRoleName}</span>
+                      {player.initialRoleName !== player.finalRoleName && (
+                        <small className="summary-role-origin">(ban đầu: {player.initialRoleName})</small>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`status-pill ${player.isAlive ? 'status-alive' : 'status-dead'}`}>
+                    {player.status}
                   </span>
-                </button>
+                </article>
               );
             })}
           </section>
         ) : (
           <section className="summary-timeline" aria-label="Diễn biến ván đấu">
             {(() => {
-              const logs = postGame?.historyLogs ?? publicView?.publicLogs ?? [];
+              const rawLogs = postGame?.historyLogs ?? publicView?.publicLogs ?? [];
+              const logs = rawLogs.filter(
+                (log) =>
+                  !log.includes('Khởi tạo ván chơi mới') &&
+                  !log.includes('Bắt đầu ván tái đấu mới') &&
+                  !log.includes('Phòng chơi 1 máy dùng chung')
+              );
+              if (logs.length === 0) {
+                return (
+                  <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13.5px', padding: '16px 0' }}>
+                    Chưa có diễn biến nào được ghi nhận.
+                  </p>
+                );
+              }
               const groups: Array<{ label: string; items: string[] }> = [];
               for (const log of logs) {
                 const phaseMatch = log.match(/(Đêm\s+(?:thứ\s+)?\d+|Ngày\s+(?:thứ\s+)?\d+)/i);
@@ -399,7 +383,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
                   groups.push({ label: groupLabel, items: [log] });
                 } else {
                   if (groups.length === 0) {
-                    groups.push({ label: 'KHỞI ĐẦU VÁN ĐẤU', items: [] });
+                    groups.push({ label: 'DIỄN BIẾN', items: [] });
                   }
                   groups[groups.length - 1].items.push(log);
                 }
@@ -412,10 +396,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
                   {group.items.map((log, lIdx) => (
                     <article key={lIdx} className="timeline-event">
                       <i className="timeline-dot night-dot" aria-hidden="true" />
-                      <div className="timeline-heading">
-                        <strong>SỰ KIỆN #{lIdx + 1}</strong>
-                      </div>
-                      <p>{log}</p>
+                      <p style={{ margin: 0 }}>{log}</p>
                     </article>
                   ))}
                 </div>
@@ -434,19 +415,17 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
             onClick={() => void handleRematch()}
           >
             <span className="rematch-icon" aria-hidden="true">🎲</span>
-            <span>{isRematching ? 'ĐANG QUAY LẠI LOBBY...' : 'CHƠI VÁN MỚI (VỀ LOBBY)'}</span>
+            <span>{isRematching ? 'ĐANG QUAY LẠI PHÒNG CHỜ...' : 'Chơi ván mới'}</span>
           </button>
         ) : (
           <span className="summary-waiting-rematch">Đang đợi quản trò đưa cả bàn về phòng chờ...</span>
         )}
         <button
           type="button"
-          className="summary-exit"
-          onClick={handleExit}
-          aria-label="Rời phòng"
-          title="Rời phòng"
+          className="summary-exit-btn"
+          onClick={() => setShowExitConfirm(true)}
         >
-          ⟵
+          Thoát phòng
         </button>
       </footer>
 
@@ -526,6 +505,83 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
                 }}
               >
                 {isRematching ? 'Đang chuyển...' : 'Về Phòng chờ'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {showExitConfirm && (
+        <div
+          role="presentation"
+          onClick={() => setShowExitConfirm(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 900,
+            background: 'rgba(6, 8, 12, 0.82)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="summary-exit-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              background: '#131720',
+              border: '1px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '14px',
+              padding: '20px',
+              color: '#e2e8f0',
+              boxShadow: '0 18px 48px rgba(0, 0, 0, 0.75)',
+            }}
+          >
+            <h2 id="summary-exit-title" style={{ margin: '0 0 10px', fontSize: '16px', color: '#f8fafc' }}>
+              Thoát phòng hiện tại?
+            </h2>
+            <p style={{ margin: '0 0 18px', fontSize: '13.5px', lineHeight: 1.5, color: '#cbd5e1' }}>
+              Bạn sẽ rời khỏi phòng và quay về màn hình chính.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(false)}
+                style={{
+                  minHeight: '40px',
+                  padding: '0 14px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                  background: 'transparent',
+                  color: '#cbd5e1',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Ở lại
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleExit()}
+                style={{
+                  minHeight: '40px',
+                  padding: '0 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(239, 68, 68, 0.5)',
+                  background: 'rgba(220, 38, 38, 0.22)',
+                  color: '#fca5a5',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Thoát phòng
               </button>
             </div>
           </section>

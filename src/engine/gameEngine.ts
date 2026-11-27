@@ -153,7 +153,7 @@ export function createInitialGameState(
     mayorId: null,
     pendingHunterShotPlayerId: null,
     pendingMayorSuccessionPlayerId: null,
-    historyLogs: ['Khởi tạo ván chơi mới thành công.'],
+    historyLogs: [],
   };
 }
 

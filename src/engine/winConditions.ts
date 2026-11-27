@@ -238,7 +238,7 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
     return attachHoodlumWin(
       {
         winner: 'WEREWOLF',
-        reason: 'Nanh vuốt Ma Sói đã áp đảo hoàn toàn dân làng! Ngôi làng chính thức chìm trong bóng đêm vĩnh hằng!',
+        reason: 'Ma Sói đã áp đảo số lượng Dân làng.',
         winningPlayerIds: winners,
       },
       state
