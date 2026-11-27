@@ -1319,4 +1319,34 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(state.publicView?.voteLockRemainingSeconds).toBe(0);
     expect(roomState.timers.voteLockDeadlineAt).toBeUndefined();
   });
+
+  it('leaveRoom xóa sạch localStorage để F5 không tự vào lại phòng cũ', async () => {
+    const store = new Map<string, string>();
+    const prevLocalStorage = (globalThis as Record<string, unknown>).localStorage;
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+    };
+
+    try {
+      const adapter = createPopulatedAdapter(6);
+      await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
+      expect(adapter.hasRecoverableSession()).toBe(true);
+
+      await adapter.leaveRoom();
+      expect(adapter.hasRecoverableSession()).toBe(false);
+      expect(await adapter.resumeSession()).toBe(false);
+    } finally {
+      if (prevLocalStorage === undefined) {
+        delete (globalThis as Record<string, unknown>).localStorage;
+      } else {
+        (globalThis as Record<string, unknown>).localStorage = prevLocalStorage;
+      }
+    }
+  });
 });

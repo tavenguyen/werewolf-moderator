@@ -365,6 +365,9 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   public async leaveRoom(): Promise<void> {
     this.clearNightIntroTimer();
     this.clearDayTimer();
+    this.nightIntroUntil = null;
+    this.pendingDayVerdict = null;
+    this.activeLocalPlayerId = undefined;
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -373,7 +376,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       }
     }
     this.roomState = this.createEmptyRoomState('7290', false);
-    this.emitState();
+    this.emitState(false);
   }
 
   public async updateSettings(settings: Partial<RoomSettings>): Promise<void> {
