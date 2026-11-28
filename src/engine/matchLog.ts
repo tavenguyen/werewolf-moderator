@@ -360,6 +360,41 @@ export function groupMatchEventsForTimeline(events: MatchEvent[]): TimelineSecti
 }
 
 /**
+ * Gộp sự kiện Đêm và Bình minh cho giao diện Post-game, khử trùng lặp giữa hành động đêm
+ * và bản tin loa sáng (DAWN_SUMMARY có người chết, MUTE_ANNOUNCE trùng SILENCE, TROUBLEMAKER_ANNOUNCE trùng DOUBLE_VOTE_SABOTAGE).
+ */
+export function consolidateRoundEventsForPostGame(
+  roundGroup: TimelineRoundGroup
+): MatchEvent[] {
+  const hasSuccessSilence = roundGroup.nightActions.some(
+    (e) => e.actionType === 'SILENCE' && e.outcome === 'SUCCESS'
+  );
+  const hasSuccessDoubleVote = roundGroup.nightActions.some(
+    (e) => e.actionType === 'DOUBLE_VOTE_SABOTAGE' && e.outcome === 'SUCCESS'
+  );
+
+  const filteredDawn = roundGroup.dawnEvents.filter((evt) => {
+    if (evt.actionType === 'DAWN_SUMMARY') {
+      const deaths = evt.metadata?.dawnDeaths ?? [];
+      return deaths.length === 0;
+    }
+    if (evt.actionType === 'MUTE_ANNOUNCE' && hasSuccessSilence) {
+      return false;
+    }
+    if (evt.actionType === 'TROUBLEMAKER_ANNOUNCE' && hasSuccessDoubleVote) {
+      return false;
+    }
+    return true;
+  });
+
+  // Đẩy DAWN_SUMMARY (khi không ai chết) xuống cuối khối Đêm làm câu chốt gọn
+  const nonDawnSummary = filteredDawn.filter((e) => e.actionType !== 'DAWN_SUMMARY');
+  const peacefulDawn = filteredDawn.filter((e) => e.actionType === 'DAWN_SUMMARY');
+
+  return [...roundGroup.nightActions, ...nonDawnSummary, ...peacefulDawn];
+}
+
+/**
  * Dựng cây quan hệ nhân – quả trong cùng một khối hiển thị.
  * Nếu parentEventId nằm ngoài khối hiện tại (xuyên khối hoặc bị lọc), tự động đẩy node lên làm root kèm crossBlockParent.
  */

@@ -189,18 +189,17 @@ export function formatMatchEventSegments(
         ];
       }
       const coupleTag = event.metadata?.setup?.isCrossFactionCouple
-        ? 'Cặp đôi khác phe — Phe Thứ 3'
-        : 'Cặp đôi cùng phe';
+        ? ' — khác phe'
+        : '';
       return [
         txt('Thần tình yêu '),
         playerSeg(event, actor, options, false),
         txt(' ghép đôi '),
         playerSeg(event, t0, options),
-        txt(' & '),
+        txt(' và '),
         playerSeg(event, t1, options),
-        txt(' ('),
-        emp(coupleTag, event.metadata?.setup?.isCrossFactionCouple ? 'third' : 'village'),
-        txt(').'),
+        ...(coupleTag ? [emp(coupleTag, 'third')] : []),
+        txt('.'),
       ];
     }
 
@@ -351,9 +350,9 @@ export function formatMatchEventSegments(
       return [
         txt('Bảo vệ '),
         playerSeg(event, actor, options, false),
-        txt(' canh gác cho '),
+        txt(' bảo vệ '),
         playerSeg(event, t0, options),
-        txt(' (bình an).'),
+        txt('.'),
       ];
     }
 
@@ -471,7 +470,7 @@ export function formatMatchEventSegments(
 
       // SUCCESS kill (hoặc selfHealBlocked)
       const selfHealNote = event.metadata?.witch?.selfHealBlocked
-        ? ' (luật cấm Phù thủy tự cứu)'
+        ? ' — cấm tự cứu'
         : '';
       const killVerb = isWhiteWolf ? 'ám sát chết ' : isBigBadWolf ? 'cắn riêng chết ' : 'cắn chết ';
       const killerPrefix: MatchTextSegment[] = isWhiteWolf && actor
@@ -489,9 +488,9 @@ export function formatMatchEventSegments(
       return [
         ...killerPrefix,
         playerSeg(event, t0, options),
-        txt('.'),
         ...(selfHealNote ? [emp(selfHealNote, 'danger')] : []),
         ...(tieNote ? [emp(tieNote, 'muted')] : []),
+        txt('.'),
       ];
     }
 
@@ -621,11 +620,11 @@ export function formatMatchEventSegments(
         return [
           txt('Phù thủy '),
           playerSeg(event, actor, options, false),
-          txt(' ném bình độc giết chết '),
+          txt(' quăng độc giết '),
           playerSeg(event, t0, options),
-          txt(' ('),
-          emp('đè lên bình cứu', 'danger'),
-          txt(').'),
+          txt(' — '),
+          emp('đè bình cứu', 'danger'),
+          txt('.'),
         ];
       }
       return [
@@ -664,16 +663,16 @@ export function formatMatchEventSegments(
         const cluster = inv.inspectedPlayers ?? [t0];
         const powerNote =
           actor.roleId === 'pi'
-            ? ' (hết phép)'
+            ? ' — hết phép'
             : inv.keptPower
-              ? ' (giữ phép)'
-              : ' (mất phép vĩnh viễn)';
+              ? ''
+              : ' — mất phép';
         return [
           txt(`${roleTitle} `),
           playerSeg(event, actor, options, false),
-          txt(' kiểm tra cụm ['),
+          txt(' soi cụm ['),
           ...joinSegmentsList(cluster.map((c) => [playerSeg(event, c, options, false)])),
-          txt('] → Kết quả: '),
+          txt('] → '),
           emp(inv.resultLabel, inv.rawValue ? 'wolf' : 'village'),
           txt(`${powerNote}.`),
         ];
@@ -697,10 +696,9 @@ export function formatMatchEventSegments(
       return [
         txt(`${actorTitle} `),
         playerSeg(event, actor, options, false),
-        ...(actor.roleId === 'apprentice_seer' ? [txt(' (kế thừa Tiên tri)')] : []),
         txt(' soi '),
         playerSeg(event, t0, options),
-        txt(' → Kết quả: '),
+        txt(' → '),
         emp(inv.resultLabel, resultTone),
         txt('.'),
       ];
@@ -991,16 +989,21 @@ export function formatMatchEventSegments(
     case 'DAWN_SUMMARY': {
       const deaths = event.metadata?.dawnDeaths ?? [];
       if (deaths.length === 0) {
+        if (options.mode === 'POST_GAME') {
+          return [emp('Sáng hôm sau: Không ai chết.', 'safe')];
+        }
         return [
           emp(`Bình minh Ngày ${event.roundNumber}: Đêm bình yên, không ai ngã xuống.`, 'safe'),
         ];
       }
-      const deathChunks = deaths.map((d) => [
-        playerSeg(event, d.victim, options),
-        ...(options.mode === 'POST_GAME'
-          ? [txt(` (${getCauseLabelVi(d.cause)})`)]
-          : []),
-      ]);
+      if (options.mode === 'POST_GAME') {
+        const deathChunks = deaths.map((d) => [
+          playerSeg(event, d.victim, options),
+          txt(` chết do ${getCauseLabelVi(d.cause)}`),
+        ]);
+        return [...joinSegmentsList(deathChunks), txt('.')];
+      }
+      const deathChunks = deaths.map((d) => [playerSeg(event, d.victim, options)]);
       return [
         txt(`Bình minh Ngày ${event.roundNumber}: `),
         ...joinSegmentsList(deathChunks),
@@ -1113,19 +1116,19 @@ export function formatMatchEventSegments(
           : '';
       if (actor.roleId === 'prince') {
         return [
-          txt(`${stepLabel}Làng bỏ phiếu treo `),
+          txt(`${stepLabel}Cả làng bỏ phiếu treo `),
           playerSeg(event, actor, options, false),
-          txt(' (Hoàng tử) → '),
-          emp('Hoàng tử lật bài thoát chết', 'safe'),
-          txt(' (giữ quyền bỏ phiếu).'),
+          txt(' (Hoàng tử) — '),
+          emp('lật bài thoát chết', 'safe'),
+          txt('.'),
         ];
       }
       return [
-        txt(`${stepLabel}Làng bỏ phiếu treo `),
+        txt(`${stepLabel}Cả làng bỏ phiếu treo `),
         playerSeg(event, actor, options, false),
-        txt(' (Thằng ngốc) → '),
-        emp('Thằng ngốc lật bài thoát chết', 'safe'),
-        txt(' (mất quyền bỏ phiếu).'),
+        txt(' (Thằng ngốc) — '),
+        emp('lật bài thoát chết, mất quyền bầu', 'safe'),
+        txt('.'),
       ];
     }
 
@@ -1155,9 +1158,9 @@ export function formatMatchEventSegments(
         voteMeta?.tallies.reduce((sum, item) => sum + item.votes, 0) ?? 0;
       const voteSuffix =
         targetTally && totalVotesCast > 0
-          ? ` với ${targetTally.votes}/${totalVotesCast} phiếu`
+          ? ` — ${targetTally.votes}/${totalVotesCast} phiếu`
           : targetTally
-            ? ` với ${targetTally.votes} phiếu`
+            ? ` — ${targetTally.votes} phiếu`
             : '';
       return [
         txt(`${stepPrefix}Cả làng treo cổ `),
@@ -1218,21 +1221,18 @@ export function formatMatchEventSegments(
       const cause = event.metadata?.cascadeCause;
       if (cause === 'COUPLE_HEARTBREAK') {
         return [
-          txt('Vì đau tim, '),
           playerSeg(event, t0, options),
-          ...(actor
-            ? [txt(' (người yêu của '), playerSeg(event, actor, options, false), txt(')')]
-            : []),
-          txt(' chết theo.'),
+          txt(' chết theo người yêu'),
+          ...(actor ? [txt(' '), playerSeg(event, actor, options, false)] : []),
+          txt('.'),
         ];
       }
       if (cause === 'COMPANION_DEATH') {
         return [
-          txt('Vì bạn đồng hành '),
-          ...(actor ? [playerSeg(event, actor, options, false), txt(' ')] : []),
-          txt('tử vong, '),
           playerSeg(event, t0, options),
-          txt(' chết theo.'),
+          txt(' chết theo bạn đồng hành'),
+          ...(actor ? [txt(' '), playerSeg(event, actor, options, false)] : []),
+          txt('.'),
         ];
       }
       return [
@@ -1242,11 +1242,11 @@ export function formatMatchEventSegments(
     }
 
     case 'EMERGENCY_ELIMINATE': {
-      if (!t0) return [txt('Quản trò đã trục xuất một người chơi khỏi bàn.')];
+      if (!t0) return [txt('Quản trò đã loại một người chơi khỏi ván đấu.')];
       return [
-        txt('Quản trò trục xuất khẩn cấp '),
+        txt('Quản trò loại '),
         playerSeg(event, t0, options),
-        txt(' khỏi bàn (rời trận).'),
+        txt(' khỏi ván đấu.'),
       ];
     }
 
@@ -1348,51 +1348,11 @@ export function getOutcomeBadge(event: MatchEvent): OutcomeBadgeInfo | null {
   }
 
   switch (event.outcome) {
-    case 'SUCCESS':
-      if (
-        event.actionType === 'ATTACK' ||
-        event.actionType === 'POISON' ||
-        event.actionType === 'VOTE_EXECUTION' ||
-        event.actionType === 'HUNTER_SHOT' ||
-        event.actionType === 'CASCADE_DEATH' ||
-        event.actionType === 'EMERGENCY_ELIMINATE' ||
-        event.actionType === 'TOUGH_GUY_COLLAPSE' ||
-        event.actionType === 'TETANUS_DEATH'
-      ) {
-        return { label: 'Tử vong', tone: 'danger' };
-      }
-      if (
-        event.actionType === 'CURSED_TURN' ||
-        event.actionType === 'WILD_CHILD_TURN' ||
-        event.actionType === 'DOPPELGANGER_INHERIT' ||
-        event.actionType === 'DRUNK_AWAKEN' ||
-        event.actionType === 'DREAM_WOLF_AWAKEN' ||
-        event.actionType === 'ANGEL_TO_VILLAGER' ||
-        event.actionType === 'CURSE'
-      ) {
-        return { label: 'Biến đổi', tone: 'transform' };
-      }
-      return { label: 'Thành công', tone: 'success' };
     case 'BLOCKED_BY_BODYGUARD':
-      return { label: 'Bị chặn', tone: 'blocked' };
-    case 'SAVED_BY_WITCH':
-      return { label: 'Được cứu', tone: 'saved' };
-    case 'OVERRIDDEN_BY_POISON':
-      return { label: 'Độc đè cứu', tone: 'danger' };
-    case 'OVERDOSE_DOUBLE_PROTECT':
-      return { label: 'Sốc thuốc', tone: 'danger' };
-    case 'IMMUNE':
-      return { label: 'Thoát chết', tone: 'saved' };
+      return { label: 'Bị đỡ', tone: 'blocked' };
     case 'NO_EFFECT':
-      return { label: 'Vô hiệu', tone: 'neutral' };
-    case 'SKIPPED':
-      return { label: 'Bỏ qua', tone: 'neutral' };
-    case 'LOST_POWER':
-      return { label: 'Mất phép', tone: 'danger' };
-    case 'TIED_ESCAPE':
-    case 'BELOW_MAJORITY':
-      return { label: 'Tha bổng', tone: 'neutral' };
-    case 'TIED_RUNOFF':
-      return { label: 'Vote lại', tone: 'neutral' };
+      return { label: 'Không tác dụng', tone: 'neutral' };
+    default:
+      return null;
   }
 }

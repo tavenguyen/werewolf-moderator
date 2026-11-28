@@ -3,12 +3,14 @@ import { createInitialGameState } from '../../../engine/gameEngine';
 import {
   appendMatchEvent,
   buildCascadeTree,
+  consolidateRoundEventsForPostGame,
   filterMatchEvents,
   formatCrossLinkContext,
   groupMatchEventsForTimeline,
   summarizeDayCardStats,
   summarizeNightCardStats,
 } from '../../../engine/matchLog';
+import { formatMatchEventText, getOutcomeBadge } from '../../../engine/matchLogFormatter';
 import type { EventParticipantSnapshot, MatchEvent } from '../../../engine/types';
 
 function snap(
@@ -479,5 +481,101 @@ describe('Summary Screen - MatchTimeline Filtering, Grouping & Cascade Tree', ()
       ],
     });
     expect(dayStats[0].label).toBe('1 treo cổ');
+  });
+
+  it('consolidateRoundEventsForPostGame gộp Đêm + Bình minh, khử trùng lặp loa sáng và lồng thẳng Thợ săn dưới đòn Sói cắn', () => {
+    const round1 = groupMatchEventsForTimeline(sampleEvents).roundGroups[0];
+    const consolidated = consolidateRoundEventsForPostGame(round1);
+    const ids = consolidated.map((e) => e.id);
+
+    // Đêm có người chết -> ẩn DAWN_SUMMARY (e4), giữ ATTACK (e3) và HUNTER_SHOT (e5) + CASCADE_DEATH (e6)
+    expect(ids).not.toContain('e4');
+    expect(ids).toEqual(['e2', 'e3', 'e5', 'e6']);
+
+    // Khi gộp chung 1 khối, buildCascadeTree lồng trực tiếp e5 (HUNTER_SHOT) dưới e3 (ATTACK)
+    const allMap = new Map(sampleEvents.map((e) => [e.id, e]));
+    const tree = buildCascadeTree(consolidated, allMap);
+    const attackNode = tree.find((n) => n.event.id === 'e3')!;
+    expect(attackNode.children.map((c) => c.event.id)).toEqual(['e5']);
+    expect(attackNode.children[0].children.map((c) => c.event.id)).toEqual(['e6']);
+
+    // Đêm bình yên (0 chết): giữ DAWN_SUMMARY làm dòng chốt và định dạng "Sáng hôm sau: Không ai chết."
+    const peacefulGroup = groupMatchEventsForTimeline([
+      makeEvent({
+        id: 'n1_sil',
+        seq: 1,
+        roundNumber: 1,
+        stage: 'NIGHT',
+        actionType: 'SILENCE',
+        actor: pSeer,
+        targets: [pVillager],
+      }),
+      makeEvent({
+        id: 'd1_mute',
+        seq: 2,
+        roundNumber: 1,
+        stage: 'DAY_ANNOUNCEMENT',
+        actionType: 'MUTE_ANNOUNCE',
+        visibility: 'PUBLIC',
+        targets: [pVillager],
+      }),
+      makeEvent({
+        id: 'd1_dawn',
+        seq: 3,
+        roundNumber: 1,
+        stage: 'DAY_ANNOUNCEMENT',
+        actionType: 'DAWN_SUMMARY',
+        visibility: 'PUBLIC',
+        metadata: { dawnDeaths: [] },
+      }),
+    ]).roundGroups[0];
+
+    const peacefulConsolidated = consolidateRoundEventsForPostGame(peacefulGroup);
+    expect(peacefulConsolidated.map((e) => e.id)).toEqual(['n1_sil', 'd1_dawn']);
+    expect(formatMatchEventText(peacefulConsolidated[1], { mode: 'POST_GAME' })).toBe(
+      'Sáng hôm sau: Không ai chết.'
+    );
+  });
+
+  it('getOutcomeBadge chỉ giữ nhãn "Bị đỡ" & "Không tác dụng" và câu chữ không bị đóng ngoặc kép', () => {
+    const attackKill = makeEvent({
+      id: 'b1',
+      seq: 1,
+      roundNumber: 1,
+      stage: 'NIGHT',
+      actionType: 'ATTACK',
+      actor: pWolf,
+      targets: [pHunter],
+      outcome: 'SUCCESS',
+    });
+    const attackBlocked = makeEvent({
+      id: 'b2',
+      seq: 2,
+      roundNumber: 1,
+      stage: 'NIGHT',
+      actionType: 'ATTACK',
+      actor: pWolf,
+      targets: [pHunter],
+      outcome: 'BLOCKED_BY_BODYGUARD',
+    });
+    const healMiss = makeEvent({
+      id: 'b3',
+      seq: 3,
+      roundNumber: 1,
+      stage: 'NIGHT',
+      actionType: 'HEAL',
+      actor: pSeer,
+      targets: [],
+      outcome: 'NO_EFFECT',
+    });
+
+    expect(getOutcomeBadge(attackKill)).toBeNull();
+    expect(getOutcomeBadge(attackBlocked)).toEqual({ label: 'Bị đỡ', tone: 'blocked' });
+    expect(getOutcomeBadge(healMiss)).toEqual({ label: 'Không tác dụng', tone: 'neutral' });
+
+    for (const evt of sampleEvents) {
+      const text = formatMatchEventText(evt, { mode: 'POST_GAME' });
+      expect(text).not.toMatch(/\)\s*\(/);
+    }
   });
 });

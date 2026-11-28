@@ -639,7 +639,7 @@ describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
 
     const timelineText = publicView.publicTimeline.map((i) => i.text).join('\n');
     expect(timelineText).toContain(seer.name);
-    expect(timelineText).toContain('trục xuất khẩn cấp');
+    expect(timelineText).toContain('Quản trò loại ');
     expect(timelineText).not.toContain('Tiên tri');
     expect(publicView.publicLogs.join('\n')).not.toContain('Tiên tri');
   });

@@ -708,7 +708,7 @@ describe('Engine - Structured MatchEvent Log & Edge Cases (39 Roles)', () => {
     );
     expect(savedAtk).toBeDefined();
     expect(overriddenPoison).toBeDefined();
-    expect(formatMatchEventText(overriddenPoison!, { mode: 'POST_GAME' })).toContain('đè lên bình cứu');
+    expect(formatMatchEventText(overriddenPoison!, { mode: 'POST_GAME' })).toContain('đè bình cứu');
 
     // 3. Blind heal refunded (không ai bị cắn, witchKnowsVictim=false, witchWasteHealOnEmpty=false)
     const blindRefundState = createInitialGameState(
@@ -896,7 +896,7 @@ describe('Engine - Structured MatchEvent Log & Edge Cases (39 Roles)', () => {
     const piInspect = r1.eventLog.find(
       (e) => e.actionType === 'INSPECT' && e.actor?.roleId === 'pi'
     );
-    expect(formatMatchEventText(piInspect!, { mode: 'POST_GAME' })).toContain('(hết phép)');
+    expect(formatMatchEventText(piInspect!, { mode: 'POST_GAME' })).toContain('hết phép');
 
     const d1 = executeDayVote(r1, null).nextState;
     // Đêm 2: Apprentice Seer kế thừa soi p5, Sói cắn Già làng p4 lần 1 (IMMUNE), Phù thủy đầu độc Già làng? Để Đêm 3 mới đầu độc để thấy IMMUNE trước!
@@ -909,7 +909,7 @@ describe('Engine - Structured MatchEvent Log & Edge Cases (39 Roles)', () => {
     );
     expect(appInspect).toBeDefined();
     expect(formatMatchEventText(appInspect!, { mode: 'POST_GAME' })).toContain(
-      'Tiên tri tập sự Người 2 (kế thừa Tiên tri) soi'
+      'Tiên tri tập sự Người 2 soi'
     );
     const elderShieldEvt = r2.eventLog.find(
       (e) => e.roundNumber === 2 && e.actionType === 'ATTACK' && e.outcome === 'IMMUNE'
@@ -945,7 +945,7 @@ describe('Engine - Structured MatchEvent Log & Edge Cases (39 Roles)', () => {
       (e) => e.actionType === 'INSPECT' && e.actor?.roleId === 'fox'
     );
     expect(foxKeepEvt?.outcome).toBe('SUCCESS');
-    expect(formatMatchEventText(foxKeepEvt!, { mode: 'POST_GAME' })).toContain('(giữ phép)');
+    expect(formatMatchEventText(foxKeepEvt!, { mode: 'POST_GAME' })).toContain('Có Ma Sói');
 
     // Ngày 1: treo Thằng ngốc p4 -> VOTE_SURVIVED_REVEAL
     const s2d1 = executeDayVote(s2n1, 'p4').nextState;

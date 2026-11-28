@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
   buildCascadeTree,
+  consolidateRoundEventsForPostGame,
   filterMatchEvents,
   formatCrossLinkContext,
   formatPostGameRoleLabel,
   groupMatchEventsForTimeline,
-  summarizeDayCardStats,
-  summarizeNightCardStats,
   type CascadeTreeNode,
-  type PhaseCardStatBadge,
   type TimelineFilterMode,
 } from '../../../engine/matchLog';
 import { getOutcomeBadge } from '../../../engine/matchLogFormatter';
@@ -21,62 +19,6 @@ export interface MatchTimelineProps {
   postGame: PostGameView | null;
   publicView: PublicRoomView | null;
   gameKey: string;
-}
-
-function getActionCategoryIcon(event: MatchEvent): string {
-  switch (event.actionType) {
-    case 'ATTACK':
-      return '🐺';
-    case 'PROTECT':
-      return '🛡️';
-    case 'HEAL':
-      return '🧪';
-    case 'POISON':
-      return '☠️';
-    case 'INSPECT':
-      return '🔮';
-    case 'CURSE':
-    case 'CURSED_TURN':
-    case 'WILD_CHILD_TURN':
-    case 'DOPPELGANGER_INHERIT':
-    case 'DRUNK_AWAKEN':
-    case 'DREAM_WOLF_AWAKEN':
-    case 'ANGEL_TO_VILLAGER':
-      return '🌑';
-    case 'HUNTER_SHOT':
-      return '🎯';
-    case 'VOTE_EXECUTION':
-    case 'VOTE_TALLY':
-    case 'VOTE_SURVIVED_REVEAL':
-    case 'VOTE_NO_EXECUTION':
-      return '⚖️';
-    case 'CASCADE_DEATH':
-    case 'TOUGH_GUY_COLLAPSE':
-    case 'TETANUS_DEATH':
-      return '💔';
-    case 'DAWN_SUMMARY':
-      return '🌅';
-    case 'BEAR_GROWL':
-      return '🐻';
-    case 'MUTE_ANNOUNCE':
-    case 'SILENCE':
-      return '🤐';
-    case 'TROUBLEMAKER_ANNOUNCE':
-    case 'DOUBLE_VOTE_SABOTAGE':
-      return '🧨';
-    case 'MAYOR_ELECTED':
-    case 'MAYOR_TIE':
-    case 'MAYOR_SUCCESSION':
-      return '🎖️';
-    case 'EMERGENCY_ELIMINATE':
-      return '⚠️';
-    case 'PAIR_LOVERS':
-      return '💘';
-    case 'WIN':
-      return '🏆';
-    default:
-      return '•';
-  }
 }
 
 const VOTE_BREAKDOWN_ACTIONS = new Set<MatchEvent['actionType']>([
@@ -143,9 +85,11 @@ function CascadeNodeList({
                   : ''
               }`}
             >
-              <span className="tl-node-icon" aria-hidden="true">
-                {depth > 0 ? '↳' : getActionCategoryIcon(node.event)}
-              </span>
+              {depth > 0 && (
+                <span className="tl-node-icon" aria-hidden="true">
+                  ↳
+                </span>
+              )}
 
               <div className="tl-node-body">
                 {node.crossBlockParent && (
@@ -181,19 +125,6 @@ function CascadeNodeList({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function renderStatBadges(badges: PhaseCardStatBadge[]) {
-  if (badges.length === 0) return null;
-  return (
-    <div className="tl-card-badges">
-      {badges.map((b, idx) => (
-        <span key={idx} className={`tl-stat-chip tone-${b.tone}`}>
-          {b.label}
-        </span>
-      ))}
     </div>
   );
 }
@@ -279,9 +210,6 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
             <div className="tl-event-list">
               {group.items.map((item) => (
                 <article key={item.id} className="tl-node-row">
-                  <span className="tl-node-icon" aria-hidden="true">
-                    •
-                  </span>
                   <div className="tl-node-body">
                     <p className="tl-node-line">{item.text}</p>
                   </div>
@@ -295,9 +223,6 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
   }
 
   const allEventsById = new Map<string, MatchEvent>(matchEvents.map((e) => [e.id, e]));
-  const rawSections = groupMatchEventsForTimeline(matchEvents);
-  const rawRoundMap = new Map(rawSections.roundGroups.map((g) => [g.roundNumber, g]));
-
   const filteredEvents = filterMatchEvents(matchEvents, filterMode, selectedPlayerId);
   const filteredSections = groupMatchEventsForTimeline(filteredEvents);
 
@@ -333,15 +258,7 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
           {filteredSections.setupEvents.length > 0 && (
             <section className="tl-phase-card tl-setup-card" aria-label="Khởi đầu Đêm 1">
               <header className="tl-card-header">
-                <div className="tl-card-title-wrap">
-                  <span className="tl-phase-icon" aria-hidden="true">
-                    ✨
-                  </span>
-                  <h3>KHỞI ĐẦU · ĐÊM 1 THIẾT LẬP</h3>
-                </div>
-                <span className="tl-stat-chip tone-neutral">
-                  {rawSections.setupEvents.length} thiết lập ẩn
-                </span>
+                <h3>ĐÊM 1 · THIẾT LẬP</h3>
               </header>
 
               <CascadeNodeList
@@ -354,20 +271,10 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
 
           {/* Các cặp Đêm N -> Ngày N */}
           {filteredSections.roundGroups.map((group) => {
-            const rawGroup = rawRoundMap.get(group.roundNumber) ?? group;
+            const nightConsolidated = consolidateRoundEventsForPostGame(group);
             const hasNightBlock =
-              group.nightActions.length > 0 ||
-              group.nightIdleEvents.length > 0 ||
-              group.dawnEvents.length > 0;
+              nightConsolidated.length > 0 || group.nightIdleEvents.length > 0;
             const hasDayBlock = group.dayEvents.length > 0;
-            const dawnHasDeaths =
-              (group.dawnEvents.find((e) => e.actionType === 'DAWN_SUMMARY')?.metadata?.dawnDeaths
-                ?.length ?? 0) > 0 ||
-              group.dawnEvents.some(
-                (e) =>
-                  (e.actionType === 'HUNTER_SHOT' || e.actionType === 'CASCADE_DEATH') &&
-                  e.outcome === 'SUCCESS'
-              );
 
             return (
               <div key={group.roundNumber} className="tl-round-cluster">
@@ -377,49 +284,28 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
                     aria-label={`Diễn biến Đêm ${group.roundNumber}`}
                   >
                     <header className="tl-card-header">
-                      <div className="tl-card-title-wrap">
-                        <span className="tl-phase-icon" aria-hidden="true">
-                          🌙
-                        </span>
-                        <h3>ĐÊM {group.roundNumber}</h3>
-                      </div>
-                      {renderStatBadges(summarizeNightCardStats(rawGroup))}
+                      <h3>ĐÊM {group.roundNumber}</h3>
                     </header>
 
-                    {(group.nightActions.length > 0 || group.nightIdleEvents.length > 0) && (
-                      <div className="tl-night-part">
-                        <h4 className="tl-subhead">Phần 1 — Lượt hành động đêm</h4>
-                        {group.nightActions.length > 0 && (
-                          <CascadeNodeList
-                            nodes={buildCascadeTree(group.nightActions, allEventsById)}
-                            selectedPlayerId={selectedPlayerId}
-                            onSelectPlayer={handleSelectPlayerFromEvent}
-                          />
-                        )}
-                        {group.nightIdleEvents.length > 0 && (
-                          <div className="tl-idle-notes">
-                            {group.nightIdleEvents.map((idle) => (
-                              <p key={idle.id} className="tl-idle-line">
-                                <TimelineRichText
-                                  event={idle}
-                                  selectedPlayerId={selectedPlayerId}
-                                  onSelectPlayer={handleSelectPlayerFromEvent}
-                                />
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                    {nightConsolidated.length > 0 && (
+                      <CascadeNodeList
+                        nodes={buildCascadeTree(nightConsolidated, allEventsById)}
+                        selectedPlayerId={selectedPlayerId}
+                        onSelectPlayer={handleSelectPlayerFromEvent}
+                      />
                     )}
 
-                    {group.dawnEvents.length > 0 && (
-                      <div className={`tl-dawn-callout ${dawnHasDeaths ? 'is-danger' : 'is-peaceful'}`}>
-                        <h4 className="tl-subhead">Phần 2 — Tổng kết bình minh</h4>
-                        <CascadeNodeList
-                          nodes={buildCascadeTree(group.dawnEvents, allEventsById)}
-                          selectedPlayerId={selectedPlayerId}
-                          onSelectPlayer={handleSelectPlayerFromEvent}
-                        />
+                    {group.nightIdleEvents.length > 0 && (
+                      <div className="tl-idle-notes">
+                        {group.nightIdleEvents.map((idle) => (
+                          <p key={idle.id} className="tl-idle-line">
+                            <TimelineRichText
+                              event={idle}
+                              selectedPlayerId={selectedPlayerId}
+                              onSelectPlayer={handleSelectPlayerFromEvent}
+                            />
+                          </p>
+                        ))}
                       </div>
                     )}
                   </section>
@@ -431,13 +317,7 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
                     aria-label={`Diễn biến Ngày ${group.roundNumber}`}
                   >
                     <header className="tl-card-header">
-                      <div className="tl-card-title-wrap">
-                        <span className="tl-phase-icon" aria-hidden="true">
-                          ☀️
-                        </span>
-                        <h3>NGÀY {group.roundNumber}</h3>
-                      </div>
-                      {renderStatBadges(summarizeDayCardStats(rawGroup))}
+                      <h3>NGÀY {group.roundNumber}</h3>
                     </header>
 
                     <CascadeNodeList
@@ -455,19 +335,10 @@ export default function MatchTimeline({ postGame, publicView, gameKey }: MatchTi
           {filteredSections.winEvent && (
             <section className="tl-phase-card tl-win-card" aria-label="Kết thúc ván đấu">
               <header className="tl-card-header">
-                <div className="tl-card-title-wrap">
-                  <span className="tl-phase-icon" aria-hidden="true">
-                    🏆
-                  </span>
-                  <h3>KẾT THÚC VÁN ĐẤU</h3>
-                </div>
-                <span className="tl-stat-chip tone-safe">Kết cuộc</span>
+                <h3>KẾT QUẢ</h3>
               </header>
               <div className="tl-event-list">
                 <article className="tl-node-row is-win-row">
-                  <span className="tl-node-icon" aria-hidden="true">
-                    🏁
-                  </span>
                   <div className="tl-node-body">
                     <p className="tl-node-line">
                       <TimelineRichText

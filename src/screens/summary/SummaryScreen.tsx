@@ -316,7 +316,6 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
             className={tab === 'roles' ? 'active' : ''}
             onClick={() => setTab('roles')}
           >
-            <span aria-hidden="true">🎴</span>
             <span>VAI TRÒ TOÀN BÀN ({rolesList.length})</span>
           </button>
           <button
@@ -326,7 +325,6 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
             className={tab === 'timeline' ? 'active' : ''}
             onClick={() => setTab('timeline')}
           >
-            <span aria-hidden="true">📜</span>
             <span>DIỄN BIẾN VÁN ĐẤU</span>
           </button>
         </div>
