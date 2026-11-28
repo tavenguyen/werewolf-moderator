@@ -25,6 +25,7 @@ Mỗi chức năng hoặc task độc lập phải được phát triển trên 
 
 ## 3. Commit sạch sẽ
 
+- **Mỗi chức năng / task hoàn chỉnh là 1 commit** (1 feature = 1 commit), giúp dễ revert, cherry-pick hoặc xử lý khi có sự cố; không gộp nhiều chức năng vào cùng 1 commit.
 1. Xem `git status --short` và `git diff` để xác nhận chỉ gồm thay đổi của task.
 2. Stage tường minh từng file (`git add <path>`). Tuyệt đối không dùng `git add -A` hay `git add .`.
 3. Dùng skill `caveman-commit` để tạo Conventional Commit message ngắn gọn, chính xác.
