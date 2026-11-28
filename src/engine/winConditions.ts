@@ -1,3 +1,4 @@
+import { isBitingWolf, ROLES_BY_ID } from './roles';
 import type { GameState, PlayerState, WinOutcome } from './types';
 
 /**
@@ -210,7 +211,81 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
 
   // Chừng nào Sói trắng còn sống hoặc còn Cặp đôi khác phe sống cản trở,
   // cả phe Dân lẫn phe Sói thường đều CHƯA thể thắng!
-  if (whiteWolfAlive || hasLivingCrossFactionCouple) {
+  if (whiteWolfAlive) {
+    return null;
+  }
+
+  if (hasLivingCrossFactionCouple) {
+    // Kiểm tra Deadlock Cặp đôi khác phe vs Dân khi đã hết sạch Sói, Sáo, Giáo phái và sát thương/biến đổi đêm:
+    // Giữ trận tiếp tục nếu còn Angel Ngày 1, Drunk sắp tỉnh ở Đêm 3 mang vai nguy hiểm, Tanner/Hoodlum phá vỡ thế cân bằng,
+    // hoặc một phía đạt > N/2 phiếu. Nếu không ai còn quyền vote hoặc cả 2 phía đều <= N/2 dưới MAJORITY -> Hòa.
+    if (activeWolves.length === 0 && !livingPiedPiper && !livingCultLeader) {
+      const hasWitchPoison =
+        alivePlayers.some((p) => p.roleId === 'witch') &&
+        !state.witchPoisonUsed &&
+        !state.villagePowerStripped;
+      const hasPendingDelayedDeath = alivePlayers.some(
+        (p) =>
+          Boolean(p.infectedWithTetanus) ||
+          (p.roleId === 'tough_guy' && typeof p.toughGuyBittenNight === 'number')
+      );
+      const hasRound1Angel =
+        state.roundNumber === 1 && alivePlayers.some((p) => p.roleId === 'angel');
+      const hasWakingDrunkBeforeNight3 =
+        state.roundNumber < 3 &&
+        alivePlayers.some((p) => {
+          if (p.roleId !== 'drunk' || !p.drunkRealRoleId) return false;
+          if (p.drunkRealRoleId === 'witch') {
+            return !state.witchPoisonUsed && !state.villagePowerStripped;
+          }
+          if (p.drunkRealRoleId === 'pied_piper' || p.drunkRealRoleId === 'cult_leader') {
+            return true;
+          }
+          const realDef = ROLES_BY_ID[p.drunkRealRoleId];
+          return realDef ? isBitingWolf({ faction: realDef.faction, roleId: realDef.id }) : false;
+        });
+
+      if (
+        !hasWitchPoison &&
+        !hasPendingDelayedDeath &&
+        !hasRound1Angel &&
+        !hasWakingDrunkBeforeNight3
+      ) {
+        const nonCoupleAlive = alivePlayers.filter(
+          (p) => !livingCouple.some((c) => c.id === p.id)
+        );
+        const coupleWeight = livingCouple.reduce((s, p) => s + p.voteWeight, 0);
+        const nonCoupleWeight = nonCoupleAlive.reduce((s, p) => s + p.voteWeight, 0);
+        const totalWeight = coupleWeight + nonCoupleWeight;
+        const majorityLine = alivePlayers.length / 2;
+
+        const nonCoupleHoodlumWeight = nonCoupleAlive
+          .filter((p) => p.roleId === 'hoodlum')
+          .reduce((s, p) => s + p.voteWeight, 0);
+        const hasHoodlumBreakCoalition = coupleWeight + nonCoupleHoodlumWeight > majorityLine;
+        const hasTannerCoalition = alivePlayers.some((p) => {
+          if (p.roleId !== 'tanner' || p.voteWeight <= 0) return false;
+          const isTannerInCouple = livingCouple.some((c) => c.id === p.id);
+          return (isTannerInCouple ? nonCoupleWeight : coupleWeight) + p.voteWeight > majorityLine;
+        });
+
+        if (
+          totalWeight === 0 ||
+          (state.settings.lynchThreshold === 'MAJORITY' &&
+            coupleWeight <= majorityLine &&
+            nonCoupleWeight <= majorityLine &&
+            !hasHoodlumBreakCoalition &&
+            !hasTannerCoalition)
+        ) {
+          return {
+            winner: 'DRAW',
+            reason:
+              'Không còn sát thương đêm và không phe nào đủ trọng số phiếu quá bán để loại Cặp đôi khác phe. Kết quả Hòa!',
+            winningPlayerIds: [],
+          };
+        }
+      }
+    }
     return null;
   }
 
@@ -253,6 +328,30 @@ export function checkWinCondition(state: GameState): WinOutcome | null {
       },
       state
     );
+  }
+
+  // 7. Deadlock Check: Không còn Sói săn đêm, Dân làng, Người thổi sáo hay Trưởng giáo phái nào sống sót
+  // (ví dụ chỉ còn Minion / Sorcerer / Hoodlum / Tanner sau các cái chết dây chuyền -> không phe chính nào thắng được) -> Hòa (DRAW),
+  // trừ Thiên sứ còn trong Ngày 1 (chờ hóa Dân) hoặc Tanner tự đủ phiếu quá bán (ví dụ giữ Trưởng làng 2/3 phiếu).
+  if (
+    activeWolves.length === 0 &&
+    totalVillagers.length === 0 &&
+    !livingPiedPiper &&
+    !livingCultLeader
+  ) {
+    const canAngelStillTurnVillagerOnDay1 =
+      state.roundNumber === 1 && alivePlayers.some((p) => p.roleId === 'angel');
+    const canTannerSelfLynchUnderMajority =
+      alivePlayers.length >= 2 &&
+      alivePlayers.some((p) => p.roleId === 'tanner' && p.voteWeight > alivePlayers.length / 2);
+
+    if (!canAngelStillTurnVillagerOnDay1 && !canTannerSelfLynchUnderMajority) {
+      return {
+        winner: 'DRAW',
+        reason: 'Không còn Ma Sói săn đêm hay Dân làng sống sót để phân định chiến thắng. Kết quả Hòa!',
+        winningPlayerIds: [],
+      };
+    }
   }
 
   return null;
