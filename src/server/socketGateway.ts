@@ -1469,9 +1469,24 @@ export class SocketGateway {
   }
 
   /**
+   * Đồng bộ trạng thái sống/chết từ GameState sang danh sách RoomPlayer.
+   */
+  private syncRoomPlayersAlive(room: RoomState): void {
+    if (!room.gameState) return;
+    for (const gsPlayer of room.gameState.players) {
+      const rp = room.players.get(gsPlayer.id);
+      if (rp) {
+        rp.isAlive = gsPlayer.isAlive;
+      }
+    }
+  }
+
+  /**
    * Broadcast toàn bộ projections tương ứng tới đúng client trong phòng.
    */
   public broadcastRoom(room: RoomState): void {
+    this.syncRoomPlayersAlive(room);
+
     // 1. Public Room View (gửi tới toàn phòng)
     const publicView = createPublicRoomView(room);
     this.io.to(room.roomCode).emit('room:publicSnapshot', publicView);

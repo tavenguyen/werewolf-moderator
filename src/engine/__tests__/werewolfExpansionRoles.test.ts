@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { resolveNight, getRawWolfTargets, getWitchVictimsPreview } from '../nightResolution';
+import { formatMatchEventText } from '../matchLogFormatter';
 import { ROLES_BY_ID } from '../roles';
 import { generateNightTurnPlan, hasAnyBitingWolfDied } from '../turnPlan';
 import { checkWinCondition } from '../winConditions';
@@ -536,6 +537,71 @@ describe('Engine - Werewolf Expansion Roles (lone_wolf, big_bad_wolf, wolf_accur
       // Quy tắc State Snapshot: soi trạng thái đầu đêm -> VILLAGER
       expect(output.infoResults.seerResult?.targetId).toBe('p3');
       expect(output.infoResults.seerResult?.result).toBe('VILLAGER');
+    });
+
+    it('wolf_accursed cursing the last cult_leader disbands cult membership and links CULT_DISBAND to CURSE', () => {
+      const game = createTestGame([
+        'wolf_accursed', // p1
+        'cult_leader',   // p2
+        'villager',      // p3
+        'villager',      // p4
+        'villager',      // p5
+        'villager',      // p6
+      ]);
+      game.roundNumber = 2;
+      game.players[2].isCultMember = true; // p3 đã theo giáo phái từ đêm 1
+
+      const { nextState } = resolveNight(game, {
+        wolfPack: { targets: ['p2'] },
+        accursedWolf: { curseTargetId: 'p2' },
+        cultLeader: { targetId: 'p4' },
+      });
+
+      const turned = nextState.players.find((p) => p.id === 'p2')!;
+      expect(turned.isAlive).toBe(true);
+      expect(turned.roleId).toBe('werewolf');
+      expect(turned.faction).toBe('WEREWOLF');
+      expect(nextState.players.some((p) => p.isCultMember)).toBe(false);
+
+      const curseEvt = nextState.eventLog?.find((e) => e.actionType === 'CURSE');
+      const disbandEvt = nextState.eventLog?.find((e) => e.actionType === 'CULT_DISBAND');
+      expect(curseEvt?.outcome).toBe('SUCCESS');
+      expect(disbandEvt?.parentEventId).toBe(curseEvt?.id);
+      expect(formatMatchEventText(disbandEvt!, { mode: 'POST_GAME' })).toContain(
+        'bị nguyền thành Ma sói → Giáo phái giải tán.'
+      );
+    });
+
+    it('wolf_accursed cursing the last pied_piper clears enchantments and links PIED_PIPER_CLEAR to CURSE', () => {
+      const game = createTestGame([
+        'wolf_accursed', // p1
+        'pied_piper',    // p2
+        'villager',      // p3
+        'villager',      // p4
+        'villager',      // p5
+        'villager',      // p6
+      ]);
+      game.roundNumber = 2;
+      game.players[2].isEnchanted = true;
+      game.players[3].isEnchanted = true;
+
+      const { nextState } = resolveNight(game, {
+        wolfPack: { targets: ['p2'] },
+        accursedWolf: { curseTargetId: 'p2' },
+        piedPiper: { targetIds: ['p5', 'p6'] },
+      });
+
+      const turned = nextState.players.find((p) => p.id === 'p2')!;
+      expect(turned.isAlive).toBe(true);
+      expect(turned.roleId).toBe('werewolf');
+      expect(nextState.players.some((p) => p.isEnchanted)).toBe(false);
+
+      const curseEvt = nextState.eventLog?.find((e) => e.actionType === 'CURSE');
+      const clearEvt = nextState.eventLog?.find((e) => e.actionType === 'PIED_PIPER_CLEAR');
+      expect(clearEvt?.parentEventId).toBe(curseEvt?.id);
+      expect(formatMatchEventText(clearEvt!, { mode: 'POST_GAME' })).toContain(
+        'bị nguyền thành Ma sói → Toàn bộ bùa thôi miên tan biến.'
+      );
     });
 
     it('big_bad_wolf attacks extra target and interacts normally with bodyguard & witch', () => {

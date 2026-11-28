@@ -931,20 +931,46 @@ export function formatMatchEventSegments(
     }
 
     case 'PIED_PIPER_CLEAR': {
-      if (!actor) return [txt('Người thổi sáo chết, toàn bộ bùa mê tan biến.')];
+      const transformed = event.metadata?.note === 'transformed_to_werewolf';
+      if (!actor) {
+        return [
+          txt(
+            transformed
+              ? 'Người thổi sáo bị nguyền thành Ma sói, toàn bộ bùa mê tan biến.'
+              : 'Người thổi sáo chết, toàn bộ bùa mê tan biến.'
+          ),
+        ];
+      }
       return [
         txt('Người thổi sáo '),
         playerSeg(event, actor, options, false),
-        txt(' chết → Toàn bộ bùa thôi miên tan biến.'),
+        txt(
+          transformed
+            ? ' bị nguyền thành Ma sói → Toàn bộ bùa thôi miên tan biến.'
+            : ' chết → Toàn bộ bùa thôi miên tan biến.'
+        ),
       ];
     }
 
     case 'CULT_DISBAND': {
-      if (!actor) return [txt('Trưởng giáo phái chết, giáo phái giải tán.')];
+      const transformed = event.metadata?.note === 'transformed_to_werewolf';
+      if (!actor) {
+        return [
+          txt(
+            transformed
+              ? 'Trưởng giáo phái bị nguyền thành Ma sói, giáo phái giải tán.'
+              : 'Trưởng giáo phái chết, giáo phái giải tán.'
+          ),
+        ];
+      }
       return [
         txt('Trưởng giáo phái '),
         playerSeg(event, actor, options, false),
-        txt(' chết → Giáo phái giải tán.'),
+        txt(
+          transformed
+            ? ' bị nguyền thành Ma sói → Giáo phái giải tán.'
+            : ' chết → Giáo phái giải tán.'
+        ),
       ];
     }
 

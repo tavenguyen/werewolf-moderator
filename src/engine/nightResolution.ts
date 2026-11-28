@@ -846,8 +846,26 @@ export function resolveNight(
         cursedSucceededId = curseTarget.id;
         nextState.accursedWolfUsed = true;
         wolfVictims = wolfVictims.filter((id) => id !== curseTargetId);
+        const cursedWasPiedPiper = curseTarget.roleId === 'pied_piper';
+        const cursedWasCultLeader = curseTarget.roleId === 'cult_leader';
         curseTarget.faction = 'WEREWOLF';
         curseTarget.roleId = 'werewolf';
+        if (
+          cursedWasPiedPiper &&
+          !nextState.players.some((p) => p.isAlive && p.roleId === 'pied_piper')
+        ) {
+          for (const p of nextState.players) {
+            p.isEnchanted = false;
+          }
+        }
+        if (
+          cursedWasCultLeader &&
+          !nextState.players.some((p) => p.isAlive && p.roleId === 'cult_leader')
+        ) {
+          for (const p of nextState.players) {
+            p.isCultMember = false;
+          }
+        }
         events.push({
           type: 'AWAKENED',
           sourceRole: 'wolf_accursed',
@@ -1355,7 +1373,7 @@ export function resolveNight(
         metadata: bodyguardSnap ? { protector: bodyguardSnap } : undefined,
       });
     } else if (cursedSucceededId) {
-      appendMatchEvent(nextState, {
+      const curseEvt = appendMatchEvent(nextState, {
         roundNumber: round,
         stage: 'NIGHT',
         actionType: 'CURSE',
@@ -1364,6 +1382,44 @@ export function resolveNight(
         targets: [cursedTargetPreSnap],
         outcome: 'SUCCESS',
       });
+      if (
+        cursedTargetPreSnap.roleId === 'pied_piper' &&
+        !nextState.players.some((p) => p.isAlive && p.roleId === 'pied_piper')
+      ) {
+        nextState.historyLogs.push(
+          'Người thổi sáo đã biến thành Ma sói! Toàn bộ bùa mê trên dân làng tan biến!'
+        );
+        appendMatchEvent(nextState, {
+          roundNumber: round,
+          stage: 'NIGHT',
+          actionType: 'PIED_PIPER_CLEAR',
+          visibility: 'SECRET_NIGHT',
+          actor: cursedTargetPreSnap,
+          targets: [],
+          outcome: 'LOST_POWER',
+          parentEventId: curseEvt.id,
+          metadata: { note: 'transformed_to_werewolf' },
+        });
+      }
+      if (
+        cursedTargetPreSnap.roleId === 'cult_leader' &&
+        !nextState.players.some((p) => p.isAlive && p.roleId === 'cult_leader')
+      ) {
+        nextState.historyLogs.push(
+          'Trưởng giáo phái đã biến thành Ma sói! Toàn bộ giáo phái giải tán!'
+        );
+        appendMatchEvent(nextState, {
+          roundNumber: round,
+          stage: 'NIGHT',
+          actionType: 'CULT_DISBAND',
+          visibility: 'SECRET_NIGHT',
+          actor: cursedTargetPreSnap,
+          targets: [],
+          outcome: 'LOST_POWER',
+          parentEventId: curseEvt.id,
+          metadata: { note: 'transformed_to_werewolf' },
+        });
+      }
     }
   }
 
