@@ -30,6 +30,8 @@
 
 ## Git
 
-- Tự động tạo commit cục bộ sau khi hoàn thành và verify mỗi chức năng/task (không cần đợi người dùng yêu cầu). Trước khi stage, xem `git status` và diff; stage tường minh file thuộc task, giữ nguyên thay đổi không liên quan, dùng skill `caveman-commit` để tạo message.
-- Không amend, force push, push hoặc thay đổi lịch sử. Không push trừ khi người dùng yêu cầu.
-- Nếu repo chưa được khởi tạo Git, dừng workflow commit và báo rõ; không tự `git init`.
+- Áp dụng `ai-config/skills/github-workflow/SKILL.md`: **mỗi chức năng/task là một nhánh riêng tách từ `origin/main` và một Pull Request**, không code hay commit trực tiếp lên `main` để tránh xung đột với teammate.
+- Trước khi stage, xem `git status` và diff; stage tường minh file thuộc task, giữ nguyên thay đổi không liên quan, dùng skill `caveman-commit` để tạo message.
+- Trước khi push/tạo PR, chạy `git fetch origin` và rebase/sync với `origin/main`, chạy lại kiểm thử đạt mới push nhánh feature (`git push -u origin <branch>`). Không force push, không push trực tiếp lên `main`, không tự merge PR trừ khi được yêu cầu.
+- Nếu cần commit cục bộ thuần túy theo yêu cầu riêng của người dùng, tham khảo `ai-config/skills/github-commit-workflow/SKILL.md`.
+- Nếu repo chưa được khởi tạo Git, dừng workflow và báo rõ; không tự `git init`.
