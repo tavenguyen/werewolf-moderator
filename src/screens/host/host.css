@@ -754,10 +754,32 @@
   display: flex;
   gap: 6px;
   line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.log-entry > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .log-bullet {
   color: #c98638;
+}
+
+.host-log-round-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.host-log-round-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #e5a95c;
+  opacity: 0.9;
 }
 
 .host-qr-img {

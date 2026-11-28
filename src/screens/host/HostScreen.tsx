@@ -573,12 +573,38 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
           <div className="host-logs-scroll">
             <strong className="logs-title">BIÊN NIÊN SỬ CÔNG KHAI:</strong>
             <div className="logs-list">
-              {(publicView?.publicLogs ?? []).map((log, index) => (
-                <div key={index} className="log-entry">
-                  <span className="log-bullet">•</span>
-                  <span>{log}</span>
-                </div>
-              ))}
+              {publicView?.publicTimeline && publicView.publicTimeline.length > 0 ? (
+                (() => {
+                  const grouped = new Map<number, typeof publicView.publicTimeline>();
+                  for (const item of publicView.publicTimeline) {
+                    const list = grouped.get(item.roundNumber) ?? [];
+                    list.push(item);
+                    grouped.set(item.roundNumber, list);
+                  }
+                  return Array.from(grouped.entries())
+                    .sort((a, b) => a[0] - b[0])
+                    .map(([roundNum, items]) => (
+                      <div key={roundNum} className="host-log-round-group">
+                        <span className="host-log-round-label">
+                          {roundNum === 0 ? 'KHỞI ĐẦU' : `VÒNG ${roundNum}`}
+                        </span>
+                        {items.map((item) => (
+                          <div key={item.id} className="log-entry">
+                            <span className="log-bullet">•</span>
+                            <span>{item.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ));
+                })()
+              ) : (
+                (publicView?.publicLogs ?? []).map((log, index) => (
+                  <div key={index} className="log-entry">
+                    <span className="log-bullet">•</span>
+                    <span>{log}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

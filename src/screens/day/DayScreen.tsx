@@ -119,7 +119,12 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     setIsSubmittingFinalize(false);
     setIsProceedingNextNight(false);
     setNotice('');
-  }, [publicView?.roundNumber, publicView?.phase, state.playerId]);
+  }, [
+    publicView?.roundNumber,
+    publicView?.phase,
+    state.playerId,
+    publicView?.activeHunterPlayerId,
+  ]);
 
   useEffect(() => {
     if (!showHeaderMenu) return;
@@ -215,6 +220,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể thực hiện phát súng Thợ săn';
       setNotice(msg);
+    } finally {
       setIsSubmittingSpecial(false);
     }
   };
@@ -228,6 +234,7 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể trao huy hiệu Trưởng làng';
       setNotice(msg);
+    } finally {
       setIsSubmittingSpecial(false);
     }
   };
@@ -532,12 +539,20 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               </div>
             )}
 
-            {/* 1 dòng thông báo sáng duy nhất */}
+            {/* 1 dòng thông báo sáng duy nhất — luôn ưu tiên DAWN_SUMMARY để badge phụ không đè mất tin người chết */}
             {!isSpecialInstantPhase && (
               <p className="day-single-morning-line" aria-live="polite">
-                {publicView?.publicLogs && publicView.publicLogs.length > 0
-                  ? publicView.publicLogs[publicView.publicLogs.length - 1]
-                  : 'Đêm qua bình yên.'}
+                {(() => {
+                  const morningList = publicView?.morningAnnouncements ?? [];
+                  const dawnLine =
+                    morningList.find((m) => m.actionType === 'DAWN_SUMMARY')?.text ??
+                    morningList[0]?.text;
+                  if (dawnLine) return dawnLine;
+                  if (publicView?.publicLogs && publicView.publicLogs.length > 0) {
+                    return publicView.publicLogs[publicView.publicLogs.length - 1];
+                  }
+                  return 'Đêm qua bình yên.';
+                })()}
               </p>
             )}
           </section>
@@ -660,12 +675,16 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
             ? players.filter((p) => privateView.validTargets.includes(p.id))
             : livingPlayers;
           const deaths = publicView?.deaths ?? [];
-          const hunterDeath =
-            [...deaths].reverse().find((d) => d.roleId === 'hunter') ??
-            (deaths.length > 0 ? deaths[deaths.length - 1] : undefined);
-          const deadHunter = hunterDeath
-            ? players.find((p) => p.id === hunterDeath.playerId)
-            : undefined;
+          const activeHunterId = publicView?.activeHunterPlayerId;
+          const hunterDeath = activeHunterId
+            ? undefined
+            : ([...deaths].reverse().find((d) => d.roleId === 'hunter') ??
+                (deaths.length > 0 ? deaths[deaths.length - 1] : undefined));
+          const deadHunter = activeHunterId
+            ? players.find((p) => p.id === activeHunterId)
+            : hunterDeath
+              ? players.find((p) => p.id === hunterDeath.playerId)
+              : undefined;
           return (
             <section className="day-players-panel special-phase-panel hunter-shot-panel" aria-live="polite">
               <div className="day-panel-heading">

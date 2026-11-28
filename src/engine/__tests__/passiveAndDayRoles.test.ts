@@ -409,5 +409,26 @@ describe('Phase 1 Roles - Passive & Day Event Roles', () => {
       // Không được thắng với tư cách ANGEL nữa
       expect(day2.winOutcome?.winner).not.toBe('ANGEL');
     });
+
+    it('bị Sói cắn chết ở Đêm 1 (roundNumber = 1) cũng thắng tối thượng; chết bởi độc Phù thủy Đêm 1 thì KHÔNG thắng', () => {
+      const setup = create6PlayerSetup();
+      const roles = ['angel', 'werewolf', 'werewolf', 'seer', 'witch', 'villager'];
+
+      // 1. Sói cắn chết Angel Đêm 1 -> thắng ANGEL
+      const stateBite = createInitialGameState(setup, roles);
+      const nightBite = executeNightPhase(stateBite, {
+        wolfPack: { targets: ['p1'] },
+      });
+      expect(nightBite.winOutcome?.winner).toBe('ANGEL');
+      expect(nightBite.winOutcome?.winningPlayerIds).toEqual(['p1']);
+
+      // 2. Trúng độc Phù thủy Đêm 1 -> không kích hoạt thắng ANGEL
+      const statePoison = createInitialGameState(setup, roles);
+      const nightPoison = executeNightPhase(statePoison, {
+        wolfPack: { isSkip: true },
+        witch: { poisonTargetId: 'p1' },
+      });
+      expect(nightPoison.winOutcome?.winner).not.toBe('ANGEL');
+    });
   });
 });

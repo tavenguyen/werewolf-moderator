@@ -1,6 +1,7 @@
 import { canHostTallyEarly } from '../engine/voting';
 import { checkWinCondition } from '../engine/winConditions';
 import { getRawWolfTargets, getWitchVictimsPreview } from '../engine/nightResolution';
+import { buildPublicTimeline, getMorningAnnouncements } from '../engine/matchLog';
 import { ROLES_BY_ID } from '../engine/roles';
 import type {
   HostBoardView,
@@ -11,7 +12,13 @@ import type {
   RoomPlayer,
   RoomState,
 } from './types';
-import type { PlayerId } from '../engine/types';
+import type { DeathCause, PlayerId } from '../engine/types';
+
+const PUBLIC_WITNESSED_DEATH_CAUSES = new Set<DeathCause>([
+  'VILLAGE_VOTE',
+  'HUNTER_SHOT',
+  'EMERGENCY_ELIMINATE',
+]);
 
 /**
  * Tạo PublicRoomView:
@@ -52,11 +59,19 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     }
   }
 
-  // Nếu revealOnDeath = false thì giấu vai trò người chết cho đến khi GAME_OVER
-  const deaths = (gameState?.deaths ?? []).map((d) => ({
-    ...d,
-    roleId: room.settings.revealOnDeath ? d.roleId : 'unknown',
-  }));
+  // Nếu revealOnDeath = false thì giấu vai trò, nguyên nhân ngầm và độ sâu chuỗi chết cho đến khi GAME_OVER
+  const deaths = (gameState?.deaths ?? []).map((d) => {
+    if (room.settings.revealOnDeath) {
+      return d;
+    }
+    return {
+      playerId: d.playerId,
+      roleId: 'unknown',
+      roundNumber: d.roundNumber,
+      phase: d.phase,
+      cause: PUBLIC_WITNESSED_DEATH_CAUSES.has(d.cause) ? d.cause : ('UNKNOWN' as const),
+    };
+  });
 
   let voteProgress: PublicRoomView['voteProgress'] = null;
   if (
@@ -78,6 +93,18 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     voteProgress = { submitted, total: eligibleTotal };
   }
 
+  const publicTimeline = gameState ? buildPublicTimeline(gameState) : [];
+  const morningAnnouncements = gameState
+    ? getMorningAnnouncements(publicTimeline, gameState.roundNumber)
+    : [];
+  const operationalNotices = (room.publicHistoryLogs ?? []).filter(
+    (msg) => msg === 'Quản trò đã mở hòm phiếu sớm!'
+  );
+  const publicLogs =
+    gameState && publicTimeline.length > 0
+      ? [...publicTimeline.map((item) => item.text), ...operationalNotices]
+      : (room.publicHistoryLogs ?? []);
+
   return {
     roomCode: room.roomCode,
     gameGeneration: room.gameGeneration,
@@ -95,7 +122,9 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     extensionsUsed: gameState?.dayState?.extensionsUsed ?? 0,
     settings: room.settings,
     deaths,
-    publicLogs: room.publicHistoryLogs ?? [],
+    publicLogs,
+    publicTimeline,
+    morningAnnouncements,
     currentTurnInfo,
     lastVoteTally: room.lastVoteTally,
     bearGrowled: gameState?.players.some((p) => p.roleId === 'bear_tamer')
@@ -106,6 +135,8 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     doubleVoteDay: Boolean(gameState?.doubleVoteDay),
     runoffCandidates:
       gameState?.phase === 'DAY_RUNOFF' ? (gameState.dayState?.runoffCandidates ?? []) : undefined,
+    activeHunterPlayerId:
+      gameState?.phase === 'HUNTER_SHOT' ? (gameState.pendingHunterShotPlayerId ?? null) : null,
     voteProgress,
   };
 }
@@ -699,6 +730,7 @@ export function createPostGameView(room: RoomState): PostGameView | null {
     seatIndex: p.seatIndex,
     initialRoleId: p.initialRoleId,
     finalRoleId: p.roleId,
+    drunkRealRoleId: p.drunkRealRoleId ?? null,
     faction: p.faction,
     isAlive: p.isAlive,
   }));
@@ -709,5 +741,6 @@ export function createPostGameView(room: RoomState): PostGameView | null {
     deaths: gameState.deaths,
     historyLogs: gameState.historyLogs,
     timeline: gameState.resolvedEvents ?? [],
+    matchEvents: (gameState.eventLog ?? []).filter((e) => e.visibility !== 'SYSTEM_DEBUG'),
   };
 }

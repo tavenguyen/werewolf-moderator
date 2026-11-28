@@ -4,8 +4,7 @@ import { getSmartPreset } from '../engine/presets';
 import { CommandQueue } from './commandQueue';
 import type { PlayerId, RoomSettings } from '../engine/types';
 import type { RoomPlayer, RoomState } from './types';
-import { processDeathCascade } from '../engine/deathCascade';
-import { checkWinCondition } from '../engine/winConditions';
+import { executeEmergencyEliminate } from '../engine/gameEngine';
 
 export const ROOM_IDLE_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 giờ
 
@@ -452,33 +451,16 @@ export class RoomService {
     if (room.gameState) {
       const pState = room.gameState.players.find((p) => p.id === targetPlayerId);
       if (pState && pState.isAlive) {
-        const prevPhase = room.gameState.phase;
-        room.gameState.historyLogs.push(
-          `Host đã sử dụng quyền LOẠI KHẨN CẤP đối với [${player.name}].`
-        );
+        const { nextState } = executeEmergencyEliminate(room.gameState, targetPlayerId);
+        room.gameState = nextState;
         room.publicHistoryLogs.push(
-          `Host đã sử dụng quyền LOẠI KHẨN CẤP đối với [${player.name}].`
+          `Quản trò đã trục xuất khẩn cấp [${player.name}] khỏi bàn.`
         );
-        processDeathCascade(room.gameState, [{ playerId: targetPlayerId, cause: 'VILLAGE_VOTE' }]);
 
         for (const gsPlayer of room.gameState.players) {
           const rp = room.players.get(gsPlayer.id);
           if (rp) {
             rp.isAlive = gsPlayer.isAlive;
-          }
-        }
-
-        const hasAlivePlayers = room.gameState.players.some((p) => p.isAlive);
-        if (room.gameState.pendingHunterShotPlayerId && hasAlivePlayers) {
-          room.gameState.previousPhaseBeforeHunter = prevPhase;
-          room.gameState.phase = 'HUNTER_SHOT';
-        } else if (room.gameState.pendingMayorSuccessionPlayerId && hasAlivePlayers) {
-          room.gameState.previousPhaseBeforeMayorSuccession = prevPhase;
-          room.gameState.phase = 'MAYOR_SUCCESSION';
-        } else {
-          const win = checkWinCondition(room.gameState);
-          if (win) {
-            room.gameState.phase = 'GAME_OVER';
           }
         }
       }

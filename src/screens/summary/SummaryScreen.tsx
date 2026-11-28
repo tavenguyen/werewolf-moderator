@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
+import { formatPostGameRoleLabel } from '../../engine/matchLog';
 import { ROLES_BY_ID } from '../../engine/roles';
 import { getRoleImage } from '../../assets/roles';
 import type { WinOutcome } from '../../engine/types';
+import MatchTimeline from './components/MatchTimeline';
 import './summary.css';
 
 interface WinnerBannerConfig {
@@ -98,6 +100,7 @@ interface RoleDisplayItem {
   id: string;
   name: string;
   seatIndex: number;
+  initialRoleId: string;
   initialRoleName: string;
   finalRoleName: string;
   finalRoleId: string;
@@ -136,7 +139,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
   }, [showEarlyRematchConfirm, showExitConfirm, isRematching]);
 
   const deathsByPlayerId = new Map(
-    (publicView?.deaths ?? []).map((d) => [d.playerId, d] as const)
+    (postGame?.deaths ?? publicView?.deaths ?? []).map((d) => [d.playerId, d] as const)
   );
 
   const formatPlayerStatus = (playerId: string, isAlive: boolean): string => {
@@ -153,7 +156,11 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
     if (postGame && postGame.allRoles && postGame.allRoles.length > 0) {
       return postGame.allRoles.map((p) => {
         const initDef = ROLES_BY_ID[p.initialRoleId];
-        const finalDef = ROLES_BY_ID[p.finalRoleId];
+        const formattedFinalName = formatPostGameRoleLabel(
+          p.initialRoleId,
+          p.finalRoleId,
+          p.drunkRealRoleId
+        );
         const side =
           p.faction === 'WEREWOLF' ? 'wolf' : p.faction === 'THIRD_PARTY' ? 'third' : 'village';
         const sideName = side === 'wolf' ? 'Phe Ma Sói' : side === 'third' ? 'Phe Thứ 3' : 'Phe Dân làng';
@@ -177,8 +184,9 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
           id: p.id,
           name: p.name,
           seatIndex: p.seatIndex,
+          initialRoleId: p.initialRoleId,
           initialRoleName: initDef?.nameVi ?? p.initialRoleId,
-          finalRoleName: finalDef?.nameVi ?? p.finalRoleId,
+          finalRoleName: formattedFinalName,
           finalRoleId: p.finalRoleId,
           symbol,
           status: formatPlayerStatus(p.id, p.isAlive),
@@ -195,6 +203,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
       id: p.id,
       name: p.name,
       seatIndex: p.seatIndex,
+      initialRoleId: '',
       initialRoleName: 'Chưa công bố',
       finalRoleName: 'Chưa công bố',
       finalRoleId: '',
@@ -346,7 +355,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
                     </div>
                     <div className="summary-role-bottom">
                       <span className="summary-role-name">{player.finalRoleName}</span>
-                      {player.initialRoleName !== player.finalRoleName && (
+                      {player.initialRoleId && player.initialRoleId !== player.finalRoleId && (
                         <small className="summary-role-origin">(ban đầu: {player.initialRoleName})</small>
                       )}
                     </div>
@@ -359,50 +368,11 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
             })}
           </section>
         ) : (
-          <section className="summary-timeline" aria-label="Diễn biến ván đấu">
-            {(() => {
-              const rawLogs = postGame?.historyLogs ?? publicView?.publicLogs ?? [];
-              const logs = rawLogs.filter(
-                (log) =>
-                  !log.includes('Khởi tạo ván chơi mới') &&
-                  !log.includes('Bắt đầu ván tái đấu mới') &&
-                  !log.includes('Phòng chơi 1 máy dùng chung')
-              );
-              if (logs.length === 0) {
-                return (
-                  <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13.5px', padding: '16px 0' }}>
-                    Chưa có diễn biến nào được ghi nhận.
-                  </p>
-                );
-              }
-              const groups: Array<{ label: string; items: string[] }> = [];
-              for (const log of logs) {
-                const phaseMatch = log.match(/(Đêm\s+(?:thứ\s+)?\d+|Ngày\s+(?:thứ\s+)?\d+)/i);
-                const groupLabel = phaseMatch ? phaseMatch[1].toUpperCase() : null;
-                if (groupLabel && (groups.length === 0 || groups[groups.length - 1].label !== groupLabel)) {
-                  groups.push({ label: groupLabel, items: [log] });
-                } else {
-                  if (groups.length === 0) {
-                    groups.push({ label: 'DIỄN BIẾN', items: [] });
-                  }
-                  groups[groups.length - 1].items.push(log);
-                }
-              }
-              return groups.map((group, gIdx) => (
-                <div key={`${group.label}-${gIdx}`} className="timeline-round-group" style={{ marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '12px', letterSpacing: '0.08em', color: '#d4af37', margin: '0 0 8px' }}>
-                    {group.label}
-                  </h3>
-                  {group.items.map((log, lIdx) => (
-                    <article key={lIdx} className="timeline-event">
-                      <i className="timeline-dot night-dot" aria-hidden="true" />
-                      <p style={{ margin: 0 }}>{log}</p>
-                    </article>
-                  ))}
-                </div>
-              ));
-            })()}
-          </section>
+          <MatchTimeline
+            postGame={postGame}
+            publicView={publicView}
+            gameKey={`${roomCode}:${publicView?.gameGeneration ?? 0}`}
+          />
         )}
       </div>
 

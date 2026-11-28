@@ -7,4 +7,6 @@ export * from './winConditions';
 export * from './turnPlan';
 export * from './voting';
 export * from './nightResolution';
+export * from './matchLogFormatter';
+export * from './matchLog';
 export * from './gameEngine';

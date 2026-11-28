@@ -20,10 +20,204 @@ export type DeathCause =
   | 'WITCH_POISON'
   | 'HUNTER_SHOT'
   | 'VILLAGE_VOTE'
+  | 'EMERGENCY_ELIMINATE'
   | 'COUPLE_HEARTBREAK'
   | 'COMPANION_DEATH'
   | 'TETANUS'
   | 'TOUGH_GUY_COLLAPSE';
+
+export type MatchLogStage =
+  | 'SETUP'
+  | 'NIGHT'
+  | 'DAY_ANNOUNCEMENT'
+  | 'DAY_VOTE'
+  | 'GAME_END';
+
+export type MatchLogVisibility = 'PUBLIC' | 'SECRET_NIGHT' | 'SYSTEM_DEBUG';
+
+export type MatchEventOutcome =
+  | 'SUCCESS'
+  | 'BLOCKED_BY_BODYGUARD'
+  | 'SAVED_BY_WITCH'
+  | 'OVERRIDDEN_BY_POISON'
+  | 'OVERDOSE_DOUBLE_PROTECT'
+  | 'IMMUNE'
+  | 'NO_EFFECT'
+  | 'SKIPPED'
+  | 'LOST_POWER'
+  | 'TIED_ESCAPE'
+  | 'TIED_RUNOFF'
+  | 'BELOW_MAJORITY';
+
+export type MatchActionType =
+  // SETUP (Đêm 1)
+  | 'PAIR_LOVERS'
+  | 'CHOOSE_IDOL'
+  | 'CHOOSE_COPY_TARGET'
+  | 'CHOOSE_HOODLUM_TARGETS'
+  | 'CHOOSE_COMPANION'
+  | 'MASON_MEET'
+  | 'MINION_REVEAL'
+  | 'DRUNK_SLEEP'
+  // NIGHT
+  | 'PROTECT'
+  | 'ATTACK'
+  | 'CURSE'
+  | 'HEAL'
+  | 'POISON'
+  | 'INSPECT'
+  | 'SILENCE'
+  | 'DOUBLE_VOTE_SABOTAGE'
+  | 'ENCHANT'
+  | 'CONVERT_CULT'
+  | 'NIGHT_IDLE_SUMMARY'
+  // TRANSFORMATIONS & DELAYED EFFECTS
+  | 'DRUNK_AWAKEN'
+  | 'DREAM_WOLF_AWAKEN'
+  | 'CURSED_TURN'
+  | 'WILD_CHILD_TURN'
+  | 'DOPPELGANGER_INHERIT'
+  | 'ELDER_SHIELD_HIT'
+  | 'ELDER_CURSE_VILLAGE'
+  | 'TOUGH_GUY_WOUNDED'
+  | 'TOUGH_GUY_COLLAPSE'
+  | 'RUSTY_KNIGHT_INFECT'
+  | 'TETANUS_DEATH'
+  | 'WOLF_CUB_ENRAGE'
+  | 'PIED_PIPER_CLEAR'
+  | 'CULT_DISBAND'
+  | 'ANGEL_TO_VILLAGER'
+  // DAWN & DAY
+  | 'DAWN_SUMMARY'
+  | 'BEAR_GROWL'
+  | 'MUTE_ANNOUNCE'
+  | 'TROUBLEMAKER_ANNOUNCE'
+  | 'MAYOR_ELECTED'
+  | 'MAYOR_TIE'
+  | 'MAYOR_SUCCESSION'
+  | 'VOTE_TALLY'
+  | 'VOTE_EXECUTION'
+  | 'VOTE_SURVIVED_REVEAL'
+  | 'VOTE_NO_EXECUTION'
+  | 'HUNTER_SHOT'
+  | 'CASCADE_DEATH'
+  | 'EMERGENCY_ELIMINATE'
+  // GAME END
+  | 'WIN';
+
+export interface EventParticipantSnapshot {
+  playerId: PlayerId;
+  name: string;
+  seatIndex: number;
+  roleId: string;
+  faction: Faction;
+  drunkRealRoleId?: string | null;
+}
+
+export interface MatchEventMetadata {
+  investigation?: {
+    kind: 'SEER_FACTION' | 'SEER_EXACT' | 'SORCERER' | 'AURA' | 'GROUP_HAS_WOLF';
+    resultLabel: string;
+    rawValue: string | boolean;
+    inspectedPlayers?: EventParticipantSnapshot[];
+    keptPower?: boolean;
+  };
+  wolfPack?: {
+    individualVotes?: Array<{
+      wolf: EventParticipantSnapshot;
+      target: EventParticipantSnapshot | null;
+      targets?: EventParticipantSnapshot[];
+    }>;
+    tieBreakRandom?: boolean;
+    isDoubleKill?: boolean;
+    isBigBadWolfExtra?: boolean;
+    firstNightPeaceRule?: boolean;
+    friendlyFireBlocked?: boolean;
+    skipWon?: boolean;
+  };
+  protector?: EventParticipantSnapshot;
+  healer?: EventParticipantSnapshot;
+  witch?: {
+    mode?: 'SINGLE' | 'AOE';
+    wastedHeal?: boolean;
+    refundedHeal?: boolean;
+    blockedByBodyguard?: boolean;
+    selfHealBlocked?: boolean;
+    blockedByBothRule?: boolean;
+  };
+  vote?: {
+    voteKind: 'MAYOR' | 'DAY' | 'RUNOFF';
+    tallies: Array<{
+      target: EventParticipantSnapshot;
+      votes: number;
+      voters?: EventParticipantSnapshot[];
+    }>;
+    abstainVotes: number;
+    totalEligibleWeight?: number;
+    isDoubleVoteDay?: boolean;
+    executionStep?: 1 | 2;
+    cancelledReason?: 'IMMEDIATE_WIN' | 'ALREADY_DEAD';
+    majorityThreshold?: number;
+    tiedCandidates?: EventParticipantSnapshot[];
+  };
+  roleChange?: {
+    oldRoleId: string;
+    newRoleId: string;
+    oldFaction: Faction;
+    newFaction: Faction;
+    drunkRealRoleId?: string;
+    inheritedWitchHealUsed?: boolean;
+    inheritedWitchPoisonUsed?: boolean;
+    inheritedFrom?: EventParticipantSnapshot;
+  };
+  delayedSourceRound?: number;
+  dawnDeaths?: Array<{
+    victim: EventParticipantSnapshot;
+    cause: DeathCause;
+    sourceRoleId?: string;
+  }>;
+  win?: {
+    winner: NonNullable<WinOutcome['winner']>;
+    winningPlayers: EventParticipantSnapshot[];
+    coWinners?: EventParticipantSnapshot[];
+    reason: string;
+  };
+  setup?: {
+    isCrossFactionCouple?: boolean;
+    drunkRealRoleId?: string;
+    soloMason?: boolean;
+  };
+  idleNotes?: string[];
+  cascadeCause?: DeathCause;
+  noShotReason?: 'DOPPELGANGER_HUNTER_BY_HUNTER' | 'POISON_BLOCKED' | 'TIMEOUT_OR_SKIP';
+  note?: string;
+}
+
+export interface MatchEvent {
+  id: string;
+  seq: number;
+  roundNumber: number;
+  stage: MatchLogStage;
+  actionType: MatchActionType;
+  visibility: MatchLogVisibility;
+  actor: EventParticipantSnapshot | null;
+  coActors?: EventParticipantSnapshot[];
+  targets: EventParticipantSnapshot[];
+  outcome: MatchEventOutcome;
+  parentEventId?: string | null;
+  involvedPlayerIds: PlayerId[];
+  metadata?: MatchEventMetadata;
+}
+
+export interface PublicMatchLogItem {
+  id: string;
+  seq: number;
+  roundNumber: number;
+  stage: Extract<MatchLogStage, 'DAY_ANNOUNCEMENT' | 'DAY_VOTE' | 'GAME_END'>;
+  actionType: MatchActionType;
+  text: string;
+  isHighlight: boolean;
+}
 
 export interface DeathRecord {
   playerId: PlayerId;
@@ -206,10 +400,16 @@ export interface GameState {
   princeRevealed?: boolean;
   mayorId: PlayerId | null;
   pendingHunterShotPlayerId?: PlayerId | null;
+  pendingHunterQueue?: PlayerId[];
+  pendingHunterDeathEventIds?: Record<PlayerId, string>;
   pendingMayorSuccessionPlayerId?: PlayerId | null;
+  morningAnnouncedRound?: number;
+  interruptedPhaseDuringNight?: boolean;
   previousPhaseBeforeHunter?: GamePhase;
   previousPhaseBeforeMayorSuccession?: GamePhase;
   dayState?: DayState;
   resolvedEvents?: NightResolutionEvent[];
   historyLogs: string[];
+  eventLog: MatchEvent[];
+  eventSeq: number;
 }

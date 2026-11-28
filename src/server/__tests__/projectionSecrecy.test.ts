@@ -10,6 +10,7 @@ import {
   createPublicRoomView,
 } from '../projections';
 import type { HostBoardView, PlayerPrivateView, PublicRoomView } from '../types';
+import { executeDayVote, executeHunterShot, executeNightPhase } from '../../engine/gameEngine';
 
 describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
   let mockIo: MockSocketIOServer;
@@ -420,5 +421,165 @@ describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
     const witchViewAfterHeal = createPlayerPrivateView(room, witch.id)!;
     expect(witchViewAfterHeal.skills.witchHealUsed).toBe(true);
     expect(witchViewAfterHeal.skills.witchPoisonUsed).toBe(true);
+  });
+
+  it('publicTimeline & morningAnnouncements tuân thủ chống spoil (revealOnDeath = false), giữ 3 ngoại lệ lộ vai và chỉ mở full matchEvents khi GAME_OVER', async () => {
+    const { roomCode } = await setupGame([
+      'werewolf',
+      'prince',
+      'hunter',
+      'seer',
+      'drunk',
+      'villager',
+    ]);
+    const room = roomService.getRoom(roomCode)!;
+    room.settings.revealOnDeath = false;
+
+    const seer = room.gameState!.players.find((p) => p.roleId === 'seer')!;
+    const prince = room.gameState!.players.find((p) => p.roleId === 'prince')!;
+    const hunter = room.gameState!.players.find((p) => p.roleId === 'hunter')!;
+    const villager = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+    const drunk = room.gameState!.players.find((p) => p.roleId === 'drunk')!;
+    drunk.drunkRealRoleId = 'witch';
+
+    // Đêm 1: Sói cắn Tiên tri, Tiên tri soi
+    room.gameState = executeNightPhase(room.gameState!, {
+      wolfPack: { targets: [seer.id] },
+      seer: { targetId: villager.id },
+    }).nextState;
+
+    const publicAfterN1 = createPublicRoomView(room);
+    const hostAfterN1 = createHostBoardView(room);
+
+    // Anti-spoiler: publicTimeline & hostBoardView không lộ SECRET_NIGHT hoặc vai Tiên tri khi revealOnDeath = false
+    const pubTextN1 = publicAfterN1.publicTimeline.map((i) => i.text).join('\n');
+    expect(pubTextN1).not.toContain('Tiên tri');
+    expect(pubTextN1).not.toContain('Kẻ say rượu');
+    expect(hostAfterN1.publicRoom.publicTimeline.map((i) => i.text).join('\n')).not.toContain('Tiên tri');
+    expect(publicAfterN1.morningAnnouncements[0]?.actionType).toBe('DAWN_SUMMARY');
+    expect(createPostGameView(room)).toBeNull();
+
+    // Ngày 1: vote Hoàng tử -> Hoàng tử vẫn phải lộ diện theo luật ngay cả khi revealOnDeath = false
+    room.gameState = executeDayVote(room.gameState!, prince.id).nextState;
+    const pubTextD1 = createPublicRoomView(room).publicTimeline.map((i) => i.text).join('\n');
+    expect(pubTextD1).toContain('Hoàng tử');
+
+    // Đêm 2: Sói cắn Thợ săn -> Thợ săn nổ súng giết Dân (vào thẳng GAME_OVER nếu cân bằng)
+    room.gameState = executeNightPhase(room.gameState!, {
+      wolfPack: { targets: [hunter.id] },
+    }).nextState;
+    room.gameState = executeHunterShot(room.gameState!, villager.id).nextState;
+    room.gameState!.phase = 'GAME_OVER';
+
+    const pubFinal = createPublicRoomView(room);
+    expect(pubFinal.publicTimeline.map((i) => i.text).join('\n')).toContain('Thợ săn');
+
+    const postGame = createPostGameView(room);
+    expect(postGame).not.toBeNull();
+    expect(postGame!.matchEvents.some((e) => e.actionType === 'INSPECT')).toBe(true);
+    expect(postGame!.matchEvents.some((e) => e.actionType === 'DRUNK_SLEEP')).toBe(true);
+    const drunkInfo = postGame!.allRoles.find((r) => r.id === drunk.id);
+    expect(drunkInfo?.drunkRealRoleId).toBe('witch');
+  });
+
+  it('ẩn nguyên nhân COMPANION_DEATH / COUPLE_HEARTBREAK khi revealOnDeath = false, che nguồn Nhân bản của Thợ săn và trả activeHunterPlayerId đúng', async () => {
+    const { roomCode } = await setupGame([
+      'dire_wolf',    // p1
+      'hunter',       // p2
+      'doppelganger', // p3 (copy hunter p2)
+      'cupid',        // p4
+      'village_idiot',// p5
+      'villager',     // p6
+    ]);
+    const room = roomService.getRoom(roomCode)!;
+    room.settings.revealOnDeath = false;
+
+    const direWolf = room.gameState!.players.find((p) => p.roleId === 'dire_wolf')!;
+    const hunter = room.gameState!.players.find((p) => p.roleId === 'hunter')!;
+    const dg = room.gameState!.players.find((p) => p.roleId === 'doppelganger')!;
+    const idiot = room.gameState!.players.find((p) => p.roleId === 'village_idiot')!;
+    const villager = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+    // Đêm 1: direWolf chọn hunter, doppelganger chọn hunter, cupid ghép hunter + villager
+    room.gameState = executeNightPhase(room.gameState!, {
+      direWolf: { targetId: hunter.id },
+      doppelganger: { targetId: hunter.id },
+      cupid: { target1: hunter.id, target2: villager.id },
+      wolfPack: { targets: [hunter.id] },
+    }).nextState;
+
+    // Lúc này hunter, villager (đau tim) và dire_wolf (bạn đồng hành) đều chết; HUNTER_SHOT đang chờ p2
+    expect(room.gameState!.phase).toBe('HUNTER_SHOT');
+    const pubHunter = createPublicRoomView(room);
+    expect(pubHunter.activeHunterPlayerId).toBe(hunter.id);
+    // publicView.deaths khi revealOnDeath = false không được lộ roleId, cause ngầm hoặc cascadeDepth
+    for (const d of pubHunter.deaths) {
+      expect(d.roleId).toBe('unknown');
+      expect(d.cause).toBe('UNKNOWN');
+      expect(d.cascadeDepth).toBeUndefined();
+    }
+
+    // Kiểm tra CASCADE_DEATH xảy ra ban ngày (PUBLIC): ẩn "bạn đồng hành" và "người yêu" khi revealOnDeath = false
+    const { roomCode: rDay } = await setupGame([
+      'dire_wolf',
+      'cupid',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const dayRoom = roomService.getRoom(rDay)!;
+    dayRoom.settings.revealOnDeath = false;
+    const dwDay = dayRoom.gameState!.players.find((p) => p.roleId === 'dire_wolf')!;
+    const vDay = dayRoom.gameState!.players.filter((p) => p.roleId === 'villager');
+    dayRoom.gameState = executeNightPhase(dayRoom.gameState!, {
+      direWolf: { targetId: vDay[0].id },
+      cupid: { target1: vDay[0].id, target2: vDay[1].id },
+      wolfPack: { isSkip: true },
+    }).nextState;
+    dayRoom.gameState = executeDayVote(dayRoom.gameState!, vDay[0].id).nextState;
+
+    const pubDayView = createPublicRoomView(dayRoom);
+    const pubDayCascadeText = pubDayView.publicTimeline.map((i) => i.text).join('\n');
+    expect(pubDayCascadeText).toContain('chết theo sau cái chết');
+    expect(pubDayCascadeText).not.toContain('bạn đồng hành');
+    expect(pubDayCascadeText).not.toContain('người yêu');
+    expect(pubDayView.deaths.find((d) => d.playerId === vDay[0].id)?.cause).toBe('VILLAGE_VOTE');
+    expect(pubDayView.deaths.find((d) => d.playerId === dwDay.id)?.cause).toBe('UNKNOWN');
+    expect(pubDayView.deaths.find((d) => d.playerId === vDay[1].id)?.cause).toBe('UNKNOWN');
+    expect(pubDayView.deaths.find((d) => d.playerId === dwDay.id)?.cascadeDepth).toBeUndefined();
+
+    // Kiểm tra ngoại lệ village_idiot lật bài khi revealOnDeath = false
+    const { roomCode: r2 } = await setupGame([
+      'werewolf',
+      'village_idiot',
+      'doppelganger',
+      'hunter',
+      'villager',
+      'villager',
+    ]);
+    const room2 = roomService.getRoom(r2)!;
+    room2.settings.revealOnDeath = false;
+    const r2Idiot = room2.gameState!.players.find((p) => p.roleId === 'village_idiot')!;
+    const r2Dg = room2.gameState!.players.find((p) => p.roleId === 'doppelganger')!;
+    const r2Hunter = room2.gameState!.players.find((p) => p.roleId === 'hunter')!;
+    const r2Villagers = room2.gameState!.players.filter((p) => p.roleId === 'villager');
+
+    room2.gameState = executeNightPhase(room2.gameState!, {
+      doppelganger: { targetId: r2Hunter.id },
+      wolfPack: { targets: [r2Hunter.id] },
+    }).nextState;
+    room2.gameState = executeHunterShot(room2.gameState!, r2Villagers[0].id).nextState;
+    room2.gameState = executeDayVote(room2.gameState!, r2Idiot.id).nextState;
+
+    const r2Night2 = executeNightPhase(room2.gameState!, {
+      wolfPack: { targets: [r2Dg.id] },
+    }).nextState;
+    room2.gameState = executeHunterShot(r2Night2, r2Villagers[1].id).nextState;
+
+    const pubR2Text = createPublicRoomView(room2).publicTimeline.map((i) => i.text).join('\n');
+    expect(pubR2Text).toContain('Thằng ngốc');
+    expect(pubR2Text).toContain('Thợ săn');
+    expect(pubR2Text).not.toContain('Nhân bản');
   });
 });

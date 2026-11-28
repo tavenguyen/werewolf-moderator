@@ -62,15 +62,25 @@ function attachHoodlumWin(outcome: WinOutcome, state: GameState): WinOutcome {
 export function checkWinCondition(state: GameState): WinOutcome | null {
   const alivePlayers = state.players.filter((p) => p.isAlive);
 
-  // 1. Thiên sứ (Angel) bị treo cổ ban ngày ngay trong Ngày 1 (VILLAGE_VOTE & roundNumber === 1)
-  const angelHangedDay1 = state.deaths.find(
-    (d) => d.roleId === 'angel' && d.cause === 'VILLAGE_VOTE' && d.roundNumber === 1
+  // 1. Thiên sứ (Angel) bị Sói cắn Đêm 1 hoặc treo cổ Ngày 1 (roundNumber === 1)
+  const angelFirstCycleWin = state.deaths.find(
+    (d) =>
+      d.roleId === 'angel' &&
+      d.roundNumber === 1 &&
+      (d.cause === 'VILLAGE_VOTE' || d.cause === 'WOLF_PACK')
   );
-  if (angelHangedDay1) {
+  if (angelFirstCycleWin) {
+    const angelPlayer = state.players.find((p) => p.id === angelFirstCycleWin.playerId);
+    const angelName = angelPlayer?.name ?? 'Thiên sứ';
+    const reason =
+      angelFirstCycleWin.cause === 'WOLF_PACK'
+        ? `Thiên sứ (${angelName}) đã bị bầy Sói cắn chết ngay trong Đêm 1 và giành chiến thắng độc tôn!`
+        : `Thiên sứ (${angelName}) đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng độc tôn!`;
+
     return {
       winner: 'ANGEL',
-      reason: 'Thiên sứ đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng!',
-      winningPlayerIds: [angelHangedDay1.playerId],
+      reason,
+      winningPlayerIds: [angelFirstCycleWin.playerId],
     };
   }
 

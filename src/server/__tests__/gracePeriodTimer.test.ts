@@ -142,6 +142,8 @@ describe('Realtime Backend - Grace Period (+1s) & Timer Management', () => {
       mayorId: null,
       dayState: createInitialDayState(),
       historyLogs: [],
+      eventLog: [],
+      eventSeq: 0,
     };
 
     timerManager.startDayDiscussTimer(room, () => {}, undefined, 180, 60);
@@ -205,6 +207,8 @@ describe('Realtime Backend - Grace Period (+1s) & Timer Management', () => {
       mayorId: null,
       dayState: createInitialDayState(),
       historyLogs: [],
+      eventLog: [],
+      eventSeq: 0,
     };
 
     let voteUnlocked = false;
@@ -275,6 +279,8 @@ describe('Realtime Backend - Grace Period (+1s) & Timer Management', () => {
       villagePowerStripped: false,
       mayorId: null,
       historyLogs: [],
+      eventLog: [],
+      eventSeq: 0,
     };
 
     const pauseRes: any = await new Promise((resolve) => {

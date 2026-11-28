@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { LocalEngineAdapter } from '../localEngineAdapter';
+import { executeDayVote, executeNightPhase } from '../../engine/gameEngine';
 
 function createPopulatedAdapter(playerCount = 8): LocalEngineAdapter {
   const adapter = new LocalEngineAdapter();
@@ -1350,5 +1351,143 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
         (globalThis as Record<string, unknown>).localStorage = prevLocalStorage;
       }
     }
+  });
+
+  it('xuất đúng morningAnnouncements, postGameView.matchEvents và phục hồi eventLog nguyên vẹn qua F5 + endGameToSummary', async () => {
+    const store = new Map<string, string>();
+    const prevLocalStorage = (globalThis as Record<string, unknown>).localStorage;
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+    };
+
+    try {
+      const adapter = createPopulatedAdapter(6);
+      await adapter.startGame([
+        'werewolf',
+        'bear_tamer',
+        'spellcaster',
+        'seer',
+        'villager',
+        'villager',
+      ]);
+      await adapter.startFirstNight();
+
+      const roomState = (adapter as unknown as { roomState: any }).roomState;
+      const bear = roomState.gameState.players.find((p: any) => p.roleId === 'bear_tamer');
+      const seer = roomState.gameState.players.find((p: any) => p.roleId === 'seer');
+      const villagers = roomState.gameState.players.filter((p: any) => p.roleId === 'villager');
+
+      // Chạy trực tiếp 1 đêm có cả nạn nhân chết + Gấu gầm + Cấm nói
+      const n1 = executeNightPhase(roomState.gameState, {
+        wolfPack: { targets: [villagers[0].id] },
+        spellcaster: { targetId: bear.id },
+        seer: { targetId: seer.id },
+      });
+      roomState.gameState = n1.nextState;
+      await (adapter as any).emitState();
+
+      // morningAnnouncements ưu tiên DAWN_SUMMARY lên đầu (không bị BEAR_GROWL hay MUTE_ANNOUNCE đè)
+      const morning = adapter.getState().publicView?.morningAnnouncements ?? [];
+      expect(morning.length).toBeGreaterThanOrEqual(2);
+      expect(morning[0].actionType).toBe('DAWN_SUMMARY');
+      expect(morning[0].text).toContain(villagers[0].name);
+      // Chưa GAME_OVER thì tuyệt đối không lộ SECRET_NIGHT vào publicTimeline
+      expect(
+        adapter.getState().publicView?.publicTimeline.some((i) => i.text.includes('Tiên tri'))
+      ).toBe(false);
+
+      // F5 reload qua adapter thứ 2: giữ nguyên eventLog & eventSeq
+      const prevSeq = roomState.gameState.eventSeq;
+      const resumedAdapter = new LocalEngineAdapter();
+      const restored = await resumedAdapter.resumeSession();
+      expect(restored).toBe(true);
+      const resumedRoom = (resumedAdapter as unknown as { roomState: any }).roomState;
+      expect(resumedRoom.gameState.eventSeq).toBe(prevSeq);
+
+      // Gọi day vote không lặp morning announcement
+      resumedRoom.gameState = executeDayVote(resumedRoom.gameState, null).nextState;
+
+      // Host kết thúc sớm ván -> sinh WIN (DRAW) & mở full matchEvents
+      await resumedAdapter.endGameToSummary();
+      const postGame = resumedAdapter.getState().postGameView;
+      expect(postGame).not.toBeNull();
+      expect(postGame!.matchEvents.some((e) => e.actionType === 'ATTACK')).toBe(true);
+      expect(postGame!.matchEvents.some((e) => e.actionType === 'WIN')).toBe(true);
+
+      // Rematch dọn sạch
+      await resumedAdapter.hostRematch();
+      expect(resumedAdapter.getState().postGameView).toBeNull();
+      expect(resumedAdapter.getState().publicView?.publicTimeline).toEqual([]);
+    } finally {
+      if (prevLocalStorage === undefined) {
+        delete (globalThis as Record<string, unknown>).localStorage;
+      } else {
+        (globalThis as Record<string, unknown>).localStorage = prevLocalStorage;
+      }
+    }
+  });
+
+  it('hostEmergencyEliminate xóa pendingDayVerdict khi chuyển HUNTER_SHOT và khôi phục NIGHT giữa đêm không nhảy vòng', async () => {
+    const adapter = createPopulatedAdapter(8);
+    await adapter.startGame([
+      'hunter',
+      'werewolf',
+      'seer',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    const hunter = roomState.gameState.players.find((p: any) => p.roleId === 'hunter');
+    const villagers = roomState.gameState.players.filter((p: any) => p.roleId === 'villager');
+
+    // 1. Vào ban ngày và chốt hòa -> hiện pendingDayVerdict
+    roomState.gameState = executeNightPhase(roomState.gameState, {
+      wolfPack: { targets: [villagers[0].id] },
+    }).nextState;
+    await adapter.submitPublicHandVotes({});
+    expect(adapter.getState().publicView?.dayVerdict?.isPendingNextNight).toBe(true);
+
+    // Trục xuất Thợ săn -> chuyển HUNTER_SHOT và phải xóa sạch dayVerdict cũ
+    await adapter.hostEmergencyEliminate(hunter.id);
+    expect(adapter.getState().publicView?.phase).toBe('HUNTER_SHOT');
+    expect(adapter.getState().publicView?.activeHunterPlayerId).toBe(hunter.id);
+    expect(adapter.getState().publicView?.dayVerdict).toBeNull();
+
+    await adapter.sendHunterShot(villagers[1].id);
+    expect(adapter.getState().publicView?.phase).toBe('DAY_DISCUSS');
+
+    // 2. Test ngắt giữa NIGHT: trục xuất một Hunter thứ 2 giữa Đêm -> bắn xong quay lại đúng round hiện tại
+    await adapter.proceedToNextNight();
+    const roundAtNight = roomState.gameState.roundNumber;
+    const seer = roomState.gameState.players.find((p: any) => p.roleId === 'seer');
+    seer.roleId = 'hunter';
+    await adapter.hostEmergencyEliminate(seer.id);
+    expect(adapter.getState().publicView?.phase).toBe('HUNTER_SHOT');
+    await adapter.sendHunterShot(villagers[2].id);
+    expect(roomState.gameState.phase).toBe('NIGHT');
+    expect(roomState.gameState.roundNumber).toBe(roundAtNight);
+
+    // 3. Chained HUNTER_SHOT (Hunter 1 bắn Hunter 2): cập nhật state.playerId & activeHunterPlayerId sang Hunter 2
+    const hunterA = roomState.gameState.players.find((p: any) => p.isAlive && p.roleId === 'villager');
+    const hunterB = roomState.gameState.players.filter((p: any) => p.isAlive && p.roleId === 'villager')[1];
+    hunterA.roleId = 'hunter';
+    hunterB.roleId = 'hunter';
+    await adapter.hostEmergencyEliminate(hunterA.id);
+    expect(adapter.getState().playerId).toBe(hunterA.id);
+    await adapter.sendHunterShot(hunterB.id);
+    expect(adapter.getState().publicView?.phase).toBe('HUNTER_SHOT');
+    expect(adapter.getState().playerId).toBe(hunterB.id);
+    expect(adapter.getState().publicView?.activeHunterPlayerId).toBe(hunterB.id);
   });
 });

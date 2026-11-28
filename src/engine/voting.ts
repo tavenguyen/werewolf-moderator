@@ -1,10 +1,72 @@
-import type { DayState, GameState, PlayerId } from './types';
+import { appendMatchEvent, snapshotPlayer } from './matchLog';
+import type {
+  DayState,
+  EventParticipantSnapshot,
+  GameState,
+  MatchEventMetadata,
+  PlayerId,
+} from './types';
 
 export interface DayVoteOutcome {
   type: 'EXECUTE' | 'RUNOFF' | 'ESCAPE';
   targetPlayerId?: PlayerId | null;
   candidateIds?: PlayerId[];
   reason: string;
+}
+
+export interface VoteTallyInput {
+  tallies: Record<PlayerId, number>;
+  abstainCount: number;
+  voterDetails?: Record<PlayerId, PlayerId[]>;
+}
+
+/**
+ * Xây dựng metadata phiếu bầu chuẩn hóa cho MatchEvent từ GameState và bảng đếm phiếu.
+ */
+export function buildVoteMetadata(
+  state: GameState,
+  voteKind: 'MAYOR' | 'DAY' | 'RUNOFF',
+  tallyData: VoteTallyInput,
+  options?: {
+    tiedIds?: PlayerId[];
+    majorityThreshold?: number;
+    includeVoters?: boolean;
+  }
+): NonNullable<MatchEventMetadata['vote']> {
+  const playerMap = new Map(state.players.map((p) => [p.id, p] as const));
+  const tallies = Object.entries(tallyData.tallies)
+    .sort((a, b) => b[1] - a[1])
+    .map(([targetId, votes]) => {
+      const targetPlayer = playerMap.get(targetId);
+      if (!targetPlayer) return null;
+      const voterIds = options?.includeVoters ? tallyData.voterDetails?.[targetId] : undefined;
+      const voters = voterIds
+        ?.map((vId) => playerMap.get(vId))
+        .filter((p): p is NonNullable<typeof p> => Boolean(p))
+        .map((p) => snapshotPlayer(p));
+      return {
+        target: snapshotPlayer(targetPlayer),
+        votes,
+        ...(voters && voters.length > 0 ? { voters } : {}),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  const tiedCandidates: EventParticipantSnapshot[] | undefined = options?.tiedIds
+    ?.map((id) => playerMap.get(id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    .map((p) => snapshotPlayer(p));
+
+  return {
+    voteKind,
+    tallies,
+    abstainVotes: tallyData.abstainCount,
+    ...(state.doubleVoteDay && voteKind === 'DAY' ? { isDoubleVoteDay: true } : {}),
+    ...(options?.majorityThreshold !== undefined
+      ? { majorityThreshold: options.majorityThreshold }
+      : {}),
+    ...(tiedCandidates && tiedCandidates.length > 0 ? { tiedCandidates } : {}),
+  };
 }
 
 /**
@@ -35,7 +97,6 @@ export function tickDayTimer(state: GameState, elapsedSeconds: number): GameStat
   const currentRemaining = nextState.dayState.discussionSecondsRemaining;
   nextState.dayState.discussionSecondsRemaining = Math.max(0, currentRemaining - elapsedSeconds);
 
-  // Đếm lùi 60s khóa vote độc lập với thời gian thảo luận (không bị ảnh hưởng khi gia hạn +30s)
   const currentLock = nextState.dayState.voteLockRemainingSeconds;
   const newLock = Math.max(0, currentLock - elapsedSeconds);
   nextState.dayState.voteLockRemainingSeconds = newLock;
@@ -129,27 +190,63 @@ export function tallyMayorElection(state: GameState): {
   electedMayorId: PlayerId | null;
 } {
   const nextState: GameState = structuredClone(state);
-  if (!nextState.dayState || !nextState.dayState.mayorBallots) {
-    nextState.historyLogs.push('Không có ai nhận được phiếu bầu Trưởng làng. Không có Trưởng làng!');
+  const mayorBallots = nextState.dayState?.mayorBallots;
+  if (!nextState.dayState || !mayorBallots) {
+    nextState.historyLogs.push(
+      'Không có ai nhận được phiếu bầu Trưởng làng. Không có Trưởng làng!'
+    );
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage: 'DAY_VOTE',
+      actionType: 'MAYOR_TIE',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: [],
+      outcome: 'NO_EFFECT',
+    });
     nextState.phase = 'DAY_DISCUSS';
     return { nextState, electedMayorId: null };
   }
 
   const counts = new Map<PlayerId, number>();
-  for (const candidateId of Object.values(nextState.dayState.mayorBallots)) {
-    if (!candidateId) continue;
+  const voterDetails: Record<PlayerId, PlayerId[]> = {};
+  const livingVoters = nextState.players.filter((p) => p.isAlive);
+  let abstainCount = 0;
+
+  for (const voter of livingVoters) {
+    const candidateId = mayorBallots[voter.id];
+    if (!candidateId) {
+      abstainCount += 1;
+      continue;
+    }
     const p = nextState.players.find((pl) => pl.id === candidateId && pl.isAlive);
     if (p) {
       counts.set(candidateId, (counts.get(candidateId) ?? 0) + 1);
+      if (!voterDetails[candidateId]) voterDetails[candidateId] = [];
+      voterDetails[candidateId].push(voter.id);
+    } else {
+      abstainCount += 1;
     }
   }
 
   if (counts.size === 0) {
-    nextState.historyLogs.push('Không có ai nhận được phiếu bầu Trưởng làng. Không có Trưởng làng!');
+    nextState.historyLogs.push(
+      'Không có ai nhận được phiếu bầu Trưởng làng. Không có Trưởng làng!'
+    );
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage: 'DAY_VOTE',
+      actionType: 'MAYOR_TIE',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: [],
+      outcome: 'NO_EFFECT',
+    });
     nextState.phase = 'DAY_DISCUSS';
     return { nextState, electedMayorId: null };
   }
 
+  const talliesRecord = Object.fromEntries(counts.entries());
   const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   const highestVotes = sorted[0][1];
   const topCandidates = sorted.filter((entry) => entry[1] === highestVotes);
@@ -161,13 +258,50 @@ export function tallyMayorElection(state: GameState): {
       nextState.mayorId = winnerId;
       mayor.voteWeight = 2; // Quyền 2 phiếu áp dụng ngay Ngày 1
       nextState.historyLogs.push(`(${mayor.name}) đã đắc cử Trưởng làng với quyền lực 2 phiếu!`);
+      appendMatchEvent(nextState, {
+        roundNumber: nextState.roundNumber,
+        stage: 'DAY_VOTE',
+        actionType: 'MAYOR_ELECTED',
+        visibility: 'PUBLIC',
+        actor: null,
+        targets: [snapshotPlayer(mayor)],
+        outcome: 'SUCCESS',
+        metadata: {
+          vote: buildVoteMetadata(
+            nextState,
+            'MAYOR',
+            { tallies: talliesRecord, abstainCount, voterDetails },
+            { includeVoters: true }
+          ),
+        },
+      });
     }
     nextState.phase = 'DAY_DISCUSS';
     return { nextState, electedMayorId: winnerId };
   }
 
   // Hòa phiếu bầu Trưởng làng -> Không ai làm Trưởng làng
-  nextState.historyLogs.push('Hòa phiếu bầu Trưởng làng. Ván đấu tiếp tục mà không có Trưởng làng!');
+  const tiedIds = topCandidates.map((c) => c[0]);
+  nextState.historyLogs.push(
+    'Hòa phiếu bầu Trưởng làng. Ván đấu tiếp tục mà không có Trưởng làng!'
+  );
+  appendMatchEvent(nextState, {
+    roundNumber: nextState.roundNumber,
+    stage: 'DAY_VOTE',
+    actionType: 'MAYOR_TIE',
+    visibility: 'PUBLIC',
+    actor: null,
+    targets: [],
+    outcome: 'TIED_ESCAPE',
+    metadata: {
+      vote: buildVoteMetadata(
+        nextState,
+        'MAYOR',
+        { tallies: talliesRecord, abstainCount, voterDetails },
+        { tiedIds, includeVoters: true }
+      ),
+    },
+  });
   nextState.phase = 'DAY_DISCUSS';
   return { nextState, electedMayorId: null };
 }
@@ -178,10 +312,17 @@ export function tallyMayorElection(state: GameState): {
  */
 export function passMayorTitle(
   state: GameState,
-  _currentMayorId: PlayerId,
+  currentMayorId: PlayerId,
   nextMayorId: PlayerId | null
 ): GameState {
   const nextState: GameState = structuredClone(state);
+  const oldMayor = nextState.players.find((p) => p.id === currentMayorId);
+  const oldMayorSnap = oldMayor ? snapshotPlayer(oldMayor) : null;
+  const fromMorning =
+    nextState.previousPhaseBeforeMayorSuccession === 'DAY_DISCUSS' ||
+    nextState.previousPhaseBeforeMayorSuccession === 'DAY_MAYOR_ELECTION';
+  const stage = fromMorning ? 'DAY_ANNOUNCEMENT' : 'DAY_VOTE';
+
   nextState.pendingMayorSuccessionPlayerId = null;
 
   if (nextMayorId) {
@@ -192,21 +333,57 @@ export function passMayorTitle(
       nextState.historyLogs.push(
         `Trưởng làng cũ đã trao lại huy hiệu Trưởng làng cho [${successor.name}]!`
       );
+      appendMatchEvent(nextState, {
+        roundNumber: nextState.roundNumber,
+        stage,
+        actionType: 'MAYOR_SUCCESSION',
+        visibility: 'PUBLIC',
+        actor: oldMayorSnap,
+        targets: [snapshotPlayer(successor)],
+        outcome: 'SUCCESS',
+      });
     } else {
       nextState.mayorId = null;
-      nextState.historyLogs.push('Hết thời gian truyền ngôi. Danh hiệu Trưởng làng chính thức biến mất vĩnh viễn!');
+      nextState.historyLogs.push(
+        'Hết thời gian truyền ngôi. Danh hiệu Trưởng làng chính thức biến mất vĩnh viễn!'
+      );
+      appendMatchEvent(nextState, {
+        roundNumber: nextState.roundNumber,
+        stage,
+        actionType: 'MAYOR_SUCCESSION',
+        visibility: 'PUBLIC',
+        actor: oldMayorSnap,
+        targets: [],
+        outcome: 'NO_EFFECT',
+      });
     }
   } else {
     nextState.mayorId = null;
-    nextState.historyLogs.push('Hết thời gian truyền ngôi. Danh hiệu Trưởng làng chính thức biến mất vĩnh viễn!');
+    nextState.historyLogs.push(
+      'Hết thời gian truyền ngôi. Danh hiệu Trưởng làng chính thức biến mất vĩnh viễn!'
+    );
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage,
+      actionType: 'MAYOR_SUCCESSION',
+      visibility: 'PUBLIC',
+      actor: oldMayorSnap,
+      targets: [],
+      outcome: 'NO_EFFECT',
+    });
   }
 
   // Tự động chuyển tiếp phase nếu đang ở MAYOR_SUCCESSION
   if (nextState.phase === 'MAYOR_SUCCESSION') {
     const targetPhase = nextState.previousPhaseBeforeMayorSuccession ?? 'DAY_DISCUSS';
     nextState.phase = targetPhase;
+    nextState.previousPhaseBeforeMayorSuccession = undefined;
     if (targetPhase === 'NIGHT') {
-      nextState.roundNumber += 1;
+      if (nextState.interruptedPhaseDuringNight) {
+        nextState.interruptedPhaseDuringNight = false;
+      } else {
+        nextState.roundNumber += 1;
+      }
     } else if (targetPhase === 'DAY_DISCUSS' || targetPhase === 'DAY_MAYOR_ELECTION') {
       if (!nextState.dayState) {
         nextState.dayState = createInitialDayState();
@@ -229,7 +406,7 @@ export function castDayVote(
   if (!nextState.dayState) return nextState;
 
   const voter = nextState.players.find((p) => p.id === voterId && p.isAlive);
-  if (!voter || voter.voteWeight <= 0) return nextState; // Thằng ngốc lật bài không được vote
+  if (!voter || voter.voteWeight <= 0) return nextState;
 
   if (targetId !== null) {
     const target = nextState.players.find((p) => p.id === targetId && p.isAlive);
@@ -248,14 +425,13 @@ export function canHostTallyEarly(state: GameState): boolean {
   if (!state.dayState) return false;
 
   const eligibleVoters = state.players.filter((p) => p.isAlive && p.voteWeight > 0);
-  return eligibleVoters.every((v) => Object.prototype.hasOwnProperty.call(state.dayState!.ballots, v.id));
+  return eligibleVoters.every((v) =>
+    Object.prototype.hasOwnProperty.call(state.dayState!.ballots, v.id)
+  );
 }
 
 /**
- * Tally phiếu biểu quyết treo cổ ban ngày:
- * - Áp dụng trọng số voteWeight (Dân = 1, Mayor = 2, Thằng ngốc lật bài = 0).
- * - Người không gửi / disconnect tính là abstain.
- * - Hòa phiếu: Nếu ESCAPE -> không ai chết; Nếu RUNOFF -> vào vòng biện hộ 30s + vote lại 20s.
+ * Tally phiếu biểu quyết treo cổ ban ngày.
  */
 export function tallyDayVotes(state: GameState): {
   nextState: GameState;
@@ -270,41 +446,88 @@ export function tallyDayVotes(state: GameState): {
   }
 
   const voteWeights = new Map<PlayerId, number>();
+  const voterDetails: Record<PlayerId, PlayerId[]> = {};
   const livingVoters = nextState.players.filter((p) => p.isAlive && p.voteWeight > 0);
+  let abstainCount = 0;
 
   for (const voter of livingVoters) {
     const targetId = nextState.dayState.ballots[voter.id];
-    if (!targetId) continue; // Bỏ phiếu trắng / Chưa gửi -> Abstain
+    if (!targetId) {
+      abstainCount += voter.voteWeight;
+      continue;
+    }
 
     const target = nextState.players.find((p) => p.id === targetId && p.isAlive);
-    if (!target) continue;
+    if (!target) {
+      abstainCount += voter.voteWeight;
+      continue;
+    }
 
     voteWeights.set(targetId, (voteWeights.get(targetId) ?? 0) + voter.voteWeight);
+    if (!voterDetails[targetId]) voterDetails[targetId] = [];
+    voterDetails[targetId].push(voter.id);
   }
 
   if (voteWeights.size === 0) {
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage: 'DAY_VOTE',
+      actionType: 'VOTE_TALLY',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: [],
+      outcome: 'NO_EFFECT',
+      metadata: {
+        vote: buildVoteMetadata(
+          nextState,
+          'DAY',
+          { tallies: {}, abstainCount },
+          { includeVoters: true }
+        ),
+      },
+    });
     return {
       nextState,
       outcome: { type: 'ESCAPE', reason: 'Không ai nhận được phiếu treo cổ hôm nay.' },
     };
   }
 
+  const talliesRecord = Object.fromEntries(voteWeights.entries());
   const sorted = Array.from(voteWeights.entries()).sort((a, b) => b[1] - a[1]);
   const highestWeight = sorted[0][1];
   const topCandidates = sorted.filter((entry) => entry[1] === highestWeight);
 
   if (topCandidates.length === 1) {
     const targetPlayerId = topCandidates[0][0];
+    const targetPlayer = nextState.players.find((p) => p.id === targetPlayerId);
+    const targetName = targetPlayer?.name ?? targetPlayerId;
 
-    // Kiểm tra ngưỡng quá bán (MAJORITY) nếu được bật
     if (nextState.settings.lynchThreshold === 'MAJORITY') {
       const livingCount = nextState.players.filter((p) => p.isAlive).length;
+      const threshold = Math.floor(livingCount / 2);
       if (highestWeight <= livingCount / 2) {
+        appendMatchEvent(nextState, {
+          roundNumber: nextState.roundNumber,
+          stage: 'DAY_VOTE',
+          actionType: 'VOTE_TALLY',
+          visibility: 'PUBLIC',
+          actor: null,
+          targets: targetPlayer ? [snapshotPlayer(targetPlayer)] : [],
+          outcome: 'BELOW_MAJORITY',
+          metadata: {
+            vote: buildVoteMetadata(
+              nextState,
+              'DAY',
+              { tallies: talliesRecord, abstainCount, voterDetails },
+              { majorityThreshold: threshold, includeVoters: true }
+            ),
+          },
+        });
         return {
           nextState,
           outcome: {
             type: 'ESCAPE',
-            reason: `Mục tiêu [${targetPlayerId}] nhận nhiều phiếu nhất (${highestWeight}) nhưng chưa đạt quá bán (> ${Math.floor(livingCount / 2)}/${livingCount} phiếu). Cả làng tha bổng hôm nay.`,
+            reason: `${targetName} nhận nhiều phiếu nhất (${highestWeight}) nhưng chưa đạt quá bán (> ${threshold}/${livingCount} phiếu). Cả làng tha bổng hôm nay.`,
           },
         };
       }
@@ -315,17 +538,39 @@ export function tallyDayVotes(state: GameState): {
       outcome: {
         type: 'EXECUTE',
         targetPlayerId,
-        reason: `Mục tiêu [${targetPlayerId}] nhận số phiếu cao nhất (${highestWeight} phiếu).`,
+        reason: `${targetName} nhận số phiếu cao nhất (${highestWeight} phiếu).`,
       },
     };
   }
 
   // Trường hợp hòa phiếu cao nhất
   const candidateIds = topCandidates.map((c) => c[0]);
+  const tiedPlayers = candidateIds
+    .map((id) => nextState.players.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    .map((p) => snapshotPlayer(p));
+
   if (nextState.settings.tieVoteMode === 'RUNOFF') {
     nextState.phase = 'DAY_RUNOFF';
     nextState.dayState.runoffCandidates = candidateIds;
     nextState.dayState.runoffBallots = {};
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage: 'DAY_VOTE',
+      actionType: 'VOTE_TALLY',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: tiedPlayers,
+      outcome: 'TIED_RUNOFF',
+      metadata: {
+        vote: buildVoteMetadata(
+          nextState,
+          'DAY',
+          { tallies: talliesRecord, abstainCount, voterDetails },
+          { tiedIds: candidateIds, includeVoters: true }
+        ),
+      },
+    });
     return {
       nextState,
       outcome: {
@@ -336,6 +581,23 @@ export function tallyDayVotes(state: GameState): {
     };
   }
 
+  appendMatchEvent(nextState, {
+    roundNumber: nextState.roundNumber,
+    stage: 'DAY_VOTE',
+    actionType: 'VOTE_TALLY',
+    visibility: 'PUBLIC',
+    actor: null,
+    targets: tiedPlayers,
+    outcome: 'TIED_ESCAPE',
+    metadata: {
+      vote: buildVoteMetadata(
+        nextState,
+        'DAY',
+        { tallies: talliesRecord, abstainCount, voterDetails },
+        { tiedIds: candidateIds, includeVoters: true }
+      ),
+    },
+  });
   return {
     nextState,
     outcome: {
@@ -389,36 +651,85 @@ export function tallyRunoffVotes(state: GameState): {
   }
 
   const counts = new Map<PlayerId, number>();
+  const voterDetails: Record<PlayerId, PlayerId[]> = {};
   const livingVoters = nextState.players.filter((p) => p.isAlive && p.voteWeight > 0);
+  let abstainCount = 0;
 
   for (const voter of livingVoters) {
     const targetId = nextState.dayState.runoffBallots[voter.id];
-    if (!targetId) continue;
+    if (!targetId) {
+      abstainCount += voter.voteWeight;
+      continue;
+    }
 
     counts.set(targetId, (counts.get(targetId) ?? 0) + voter.voteWeight);
+    if (!voterDetails[targetId]) voterDetails[targetId] = [];
+    voterDetails[targetId].push(voter.id);
   }
 
   if (counts.size === 0) {
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage: 'DAY_VOTE',
+      actionType: 'VOTE_TALLY',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: [],
+      outcome: 'NO_EFFECT',
+      metadata: {
+        vote: buildVoteMetadata(
+          nextState,
+          'RUNOFF',
+          { tallies: {}, abstainCount },
+          { includeVoters: true }
+        ),
+      },
+    });
     return {
       nextState,
-      outcome: { type: 'ESCAPE', reason: 'Không có phiếu bầu hợp lệ ở vòng Runoff. Thoát án treo cổ!' },
+      outcome: {
+        type: 'ESCAPE',
+        reason: 'Không có phiếu bầu hợp lệ ở vòng Runoff. Thoát án treo cổ!',
+      },
     };
   }
 
+  const talliesRecord = Object.fromEntries(counts.entries());
   const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   const highest = sorted[0][1];
   const top = sorted.filter((e) => e[1] === highest);
 
   if (top.length === 1) {
     const targetPlayerId = top[0][0];
+    const targetPlayer = nextState.players.find((p) => p.id === targetPlayerId);
+    const targetName = targetPlayer?.name ?? targetPlayerId;
+
     if (nextState.settings.lynchThreshold === 'MAJORITY') {
       const livingCount = nextState.players.filter((p) => p.isAlive).length;
+      const threshold = Math.floor(livingCount / 2);
       if (highest <= livingCount / 2) {
+        appendMatchEvent(nextState, {
+          roundNumber: nextState.roundNumber,
+          stage: 'DAY_VOTE',
+          actionType: 'VOTE_TALLY',
+          visibility: 'PUBLIC',
+          actor: null,
+          targets: targetPlayer ? [snapshotPlayer(targetPlayer)] : [],
+          outcome: 'BELOW_MAJORITY',
+          metadata: {
+            vote: buildVoteMetadata(
+              nextState,
+              'RUNOFF',
+              { tallies: talliesRecord, abstainCount, voterDetails },
+              { majorityThreshold: threshold, includeVoters: true }
+            ),
+          },
+        });
         return {
           nextState,
           outcome: {
             type: 'ESCAPE',
-            reason: `Mục tiêu [${targetPlayerId}] nhận nhiều phiếu nhất vòng Runoff (${highest}) nhưng chưa đạt quá bán (> ${Math.floor(livingCount / 2)}/${livingCount} phiếu). Thoát án treo cổ!`,
+            reason: `${targetName} nhận nhiều phiếu nhất vòng Runoff (${highest}) nhưng chưa đạt quá bán (> ${threshold}/${livingCount} phiếu). Thoát án treo cổ!`,
           },
         };
       }
@@ -429,10 +740,34 @@ export function tallyRunoffVotes(state: GameState): {
       outcome: {
         type: 'EXECUTE',
         targetPlayerId,
-        reason: `Mục tiêu [${targetPlayerId}] nhận số phiếu cao nhất ở vòng Runoff (${highest} phiếu).`,
+        reason: `${targetName} nhận số phiếu cao nhất ở vòng Runoff (${highest} phiếu).`,
       },
     };
   }
+
+  const tiedIds = top.map((c) => c[0]);
+  const tiedPlayers = tiedIds
+    .map((id) => nextState.players.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    .map((p) => snapshotPlayer(p));
+
+  appendMatchEvent(nextState, {
+    roundNumber: nextState.roundNumber,
+    stage: 'DAY_VOTE',
+    actionType: 'VOTE_TALLY',
+    visibility: 'PUBLIC',
+    actor: null,
+    targets: tiedPlayers,
+    outcome: 'TIED_ESCAPE',
+    metadata: {
+      vote: buildVoteMetadata(
+        nextState,
+        'RUNOFF',
+        { tallies: talliesRecord, abstainCount, voterDetails },
+        { tiedIds, includeVoters: true }
+      ),
+    },
+  });
 
   // Vòng 2 vẫn hòa -> Thoát án treo cổ
   return {

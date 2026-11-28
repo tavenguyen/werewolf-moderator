@@ -3,6 +3,7 @@ import type { Server, Socket } from 'socket.io';
 import { executeDayVote, executeHunterShot, executeMayorSuccession, executeNightPhase } from '../engine/gameEngine';
 import { generateNightTurnPlan } from '../engine/turnPlan';
 import {
+  buildVoteMetadata,
   canHostTallyEarly,
   castDayVote,
   castMayorBallot,
@@ -467,13 +468,13 @@ export class SocketGateway {
           }
 
           this.timerManager.clearRoomTimer(room);
-          const { nextState, winOutcome } = executeHunterShot(
+          const { nextState, winOutcome, resumedInterruptedNight } = executeHunterShot(
             room.gameState,
             payload.targetPlayerId
           );
           room.gameState = nextState;
 
-          this.routePostHunterPhase(room, winOutcome);
+          this.routePostHunterPhase(room, winOutcome, resumedInterruptedNight);
           return { shot: true };
         });
       }
@@ -502,13 +503,13 @@ export class SocketGateway {
           }
 
           this.timerManager.clearRoomTimer(room);
-          const { nextState, winOutcome } = executeMayorSuccession(
+          const { nextState, winOutcome, resumedInterruptedNight } = executeMayorSuccession(
             room.gameState,
             payload.successorPlayerId
           );
           room.gameState = nextState;
 
-          this.routePostMayorSuccessionPhase(room, winOutcome);
+          this.routePostMayorSuccessionPhase(room, winOutcome, resumedInterruptedNight);
           return { transferred: true };
         });
       }
@@ -758,15 +759,6 @@ export class SocketGateway {
       return;
     }
 
-    const roundDeaths = room.gameState.deaths.filter(
-      (d) => d.roundNumber === room.gameState!.roundNumber && d.phase === 'NIGHT'
-    );
-    if (roundDeaths.length > 0) {
-      room.publicHistoryLogs.push(`Trời đã sáng. Đêm qua có ${roundDeaths.length} người ngã xuống!`);
-    } else {
-      room.publicHistoryLogs.push('Trời đã sáng. Một đêm bình yên, không ai ngã xuống!');
-    }
-
     const expectedGeneration = room.gameGeneration;
 
     if (room.gameState.phase === 'HUNTER_SHOT') {
@@ -803,9 +795,6 @@ export class SocketGateway {
    * Bắt đầu pha Thảo luận ban ngày (tùy chỉnh thảo luận & khóa vote).
    */
   private startDayDiscussion(room: RoomState): void {
-    if (room.gameState) {
-      room.publicHistoryLogs.push(`Bắt đầu Ngày ${room.gameState.roundNumber}: Mở phiên thảo luận làng.`);
-    }
     const discussSec = room.settings.dayDiscussionSeconds ?? DEFAULT_DAY_DISCUSS_SEC;
     const lockSec = room.settings.dayVoteLockSeconds ?? DEFAULT_VOTE_LOCK_SEC;
     const expectedGeneration = room.gameGeneration;
@@ -929,10 +918,18 @@ export class SocketGateway {
       targetsToExecute = targets;
     }
 
+    const voteSummary = buildVoteMetadata(
+      room.gameState,
+      'DAY',
+      { tallies, abstainCount, voterDetails },
+      { includeVoters: true }
+    );
+
     const prevHistoryLen = room.gameState.historyLogs.length;
     const { nextState, survivedByReveal, winOutcome } = executeDayVote(
       room.gameState,
-      targetsToExecute
+      targetsToExecute,
+      voteSummary
     );
     room.gameState = nextState;
 
@@ -1016,10 +1013,18 @@ export class SocketGateway {
     const executeTargetId =
       outcome.type === 'EXECUTE' ? (outcome.targetPlayerId ?? null) : null;
 
+    const voteSummary = buildVoteMetadata(
+      room.gameState,
+      'RUNOFF',
+      { tallies, abstainCount, voterDetails },
+      { includeVoters: true }
+    );
+
     const prevHistoryLen = room.gameState.historyLogs.length;
     const { nextState, survivedByReveal, winOutcome } = executeDayVote(
       room.gameState,
-      executeTargetId
+      executeTargetId,
+      voteSummary
     );
     room.gameState = nextState;
 
@@ -1090,9 +1095,12 @@ export class SocketGateway {
       if (!room.gameState || room.gameState.phase !== 'HUNTER_SHOT') return;
       if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
 
-      const { nextState, winOutcome } = executeHunterShot(room.gameState, null);
+      const { nextState, winOutcome, resumedInterruptedNight } = executeHunterShot(
+        room.gameState,
+        null
+      );
       room.gameState = nextState;
-      this.routePostHunterPhase(room, winOutcome);
+      this.routePostHunterPhase(room, winOutcome, resumedInterruptedNight);
     });
   }
 
@@ -1105,13 +1113,20 @@ export class SocketGateway {
       if (!room.gameState || room.gameState.phase !== 'MAYOR_SUCCESSION') return;
       if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
 
-      const { nextState, winOutcome } = executeMayorSuccession(room.gameState, null);
+      const { nextState, winOutcome, resumedInterruptedNight } = executeMayorSuccession(
+        room.gameState,
+        null
+      );
       room.gameState = nextState;
-      this.routePostMayorSuccessionPhase(room, winOutcome);
+      this.routePostMayorSuccessionPhase(room, winOutcome, resumedInterruptedNight);
     });
   }
 
-  private routePostHunterPhase(room: RoomState, winOutcome: unknown): void {
+  private routePostHunterPhase(
+    room: RoomState,
+    winOutcome: unknown,
+    resumedInterruptedNight?: boolean
+  ): void {
     if (winOutcome || room.gameState?.phase === 'GAME_OVER') {
       this.timerManager.clearRoomTimer(room);
       this.broadcastRoom(room);
@@ -1119,6 +1134,14 @@ export class SocketGateway {
     }
 
     const expectedGeneration = room.gameGeneration;
+
+    if (room.gameState?.phase === 'HUNTER_SHOT') {
+      this.timerManager.startHunterShotTimer(room, () => {
+        this.handleHunterTimeout(room, expectedGeneration);
+      });
+      this.broadcastRoom(room);
+      return;
+    }
 
     if (room.gameState?.phase === 'MAYOR_SUCCESSION') {
       this.timerManager.startMayorSuccessionTimer(room, () => {
@@ -1129,7 +1152,16 @@ export class SocketGateway {
     }
 
     if (room.gameState?.phase === 'NIGHT') {
-      this.startNewNight(room);
+      if (resumedInterruptedNight) {
+        if (room.currentNightTurnIndex < room.nightTurnPlan.length) {
+          this.startCurrentNightTurnTimer(room);
+          this.broadcastRoom(room);
+        } else {
+          this.resolveNightAndTransition(room);
+        }
+      } else {
+        this.startNewNight(room);
+      }
       return;
     }
 
@@ -1137,6 +1169,18 @@ export class SocketGateway {
       this.timerManager.startMayorElectionTimer(room, () => {
         this.finalizeMayorElection(room, expectedGeneration);
       });
+      this.broadcastRoom(room);
+      return;
+    }
+
+    if (room.gameState?.phase === 'DAY_RUNOFF') {
+      this.timerManager.startMayorElectionTimer(
+        room,
+        () => {
+          this.finalizeRunoffVote(room, expectedGeneration);
+        },
+        30
+      );
       this.broadcastRoom(room);
       return;
     }
@@ -1150,7 +1194,11 @@ export class SocketGateway {
     this.broadcastRoom(room);
   }
 
-  private routePostMayorSuccessionPhase(room: RoomState, winOutcome: unknown): void {
+  private routePostMayorSuccessionPhase(
+    room: RoomState,
+    winOutcome: unknown,
+    resumedInterruptedNight?: boolean
+  ): void {
     if (winOutcome || room.gameState?.phase === 'GAME_OVER') {
       this.timerManager.clearRoomTimer(room);
       this.broadcastRoom(room);
@@ -1160,7 +1208,16 @@ export class SocketGateway {
     const expectedGeneration = room.gameGeneration;
 
     if (room.gameState?.phase === 'NIGHT') {
-      this.startNewNight(room);
+      if (resumedInterruptedNight) {
+        if (room.currentNightTurnIndex < room.nightTurnPlan.length) {
+          this.startCurrentNightTurnTimer(room);
+          this.broadcastRoom(room);
+        } else {
+          this.resolveNightAndTransition(room);
+        }
+      } else {
+        this.startNewNight(room);
+      }
       return;
     }
 
@@ -1168,6 +1225,18 @@ export class SocketGateway {
       this.timerManager.startMayorElectionTimer(room, () => {
         this.finalizeMayorElection(room, expectedGeneration);
       });
+      this.broadcastRoom(room);
+      return;
+    }
+
+    if (room.gameState?.phase === 'DAY_RUNOFF') {
+      this.timerManager.startMayorElectionTimer(
+        room,
+        () => {
+          this.finalizeRunoffVote(room, expectedGeneration);
+        },
+        30
+      );
       this.broadcastRoom(room);
       return;
     }

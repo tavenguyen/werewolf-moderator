@@ -1,10 +1,13 @@
 import type {
+  DeathCause,
   DeathRecord,
   GamePhase,
   GameState,
+  MatchEvent,
   NightActions,
   NightResolutionEvent,
   PlayerId,
+  PublicMatchLogItem,
   RoomSettings,
   WinOutcome,
 } from '../engine/types';
@@ -129,6 +132,11 @@ export interface PublicPlayerView {
   isMayor: boolean;
 }
 
+export type PublicDeathRecord = Omit<DeathRecord, 'cause' | 'cascadeDepth'> & {
+  cause: DeathCause | 'UNKNOWN';
+  cascadeDepth?: number;
+};
+
 export interface PublicRoomView {
   roomCode: string;
   gameGeneration: number;
@@ -142,8 +150,10 @@ export interface PublicRoomView {
   voteLockRemainingSeconds: number | null;
   extensionsUsed: number;
   settings: RoomSettings;
-  deaths: DeathRecord[];
+  deaths: PublicDeathRecord[];
   publicLogs: string[];
+  publicTimeline: PublicMatchLogItem[];
+  morningAnnouncements: PublicMatchLogItem[];
   currentTurnInfo?: {
     turnKey: string;
     titleVi: string;
@@ -162,6 +172,7 @@ export interface PublicRoomView {
   mutedPlayerId?: PlayerId | null;
   doubleVoteDay?: boolean;
   runoffCandidates?: PlayerId[];
+  activeHunterPlayerId?: PlayerId | null;
   voteProgress?: { submitted: number; total: number } | null;
   dayVerdict?: { headline: string; detail: string; isPendingNextNight: boolean } | null;
   nightIntroUntil?: number | null;
@@ -232,12 +243,14 @@ export interface PostGameView {
     seatIndex: number;
     initialRoleId: string;
     finalRoleId: string;
+    drunkRealRoleId?: string | null;
     faction: Faction;
     isAlive: boolean;
   }>;
   deaths: DeathRecord[];
   historyLogs: string[];
   timeline: NightResolutionEvent[];
+  matchEvents: MatchEvent[];
 }
 
 // -------------------------------------------------------------

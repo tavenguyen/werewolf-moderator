@@ -346,4 +346,62 @@ describe('Realtime Backend - Secret Voting & Tally Secrecy', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(room.currentNightTurnIndex).toBe(turnIdxBefore);
   });
+
+  it('chained HUNTER_SHOT qua SocketGateway khởi động lại HunterShotTimer cho Thợ săn kế tiếp (không soft-lock)', async () => {
+    const { hostClient, roomCode, hostToken, players, room } = await setupDayGame();
+    // Chừa đúng 1 Ma sói và gán 2 Thợ săn ở phe Dân để sau 2 mạng ngã xuống ván chưa thắng ngay
+    const wolves = room.gameState!.players.filter((p) => p.faction === 'WEREWOLF');
+    for (let i = 1; i < wolves.length; i++) {
+      wolves[i].roleId = 'villager';
+      wolves[i].initialRoleId = 'villager';
+      wolves[i].faction = 'VILLAGER';
+    }
+    const villageSide = room.gameState!.players.filter((p) => p.faction === 'VILLAGER');
+    const hunter1 = villageSide[0];
+    const hunter2 = villageSide[1];
+    hunter1.roleId = 'hunter';
+    hunter1.initialRoleId = 'hunter';
+    hunter2.roleId = 'hunter';
+    hunter2.initialRoleId = 'hunter';
+
+    // Bầu treo cổ hunter1 qua day vote -> vào HUNTER_SHOT (hunter1 vẫn giữ playerToken hợp lệ để nổ súng)
+    const h1Info = players.find((p) => p.id === hunter1.id)!;
+    const h2Info = players.find((p) => p.id === hunter2.id)!;
+    await new Promise((resolve) =>
+      h2Info.client.emit(
+        'day:vote',
+        { roomCode, token: h2Info.token, targetPlayerId: hunter1.id },
+        resolve
+      )
+    );
+    gateway.executeFinalizeDayVote(room);
+    expect(room.gameState!.phase).toBe('HUNTER_SHOT');
+    expect(room.gameState!.pendingHunterShotPlayerId).toBe(hunter1.id);
+
+    // Trong lúc hunter1 đang HUNTER_SHOT, Host loại khẩn cấp hunter2 (thu hồi token & xếp hàng đợi sau hunter1)
+    await new Promise((resolve) => {
+      hostClient.emit(
+        'host:emergencyEliminate',
+        { roomCode, token: hostToken, targetPlayerId: hunter2.id },
+        resolve
+      );
+    });
+    expect(room.gameState!.phase).toBe('HUNTER_SHOT');
+    expect(room.gameState!.pendingHunterShotPlayerId).toBe(hunter1.id);
+
+    // hunter1 bắn 1 dân -> phải tiếp tục phase HUNTER_SHOT cho hunter2 và khởi động timer mới (chống soft-lock)
+    const villagerTarget = villageSide[2];
+    const shotRes: any = await new Promise((resolve) => {
+      h1Info.client.emit(
+        'hunter:shot',
+        { roomCode, token: h1Info.token, targetPlayerId: villagerTarget.id },
+        resolve
+      );
+    });
+    expect(shotRes.ok).toBe(true);
+    expect(room.gameState!.phase).toBe('HUNTER_SHOT');
+    expect(room.gameState!.pendingHunterShotPlayerId).toBe(hunter2.id);
+    expect(room.timers.phase).toBe('HUNTER_SHOT');
+    expect(room.timers.deadlineAt).not.toBeNull();
+  });
 });
