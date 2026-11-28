@@ -6,10 +6,12 @@ export type GamePhase =
   | 'LOBBY'
   | 'FIRST_NIGHT_SETUP'
   | 'NIGHT'
+  | 'LUNAR_SEANCE'
   | 'DAY_DISCUSS'
   | 'DAY_MAYOR_ELECTION'
   | 'DAY_VOTE'
   | 'DAY_RUNOFF'
+  | 'LAST_ECHO_MARK'
   | 'HUNTER_SHOT'
   | 'MAYOR_SUCCESSION'
   | 'GAME_OVER';
@@ -92,6 +94,11 @@ export type MatchActionType =
   | 'BEAR_GROWL'
   | 'MUTE_ANNOUNCE'
   | 'TROUBLEMAKER_ANNOUNCE'
+  | 'LUNAR_EVENT_DRAWN'
+  | 'LUNAR_SEANCE_RESULT'
+  | 'LUNAR_LAST_ECHO'
+  | 'LUNAR_MIRROR_REFLECTION'
+  | 'LUNAR_BLOOD_OATH_TRIGGERED'
   | 'MAYOR_ELECTED'
   | 'MAYOR_TIE'
   | 'MAYOR_SUCCESSION'
@@ -175,7 +182,18 @@ export interface MatchEventMetadata {
     victim: EventParticipantSnapshot;
     cause: DeathCause;
     sourceRoleId?: string;
+    forceReveal?: boolean;
   }>;
+  lunar?: {
+    eventId?: LunarEventId;
+    category?: LunarEventCategory;
+    titleVi?: string;
+    summaryVi?: string;
+    detailLineVi?: string;
+    questionText?: string;
+    answer?: 'YES' | 'NO' | null;
+    forceReveal?: boolean;
+  };
   win?: {
     winner: NonNullable<WinOutcome['winner']>;
     winningPlayers: EventParticipantSnapshot[];
@@ -285,6 +303,84 @@ export interface RoomSettings {
   // Variant rules - Hunter
   hunterShootsOnPoison?: boolean;
   allowHunterSkipShot?: boolean;
+
+  // Variant rules - Lunar Events (Sự kiện Tuần Trăng)
+  lunarEventsEnabled?: boolean;
+  lunarEventCadence?: 'EVERY_DAY' | 'ALTERNATE_DAYS';
+  lunarAllowSpiritism?: boolean;
+}
+
+export type LunarEventCategory =
+  | 'FULL_MOON'
+  | 'CRESCENT'
+  | 'NEW_MOON'
+  | 'SPIRITISM';
+
+export type LunarEventId =
+  | 'dawns_guarantee'
+  | 'midnight_echo'
+  | 'neighbors_fury'
+  | 'flash_trial'
+  | 'open_ballot'
+  | 'blood_oath'
+  | 'blood_moon'
+  | 'silver_shield'
+  | 'misty_moon'
+  | 'mirror_moon'
+  | 'last_echo'
+  | 'seance';
+
+export type SeanceQuestionId =
+  | 'Q1_SUSPECT_ALIVE'
+  | 'Q2_WOLVES_CAUSE'
+  | 'Q3_NEIGHBOR_WOLF'
+  | 'Q4_PROTECT_IMPORTANT';
+
+export interface ActiveLunarAnnouncement {
+  eventId: LunarEventId;
+  category: LunarEventCategory;
+  titleVi: string;
+  summaryVi: string;
+  detailLineVi: string;
+  roundDrawn: number;
+}
+
+export interface LunarSeanceState {
+  stage: 'PICK_QUESTION' | 'WAIT_ANSWER' | 'RESOLVED';
+  mediumPlayerId: PlayerId;
+  targetDeadPlayerId: PlayerId;
+  selectedQuestionId: SeanceQuestionId | null;
+  selectedQuestionText?: string | null;
+  answer: 'YES' | 'NO' | null;
+}
+
+export interface LunarLastEchoState {
+  pendingQueuePlayerIds: PlayerId[];
+  activeExecutorId: PlayerId | null;
+  hasPendingHunterAfter: boolean;
+  hasPendingMayorAfter: boolean;
+}
+
+export interface LunarEventState {
+  usedEventIds: LunarEventId[];
+  currentDayEvent: ActiveLunarAnnouncement | null;
+  lastNightActivatedSkillCount: number;
+  neighborsFuryPlayerIds: PlayerId[];
+  flashTrialActiveToday: boolean;
+  openBallotActiveToday: boolean;
+  bloodOathPendingToday: boolean;
+  wolfDoubleKillTonight: boolean;
+  bloodMoonRevealTonight: boolean;
+  bloodMoonRevealedPlayerIds: PlayerId[];
+  silverShieldActiveTonight: boolean;
+  mistyMoonActiveTonight: boolean;
+  mirrorMoonActiveTonight: boolean;
+  mirrorMoonReflectedPending: boolean;
+  lastEchoPermanentActive: boolean;
+  lastEchoState: LunarLastEchoState | null;
+  penaltyVotesNextDay: Record<PlayerId, number>;
+  todayPenaltyVotes: Record<PlayerId, number>;
+  seanceState: LunarSeanceState | null;
 }
 
 export interface NightActions {
@@ -322,12 +418,35 @@ export interface NightActions {
 }
 
 export interface NightInfoResults {
-  seerResult?: { targetId: PlayerId; result: SeerResult | string };
-  sorcererResult?: { targetId: PlayerId; isSeer: boolean };
+  seerResult?: {
+    targetId: PlayerId;
+    result: SeerResult | string;
+    hasWerewolf?: boolean;
+    inspectedPlayerIds?: PlayerId[];
+    mistyMoon?: boolean;
+  };
+  sorcererResult?: {
+    targetId: PlayerId;
+    isSeer: boolean;
+    hasWerewolf?: boolean;
+    inspectedPlayerIds?: PlayerId[];
+    mistyMoon?: boolean;
+  };
   auraResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
   piResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
-  foxResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
-  apprenticeSeerResult?: { targetId: PlayerId; result: SeerResult | string };
+  foxResult?: {
+    targetId: PlayerId;
+    hasWerewolf: boolean;
+    inspectedPlayerIds: PlayerId[];
+    keptPower?: boolean;
+  };
+  apprenticeSeerResult?: {
+    targetId: PlayerId;
+    result: SeerResult | string;
+    hasWerewolf?: boolean;
+    inspectedPlayerIds?: PlayerId[];
+    mistyMoon?: boolean;
+  };
 }
 
 export interface NightResolutionEvent {
@@ -408,6 +527,7 @@ export interface GameState {
   interruptedPhaseDuringNight?: boolean;
   previousPhaseBeforeHunter?: GamePhase;
   previousPhaseBeforeMayorSuccession?: GamePhase;
+  lunarState?: LunarEventState;
   dayState?: DayState;
   resolvedEvents?: NightResolutionEvent[];
   historyLogs: string[];

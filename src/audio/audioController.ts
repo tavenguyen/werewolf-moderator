@@ -255,6 +255,11 @@ export const NARRATION_PROMPTS: Record<string, NarrationPrompt> = {
     subtitle: 'Người bị kết án là Hoàng tử! Hoàng tử lật bài thoát chết, hôm nay không ai bị treo cổ!',
     durationMs: 6000,
   },
+  day_lunar_event: {
+    audioKey: 'day_lunar_event',
+    subtitle: 'Bầu trời sáng nay nhuốm ánh trăng lạ. Một sự kiện Tuần Trăng vừa được hé lộ.',
+    durationMs: 5000,
+  },
   angel_win: {
     audioKey: 'angel_win',
     subtitle: 'Thiên sứ đã bị dân làng bỏ phiếu treo cổ ngay trong Ngày 1 và giành chiến thắng!',
@@ -649,6 +654,138 @@ export class AudioController {
    */
   public playConfirmSfx(): void {
     this.playSynthChime(659.25, 1046.5, 0.12, 0.24);
+  }
+
+  /**
+   * Phát tiếng chuông Tuần Trăng (2 nốt nhẹ nhàng) bằng Web Audio API.
+   * An toàn no-op nếu đang tắt tiếng, SINGLE_DEVICE, hoặc thiếu AudioContext (headless test).
+   */
+  public playLunarChime(): Promise<void> {
+    if (this.deviceMode === 'SINGLE_DEVICE' || this.isMuted || typeof window === 'undefined') {
+      return Promise.resolve();
+    }
+
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Howler.ctx && !AudioCtx) {
+        return Promise.resolve();
+      }
+
+      const isReused = Boolean(Howler.ctx);
+      const ctx = Howler.ctx || new AudioCtx!();
+      const now = ctx.currentTime;
+
+      const scheduleNote = (freq: number, startOffsetSec: number, durationSec: number, peakGain: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + startOffsetSec);
+
+        gain.gain.setValueAtTime(0.001, now + startOffsetSec);
+        gain.gain.linearRampToValueAtTime(peakGain, now + startOffsetSec + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + startOffsetSec + durationSec);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + startOffsetSec);
+        osc.stop(now + startOffsetSec + durationSec);
+      };
+
+      // Hai nốt mềm C5 -> G5
+      scheduleNote(523.25, 0, 0.24, 0.14);
+      scheduleNote(783.99, 0.14, 0.34, 0.12);
+
+      if (!isReused) {
+        setTimeout(() => {
+          void ctx.close().catch(() => {});
+        }, 600);
+      }
+
+      return new Promise((resolve) => {
+        setTimeout(resolve, 480);
+      });
+    } catch {
+      return Promise.resolve();
+    }
+  }
+
+  /**
+   * Phát chuông Tuần Trăng rồi đọc thông báo sự kiện buổi sáng,
+   * hủy bỏ narration trước đó để tránh chồng lấn với night_end hoặc day_discuss.
+   */
+  public playLunarAnnouncement(
+    titleVi: string,
+    categoryLabelVi: string,
+    onEnded?: () => void,
+  ): void {
+    void this.unlockAudio();
+
+    const seq = ++this.narrationSeq;
+    if (this.voiceSafetyTimer) {
+      clearTimeout(this.voiceSafetyTimer);
+      this.voiceSafetyTimer = null;
+    }
+    if (this.ttsTimer) {
+      clearTimeout(this.ttsTimer);
+      this.ttsTimer = null;
+    }
+    if (this.currentVoiceHowl) {
+      try {
+        this.currentVoiceHowl.stop();
+        this.currentVoiceHowl.unload();
+      } catch {
+        // ignore
+      }
+      this.currentVoiceHowl = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // ignore
+      }
+    }
+
+    const announcementText = categoryLabelVi
+      ? `${categoryLabelVi}: ${titleVi}.`
+      : `${titleVi}.`;
+    this.setSubtitle(announcementText);
+
+    if (this.isMuted) {
+      this.duckBGM(false);
+      onEnded?.();
+      return;
+    }
+
+    void this.playLunarChime().then(() => {
+      if (seq !== this.narrationSeq) return;
+
+      if (this.isMuted || typeof window === 'undefined' || typeof window.Audio === 'undefined') {
+        this.duckBGM(false);
+        onEnded?.();
+        return;
+      }
+
+      this.duckBGM(true);
+
+      let finished = false;
+      const finishVoice = () => {
+        if (finished) return;
+        finished = true;
+        if (this.voiceSafetyTimer) {
+          clearTimeout(this.voiceSafetyTimer);
+          this.voiceSafetyTimer = null;
+        }
+        if (seq !== this.narrationSeq) return;
+        this.duckBGM(false);
+        onEnded?.();
+      };
+
+      this.voiceSafetyTimer = setTimeout(finishVoice, 7000);
+      this.speakTTS(announcementText, finishVoice, 5000);
+    });
   }
 
   /**

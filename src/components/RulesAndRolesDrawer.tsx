@@ -397,6 +397,59 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                   </p>
                 </div>
 
+                <section className="masa-lunar-section" aria-labelledby="rules-lunar-title">
+                  <div className="masa-rules-intro">
+                    <h3 id="rules-lunar-title" className="masa-editorial-title">
+                      Sự kiện Tuần Trăng
+                    </h3>
+                    <p className="masa-editorial-lede">
+                      Thời điểm bốc: Sau khi công bố người chết mỗi sáng, bắt đầu từ Ngày 2 (theo nhịp phòng đã chọn).
+                    </p>
+                  </div>
+
+                  <div className="masa-rules-list">
+                    <article className="masa-rule-step">
+                      <div className="masa-step-index" aria-hidden="true">🌕</div>
+                      <div className="masa-step-content">
+                        <h3>Trăng Tròn (Full Moon)</h3>
+                        <p>
+                          Hiệu lực ngay trong buổi sáng/ngày hôm nay, hết tác dụng khi đêm xuống.
+                        </p>
+                      </div>
+                    </article>
+
+                    <article className="masa-rule-step">
+                      <div className="masa-step-index" aria-hidden="true">🌒</div>
+                      <div className="masa-step-content">
+                        <h3>Trăng Lưỡi Liềm (Crescent)</h3>
+                        <p>
+                          Chưa tác động ngay lúc mở, kích hoạt lúc chốt phiếu cuối ngày hoặc trong đêm kế tiếp (dùng 1 lần).
+                        </p>
+                      </div>
+                    </article>
+
+                    <article className="masa-rule-step">
+                      <div className="masa-step-index" aria-hidden="true">🌑</div>
+                      <div className="masa-step-content">
+                        <h3>Trăng Non (New Moon)</h3>
+                        <p>
+                          Hiệu lực kéo dài từ lúc mở cho đến hết ván đấu, thay đổi một quy tắc chung của cả làng.
+                        </p>
+                      </div>
+                    </article>
+
+                    <article className="masa-rule-step">
+                      <div className="masa-step-index" aria-hidden="true">🕯️</div>
+                      <div className="masa-step-content">
+                        <h3>Thuật Chiêu Hồn (Spiritism)</h3>
+                        <p>
+                          Phiên hỏi đáp 20 giây với người đã chết bằng câu hỏi chọn sẵn; người chết chỉ được trả lời &ldquo;Có&rdquo; hoặc &ldquo;Không&rdquo;.
+                        </p>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+
                 {roomSettings && (
                   <div className="masa-rules-footnote" style={{ marginTop: '16px', flexDirection: 'column', gap: '8px' }}>
                     <strong>Luật phòng #{state.roomCode} đang bật:</strong>
@@ -406,7 +459,19 @@ export default function RulesAndRolesDrawer({ isOpen, onClose, initialTab = 'rol
                       Bảo vệ tự cứu: {roomSettings.allowBodyguardSelfProtect ? 'Được' : 'Không'} ·
                       Phù thủy 2 bình/đêm: {roomSettings.allowWitchBothPotionsSameNight ? 'Được' : 'Không'} ·
                       Sói bỏ qua cắn: {roomSettings.allowWolfSkip ? 'Được' : 'Không'} ·
-                      Hòa phiếu: {roomSettings.tieVoteMode === 'RUNOFF' ? 'Bỏ phiếu lại' : 'Thoát nạn'}
+                      Hòa phiếu: {roomSettings.tieVoteMode === 'RUNOFF' ? 'Bỏ phiếu lại' : 'Thoát nạn'} ·
+                      Sự kiện Tuần Trăng:{' '}
+                      {roomSettings.lunarEventsEnabled
+                        ? `Bật (${
+                            roomSettings.lunarEventCadence === 'EVERY_DAY'
+                              ? 'Mỗi ngày từ Ngày 2'
+                              : 'Cách ngày (Ngày 2, 4, 6...)'
+                          }, ${
+                            roomSettings.lunarAllowSpiritism === false
+                              ? 'Tắt Thuật Chiêu Hồn'
+                              : 'Có Thuật Chiêu Hồn'
+                          })`
+                        : 'Tắt'}
                     </p>
                   </div>
                 )}

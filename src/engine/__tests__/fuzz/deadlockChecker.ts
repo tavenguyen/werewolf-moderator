@@ -6,6 +6,7 @@ import {
   executeMayorSuccession,
   executeNightPhase,
 } from '../../gameEngine';
+import { drawLunarEventIfNeeded } from '../../lunarEvents';
 import { generateNightTurnPlan } from '../../turnPlan';
 import type { GameState, PlayerId } from '../../types';
 import {
@@ -17,7 +18,12 @@ import {
   tallyMayorElection,
   tallyRunoffVotes,
 } from '../../voting';
-import { generateFuzzNightActions, pickFuzzVoteTarget } from './generator';
+import {
+  generateFuzzNightActions,
+  pickFuzzVoteTarget,
+  stepFuzzLastEchoMark,
+  stepFuzzLunarSeance,
+} from './generator';
 import {
   assertFinalMatchInvariants,
   assertGameStateInvariants,
@@ -30,6 +36,7 @@ import { generateToxicCombinatorialConfig } from './targetedGenerator';
 
 export interface TargetedFuzzOptions {
   clusterIndex?: number;
+  useLunarClusters?: boolean;
   passiveDayMode?: boolean;
   allowEmergencyEliminate?: boolean;
   checkImmutability?: boolean;
@@ -62,7 +69,13 @@ function checkImmutabilitySnapshot(
  * 0 sát thương trễ đang chờ, 0 Thiên sứ Ngày 1, và 0 Dân làng), trạng thái không được phép tiếp tục lơ lửng.
  */
 export function assertNoUnbreakableStalemateState(state: GameState, ctx: InvariantContext): void {
-  if (state.phase === 'GAME_OVER' || state.phase === 'HUNTER_SHOT' || state.phase === 'MAYOR_SUCCESSION') {
+  if (
+    state.phase === 'GAME_OVER' ||
+    state.phase === 'HUNTER_SHOT' ||
+    state.phase === 'MAYOR_SUCCESSION' ||
+    state.phase === 'LUNAR_SEANCE' ||
+    state.phase === 'LAST_ECHO_MARK'
+  ) {
     return;
   }
   const alive = state.players.filter((p) => p.isAlive);
@@ -228,7 +241,9 @@ export function runTargetedToxicGame(
   options: TargetedFuzzOptions = {}
 ): TargetedFuzzSummary {
   const rng = new SeededRng(seed);
-  const { config, clusterId } = generateToxicCombinatorialConfig(rng, options.clusterIndex);
+  const { config, clusterId } = generateToxicCombinatorialConfig(rng, options.clusterIndex, {
+    useLunarClusters: options.useLunarClusters,
+  });
   const passiveDayMode = Boolean(options.passiveDayMode);
   const checkImmutability = options.checkImmutability ?? seed % 50 === 0;
   const allowEmergency = options.allowEmergencyEliminate ?? !passiveDayMode;
@@ -307,6 +322,34 @@ export function runTargetedToxicGame(
         state = specRes.state;
         if (specRes.gameOver) break;
       }
+
+      if (state.phase === 'DAY_DISCUSS' || state.phase === 'DAY_MAYOR_ELECTION') {
+        const beforeDraw = checkImmutability ? JSON.stringify(state) : '';
+        const drawnState = drawLunarEventIfNeeded(
+          state,
+          rng.nextInt(1, 1_000_000),
+          rng.chance(0.8) ? 'MULTI_DEVICE' : 'SINGLE_DEVICE'
+        );
+        checkImmutabilitySnapshot(checkImmutability, beforeDraw, state, ctx);
+        state = drawnState;
+        assertGameStateInvariants(state, ctx);
+      }
+
+      let seanceGuard = 0;
+      while (state.phase === 'LUNAR_SEANCE' && seanceGuard < 6) {
+        seanceGuard += 1;
+        const beforeSeance = checkImmutability ? JSON.stringify(state) : '';
+        const step = stepFuzzLunarSeance(state, rng, forceProgress);
+        checkImmutabilitySnapshot(checkImmutability, beforeSeance, state, ctx);
+        state = step.nextState;
+        ctx.stepLabel = `R${state.roundNumber}:${step.label}`;
+        ctx.trace.push(ctx.stepLabel);
+        assertGameStateInvariants(state, ctx);
+      }
+      if (state.phase === 'LUNAR_SEANCE') {
+        throw new InvariantViolationError('DEADLOCK', 'Infinite loop in LUNAR_SEANCE', ctx);
+      }
+      assertNoUnbreakableStalemateState(state, ctx);
     }
 
     if (state.phase === 'DAY_MAYOR_ELECTION') {
@@ -507,6 +550,23 @@ export function runTargetedToxicGame(
         assertNoUnbreakableStalemateState(state, ctx);
         if (state.phase === 'GAME_OVER' || execRes.winOutcome) break;
       }
+
+      let echoGuard = 0;
+      const maxEchoSteps = state.players.length + 4;
+      while (state.phase === 'LAST_ECHO_MARK' && echoGuard < maxEchoSteps) {
+        echoGuard += 1;
+        const beforeEcho = checkImmutability ? JSON.stringify(state) : '';
+        const step = stepFuzzLastEchoMark(state, rng, forceProgress);
+        checkImmutabilitySnapshot(checkImmutability, beforeEcho, state, ctx);
+        state = step.nextState;
+        ctx.stepLabel = `R${state.roundNumber}:${step.label}`;
+        ctx.trace.push(ctx.stepLabel);
+        assertGameStateInvariants(state, ctx);
+      }
+      if (state.phase === 'LAST_ECHO_MARK') {
+        throw new InvariantViolationError('DEADLOCK', 'Infinite loop in LAST_ECHO_MARK', ctx);
+      }
+      assertNoUnbreakableStalemateState(state, ctx);
 
       if (state.phase === 'HUNTER_SHOT' || state.phase === 'MAYOR_SUCCESSION') {
         const specRes = resolveSpecialsTargeted(state, rng, ctx, forceProgress, checkImmutability);

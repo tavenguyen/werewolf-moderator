@@ -192,7 +192,10 @@ function resolveRawWolfDetails(
   actions: NightActions,
   randomSeed: number
 ): WolfTallyDetails {
-  const targetCount = state.wolfCubDoubleKillNextNight ? 2 : 1;
+  const targetCount = Math.min(
+    2,
+    state.wolfCubDoubleKillNextNight || state.lunarState?.wolfDoubleKillTonight ? 2 : 1
+  );
 
   if (!actions.wolfPack) {
     return { targets: [], tieBreakRandom: false, skipWon: false, friendlyFireBlocked: false };
@@ -286,12 +289,13 @@ export function getWitchVictimsPreview(
     Boolean(bodyguardPlayer) &&
     actions.bodyguard?.targetId === bodyguardPlayer!.id &&
     state.settings.allowBodyguardSelfProtect === false;
+  const silverShield = Boolean(state.lunarState?.silverShieldActiveTonight);
   const isProtectedValid =
     Boolean(bodyguardPlayer) &&
     !state.villagePowerStripped &&
     !isBgSelfForbidden &&
     actions.bodyguard?.targetId &&
-    actions.bodyguard.targetId !== state.lastProtectedPlayerId;
+    (silverShield || actions.bodyguard.targetId !== state.lastProtectedPlayerId);
   const protectedId = isProtectedValid ? actions.bodyguard?.targetId : undefined;
 
   const accursedAlive = state.players.some(
@@ -708,6 +712,7 @@ export function resolveNight(
   let bodyguardFailedNote: string | null = null;
   let bodyguardBlockedAny = false;
 
+  const silverShield = Boolean(nextState.lunarState?.silverShieldActiveTonight);
   const bodyguardPlayer = nextState.players.find((p) => p.isAlive && p.roleId === 'bodyguard');
   if (bodyguardPlayer && actions.bodyguard?.targetId && !nextState.villagePowerStripped) {
     bodyguardSnap = snapshotPlayer(bodyguardPlayer);
@@ -718,7 +723,7 @@ export function resolveNight(
       nextState.historyLogs.push('Bảo vệ tự bảo vệ bản thân nhưng luật phòng cấm -> Khiên vô hiệu!');
       nextState.lastProtectedPlayerId = null;
       bodyguardFailedNote = 'tự bảo vệ bản thân nhưng luật phòng cấm (khiên vô hiệu).';
-    } else if (target !== nextState.lastProtectedPlayerId) {
+    } else if (silverShield || target !== nextState.lastProtectedPlayerId) {
       protectedPlayerId = target;
       nextState.lastProtectedPlayerId = target;
       events.push({
@@ -756,7 +761,10 @@ export function resolveNight(
   // =========================================================================
   // 4. TÍNH TOÁN ĐÒN CẮN, NGUYỀN, SÓI ĐẠI CA, SÓI TRẮNG & PHÙ THỦY
   // =========================================================================
-  const targetCount = nextState.wolfCubDoubleKillNextNight ? 2 : 1;
+  const targetCount = Math.min(
+    2,
+    nextState.wolfCubDoubleKillNextNight || nextState.lunarState?.wolfDoubleKillTonight ? 2 : 1
+  );
 
   const isFirstNightPeace = Boolean(nextState.settings.firstNightNoKill && round === 1);
   const livingWakingWolves = getLivingBitingWolves(nextState);
@@ -767,6 +775,9 @@ export function resolveNight(
     : resolveRawWolfDetails(nextState, actions, randomSeed);
 
   nextState.wolfCubDoubleKillNextNight = false;
+  if (nextState.lunarState) {
+    nextState.lunarState.wolfDoubleKillTonight = false;
+  }
 
   const deduplicatedTargets = Array.from(new Set(wolfVoteDetails.targets));
   const individualVotesMeta: NonNullable<
@@ -1611,6 +1622,9 @@ export function resolveNight(
   // =========================================================================
   // 7. CÁC VAI THU THẬP THÔNG TIN & CAN THIỆP
   // =========================================================================
+  const mistyMoon = Boolean(nextState.lunarState?.mistyMoonActiveTonight);
+  const mirrorMoon = Boolean(nextState.lunarState?.mirrorMoonActiveTonight);
+
   // 7a. Tiên tri (Seer) & Tiên tri tập sự (Apprentice Seer)
   const seerTargetId = actions.seer?.targetId ?? actions.apprenticeSeer?.targetId;
   if (seerTargetId && !nextState.villagePowerStripped) {
@@ -1621,55 +1635,105 @@ export function resolveNight(
     if (aliveSeer || aliveApprentice) {
       const target = state.players.find((p) => p.id === seerTargetId);
       if (target) {
-        const effectiveRoleId =
-          target.roleId === 'drunk' && state.roundNumber >= 3 && target.drunkRealRoleId
-            ? target.drunkRealRoleId
-            : target.roleId;
-        const def = ROLES_BY_ID[effectiveRoleId];
-        let result: SeerResult | string = def?.seerResult ?? 'VILLAGER';
-        const isExact = nextState.settings.seerRevealMode === 'EXACT_ROLE';
-        if (isExact) {
-          result = effectiveRoleId;
-        } else {
-          if (effectiveRoleId === 'lycan') result = 'WEREWOLF';
-          if (effectiveRoleId === 'minion') result = 'VILLAGER';
-        }
-
-        infoResults.seerResult = {
-          targetId: target.id,
-          result,
-        };
-        if (!aliveSeer && aliveApprentice) {
-          infoResults.apprenticeSeerResult = {
-            targetId: target.id,
-            result,
-          };
+        if (mirrorMoon && isWerewolfForInvestigation(target, round) && nextState.lunarState) {
+          nextState.lunarState.mirrorMoonReflectedPending = true;
         }
 
         const actingSeer = aliveSeer ?? aliveApprentice!;
         const targetSnap = getStartOfNightSnapshot(state, target.id);
-        if (targetSnap) {
-          const resultLabel = isExact
-            ? (ROLES_BY_ID[String(result)]?.nameVi ?? String(result))
-            : result === 'WEREWOLF'
-              ? 'Ma Sói'
-              : 'Dân làng';
-          appendMatchEvent(nextState, {
-            roundNumber: round,
-            stage: 'NIGHT',
-            actionType: 'INSPECT',
-            visibility: 'SECRET_NIGHT',
-            actor: snapshotPlayer(actingSeer),
-            targets: [targetSnap],
-            outcome: 'SUCCESS',
-            metadata: {
-              investigation: {
-                kind: isExact ? 'SEER_EXACT' : 'SEER_FACTION',
-                resultLabel,
-                rawValue: result,
+
+        if (mistyMoon) {
+          const neighbors = getAliveNeighbors(state.players, target.id);
+          const group = neighbors ? neighbors.group : [target];
+          const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p, round));
+          const inspectedPlayerIds = group.map((p) => p.id);
+          const result: SeerResult = hasWerewolf ? 'WEREWOLF' : 'VILLAGER';
+
+          infoResults.seerResult = {
+            targetId: target.id,
+            result,
+            hasWerewolf,
+            inspectedPlayerIds,
+            mistyMoon: true,
+          };
+          if (!aliveSeer && aliveApprentice) {
+            infoResults.apprenticeSeerResult = {
+              targetId: target.id,
+              result,
+              hasWerewolf,
+              inspectedPlayerIds,
+              mistyMoon: true,
+            };
+          }
+
+          if (targetSnap) {
+            appendMatchEvent(nextState, {
+              roundNumber: round,
+              stage: 'NIGHT',
+              actionType: 'INSPECT',
+              visibility: 'SECRET_NIGHT',
+              actor: snapshotPlayer(actingSeer),
+              targets: [targetSnap],
+              outcome: 'SUCCESS',
+              metadata: {
+                investigation: {
+                  kind: 'GROUP_HAS_WOLF',
+                  resultLabel: hasWerewolf ? 'Có Ma Sói' : 'Không có Ma Sói',
+                  rawValue: hasWerewolf,
+                  inspectedPlayers: group.map((p) => snapshotPlayer(p)),
+                },
               },
-            },
-          });
+            });
+          }
+        } else {
+          const effectiveRoleId =
+            target.roleId === 'drunk' && state.roundNumber >= 3 && target.drunkRealRoleId
+              ? target.drunkRealRoleId
+              : target.roleId;
+          const def = ROLES_BY_ID[effectiveRoleId];
+          let result: SeerResult | string = def?.seerResult ?? 'VILLAGER';
+          const isExact = nextState.settings.seerRevealMode === 'EXACT_ROLE';
+          if (isExact) {
+            result = effectiveRoleId;
+          } else {
+            if (effectiveRoleId === 'lycan') result = 'WEREWOLF';
+            if (effectiveRoleId === 'minion') result = 'VILLAGER';
+          }
+
+          infoResults.seerResult = {
+            targetId: target.id,
+            result,
+          };
+          if (!aliveSeer && aliveApprentice) {
+            infoResults.apprenticeSeerResult = {
+              targetId: target.id,
+              result,
+            };
+          }
+
+          if (targetSnap) {
+            const resultLabel = isExact
+              ? (ROLES_BY_ID[String(result)]?.nameVi ?? String(result))
+              : result === 'WEREWOLF'
+                ? 'Ma Sói'
+                : 'Dân làng';
+            appendMatchEvent(nextState, {
+              roundNumber: round,
+              stage: 'NIGHT',
+              actionType: 'INSPECT',
+              visibility: 'SECRET_NIGHT',
+              actor: snapshotPlayer(actingSeer),
+              targets: [targetSnap],
+              outcome: 'SUCCESS',
+              metadata: {
+                investigation: {
+                  kind: isExact ? 'SEER_EXACT' : 'SEER_FACTION',
+                  resultLabel,
+                  rawValue: result,
+                },
+              },
+            });
+          }
         }
       }
     }
@@ -1679,34 +1743,70 @@ export function resolveNight(
   const aliveSorcerer = nextState.players.find((p) => p.isAlive && p.roleId === 'sorcerer');
   if (aliveSorcerer && actions.sorcerer?.targetId) {
     const target = state.players.find((p) => p.id === actions.sorcerer!.targetId);
-    const effectiveRoleId =
-      target && target.roleId === 'drunk' && state.roundNumber >= 3 && target.drunkRealRoleId
-        ? target.drunkRealRoleId
-        : target?.roleId;
-    const isSeer = effectiveRoleId === 'seer';
-    infoResults.sorcererResult = {
-      targetId: actions.sorcerer.targetId,
-      isSeer,
-    };
-
     const targetSnap = getStartOfNightSnapshot(state, actions.sorcerer.targetId);
-    if (targetSnap) {
-      appendMatchEvent(nextState, {
-        roundNumber: round,
-        stage: 'NIGHT',
-        actionType: 'INSPECT',
-        visibility: 'SECRET_NIGHT',
-        actor: snapshotPlayer(aliveSorcerer),
-        targets: [targetSnap],
-        outcome: 'SUCCESS',
-        metadata: {
-          investigation: {
-            kind: 'SORCERER',
-            resultLabel: isSeer ? 'Đúng là Tiên tri' : 'Không phải Tiên tri',
-            rawValue: isSeer,
+
+    if (mistyMoon && target) {
+      const neighbors = getAliveNeighbors(state.players, target.id);
+      const group = neighbors ? neighbors.group : [target];
+      const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p, round));
+      const inspectedPlayerIds = group.map((p) => p.id);
+
+      infoResults.sorcererResult = {
+        targetId: target.id,
+        isSeer: false,
+        hasWerewolf,
+        inspectedPlayerIds,
+        mistyMoon: true,
+      };
+
+      if (targetSnap) {
+        appendMatchEvent(nextState, {
+          roundNumber: round,
+          stage: 'NIGHT',
+          actionType: 'INSPECT',
+          visibility: 'SECRET_NIGHT',
+          actor: snapshotPlayer(aliveSorcerer),
+          targets: [targetSnap],
+          outcome: 'SUCCESS',
+          metadata: {
+            investigation: {
+              kind: 'GROUP_HAS_WOLF',
+              resultLabel: hasWerewolf ? 'Có Ma Sói' : 'Không có Ma Sói',
+              rawValue: hasWerewolf,
+              inspectedPlayers: group.map((p) => snapshotPlayer(p)),
+            },
           },
-        },
-      });
+        });
+      }
+    } else {
+      const effectiveRoleId =
+        target && target.roleId === 'drunk' && state.roundNumber >= 3 && target.drunkRealRoleId
+          ? target.drunkRealRoleId
+          : target?.roleId;
+      const isSeer = effectiveRoleId === 'seer';
+      infoResults.sorcererResult = {
+        targetId: actions.sorcerer.targetId,
+        isSeer,
+      };
+
+      if (targetSnap) {
+        appendMatchEvent(nextState, {
+          roundNumber: round,
+          stage: 'NIGHT',
+          actionType: 'INSPECT',
+          visibility: 'SECRET_NIGHT',
+          actor: snapshotPlayer(aliveSorcerer),
+          targets: [targetSnap],
+          outcome: 'SUCCESS',
+          metadata: {
+            investigation: {
+              kind: 'SORCERER',
+              resultLabel: isSeer ? 'Đúng là Tiên tri' : 'Không phải Tiên tri',
+              rawValue: isSeer,
+            },
+          },
+        });
+      }
     }
   }
 
@@ -1754,7 +1854,7 @@ export function resolveNight(
       nextState.piUsed = true;
       const neighbors = getAliveNeighbors(nextState.players, target.id);
       const group = neighbors ? neighbors.group : [target];
-      const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
+      const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p, round));
       infoResults.piResult = {
         targetId: target.id,
         hasWerewolf,
@@ -1799,14 +1899,16 @@ export function resolveNight(
       if (target) {
         const neighbors = getAliveNeighbors(nextState.players, target.id);
         const group = neighbors ? neighbors.group : [target];
-        const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p));
-        if (!hasWerewolf) {
+        const hasWerewolf = group.some((p) => isWerewolfForInvestigation(p, round));
+        const keptPower = hasWerewolf || mistyMoon;
+        if (!keptPower) {
           nextState.foxLostPower = true;
         }
         infoResults.foxResult = {
           targetId: target.id,
           hasWerewolf,
           inspectedPlayerIds: group.map((p) => p.id),
+          ...(keptPower ? { keptPower: true } : {}),
         };
         appendMatchEvent(nextState, {
           roundNumber: round,
@@ -1815,14 +1917,14 @@ export function resolveNight(
           visibility: 'SECRET_NIGHT',
           actor: snapshotPlayer(aliveFox),
           targets: [snapshotPlayer(target)],
-          outcome: hasWerewolf ? 'SUCCESS' : 'LOST_POWER',
+          outcome: keptPower ? 'SUCCESS' : 'LOST_POWER',
           metadata: {
             investigation: {
               kind: 'GROUP_HAS_WOLF',
               resultLabel: hasWerewolf ? 'Có Ma Sói' : 'Không có Ma Sói',
               rawValue: hasWerewolf,
               inspectedPlayers: group.map((p) => snapshotPlayer(p)),
-              keptPower: hasWerewolf,
+              keptPower,
             },
           },
         });
@@ -2064,13 +2166,22 @@ export function resolveNight(
     });
   }
 
+  const bloodMoonReveal = Boolean(nextState.lunarState?.bloodMoonRevealTonight);
+  if (bloodMoonReveal && nextState.lunarState && newDeaths.length > 0) {
+    nextState.lunarState.bloodMoonRevealedPlayerIds = [
+      ...nextState.lunarState.bloodMoonRevealedPlayerIds,
+      ...newDeaths.map((d) => d.playerId),
+    ];
+  }
+
   for (const death of newDeaths) {
+    const showRole = nextState.settings.revealOnDeath || bloodMoonReveal;
     events.push({
       type: 'DEATH',
       targetPlayerId: death.playerId,
       sourceRole: death.cause,
-      isPublic: nextState.settings.revealOnDeath,
-      details: nextState.settings.revealOnDeath ? `Nạn nhân mang vai trò [${death.roleId}]` : undefined,
+      isPublic: showRole,
+      details: showRole ? `Nạn nhân mang vai trò [${death.roleId}]` : undefined,
     });
   }
 
@@ -2084,6 +2195,7 @@ export function resolveNight(
       return {
         victim: snapshotPlayer(p),
         cause: d.cause,
+        ...(bloodMoonReveal ? { forceReveal: true } : {}),
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
@@ -2098,6 +2210,43 @@ export function resolveNight(
     outcome: 'SUCCESS',
     metadata: { dawnDeaths },
   });
+
+  if (nextState.lunarState) {
+    let activatedSkillCount = 0;
+    if (protectedPlayerId !== null) activatedSkillCount++;
+    if (!state.witchHealUsed && nextState.witchHealUsed) activatedSkillCount++;
+    if (!state.witchPoisonUsed && nextState.witchPoisonUsed) activatedSkillCount++;
+    if (infoResults.seerResult) activatedSkillCount++;
+    if (infoResults.sorcererResult) activatedSkillCount++;
+    if (infoResults.auraResult) activatedSkillCount++;
+    if (infoResults.piResult) activatedSkillCount++;
+    if (infoResults.foxResult) activatedSkillCount++;
+    if (!state.accursedWolfUsed && nextState.accursedWolfUsed) activatedSkillCount++;
+    if (bigBadWolfPlayer && bbTargetId && !deduplicatedTargets.includes(bbTargetId)) {
+      activatedSkillCount++;
+    }
+    if (round % 2 === 0 && whiteWolfPlayer && whiteWolfVictim) {
+      activatedSkillCount++;
+    }
+    if (chosenMuteTargetId !== null) activatedSkillCount++;
+    if (!state.troublemakerUsed && nextState.troublemakerUsed) activatedSkillCount++;
+    if (alivePiedPiper && (actions.piedPiper?.targetIds?.length ?? 0) > 0) {
+      activatedSkillCount++;
+    }
+    if (
+      actions.cultLeader?.targetId &&
+      aliveCultLeader &&
+      events.some((e) => e.type === 'AWAKENED' && e.sourceRole === 'cult_leader')
+    ) {
+      activatedSkillCount++;
+    }
+
+    nextState.lunarState.lastNightActivatedSkillCount = activatedSkillCount;
+    nextState.lunarState.bloodMoonRevealTonight = false;
+    nextState.lunarState.silverShieldActiveTonight = false;
+    nextState.lunarState.mistyMoonActiveTonight = false;
+    nextState.lunarState.mirrorMoonActiveTonight = false;
+  }
 
   return {
     nextState,

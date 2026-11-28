@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { LocalEngineAdapter } from '../../adapters/localEngineAdapter';
+import { SEANCE_QUESTIONS } from '../../engine/lunarEvents';
+import type { SeanceQuestionId } from '../../engine/types';
 import { generateNightTurnPlan } from '../../engine/turnPlan';
 import { generateFuzzMatchConfig, generateFuzzNightActions, pickFuzzVoteTarget } from '../../engine/__tests__/fuzz/generator';
 import {
@@ -20,6 +22,8 @@ import { SocketGateway } from '../socketGateway';
 import { TimerManager } from '../timerManager';
 import { createMockIoServer, type MockClientSocket } from './mockSocket';
 
+const SEANCE_QUESTION_IDS = Object.keys(SEANCE_QUESTIONS) as SeanceQuestionId[];
+
 describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Secrecy)', () => {
   it('chạy 150 ván SocketGateway headless với disconnect/resume ngẫu nhiên, timeout & trục xuất giữa pha', async () => {
     const gamesCount = 150;
@@ -38,6 +42,7 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
       const trace: string[] = [`ServerFuzz Init (${config.playerCount}p)`];
       const ctx: InvariantContext = { seed, stepLabel: 'INIT', trace };
       let activeRoomCode: string | null = null;
+      let openBallotActiveForLastTally = false;
 
       try {
         const hostSocket = mockIo.createClientSocket();
@@ -115,13 +120,15 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
           }
 
           if (!room.settings.revealOnDeath) {
+            const bloodMoonRevealedIds = gs.lunarState?.bloodMoonRevealedPlayerIds ?? [];
             for (const d of pub.deaths) {
               const isPublicCause =
                 d.cause === 'VILLAGE_VOTE' ||
                 d.cause === 'HUNTER_SHOT' ||
                 d.cause === 'EMERGENCY_ELIMINATE';
+              const isBloodMoonRevealed = bloodMoonRevealedIds.includes(d.playerId);
               if (
-                d.roleId !== 'unknown' ||
+                (!isBloodMoonRevealed && d.roleId !== 'unknown') ||
                 d.cascadeDepth !== undefined ||
                 (!isPublicCause && d.cause !== 'UNKNOWN')
               ) {
@@ -133,13 +140,19 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
               }
             }
             for (const hd of hostView.publicRoom.deaths) {
-              if (hd.roleId !== 'unknown') {
+              const isBloodMoonRevealed = bloodMoonRevealedIds.includes(hd.playerId);
+              if (!isBloodMoonRevealed && hd.roleId !== 'unknown') {
                 throw new InvariantViolationError('I8', `HostView deaths leaked roleId=${hd.roleId}`, ctx);
               }
             }
           }
 
-          if (!room.settings.revealVoterIdentities && pub.lastVoteTally?.voterDetails !== undefined) {
+          if (
+            !room.settings.revealVoterIdentities &&
+            !gs.lunarState?.openBallotActiveToday &&
+            !openBallotActiveForLastTally &&
+            pub.lastVoteTally?.voterDetails !== undefined
+          ) {
             throw new InvariantViolationError(
               'I8',
               'PublicRoomView.lastVoteTally leaked voterDetails when revealVoterIdentities=false',
@@ -281,7 +294,66 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
               await roomService.getCommandQueue(roomCode).enqueue(async () => {});
             }
             checkProjectionInvariants(`R${gs.roundNumber}:PostMayorSucc`);
+          } else if (gs.phase === 'LUNAR_SEANCE') {
+            const seance = gs.lunarState?.seanceState;
+            if (seance?.stage === 'PICK_QUESTION') {
+              const pInfo = playersInfo.find((p) => p.id === seance.mediumPlayerId);
+              if (pInfo && pInfo.token && !pInfo.disconnected && (forceProgress || rng.chance(0.85))) {
+                const questionId = rng.pick(SEANCE_QUESTION_IDS);
+                await new Promise((resolve) => {
+                  pInfo.client.emit(
+                    'seance:pickQuestion',
+                    { roomCode, token: pInfo.token, questionId },
+                    resolve
+                  );
+                });
+              } else {
+                (gateway as any).handleSeanceTimeout(room, room.gameGeneration);
+                await roomService.getCommandQueue(roomCode).enqueue(async () => {});
+              }
+            } else if (seance?.stage === 'WAIT_ANSWER') {
+              const pInfo = playersInfo.find((p) => p.id === seance.targetDeadPlayerId);
+              if (pInfo && pInfo.token && !pInfo.disconnected && (forceProgress || rng.chance(0.85))) {
+                const answer: 'YES' | 'NO' = rng.chance(0.5) ? 'YES' : 'NO';
+                await new Promise((resolve) => {
+                  pInfo.client.emit(
+                    'seance:answer',
+                    { roomCode, token: pInfo.token, answer },
+                    resolve
+                  );
+                });
+              } else {
+                (gateway as any).handleSeanceTimeout(room, room.gameGeneration);
+                await roomService.getCommandQueue(roomCode).enqueue(async () => {});
+              }
+            } else {
+              (gateway as any).handleSeanceTimeout(room, room.gameGeneration);
+              await roomService.getCommandQueue(roomCode).enqueue(async () => {});
+            }
+            checkProjectionInvariants(`R${gs.roundNumber}:PostLunarSeance`);
+          } else if (gs.phase === 'LAST_ECHO_MARK') {
+            const executorId = gs.lunarState?.lastEchoState?.activeExecutorId;
+            const pInfo = executorId ? playersInfo.find((p) => p.id === executorId) : undefined;
+            const aliveTargets = gs.players.filter((p) => p.isAlive).map((p) => p.id);
+            if (pInfo && pInfo.token && !pInfo.disconnected && (forceProgress || rng.chance(0.85))) {
+              const target =
+                aliveTargets.length > 0 && (forceProgress || rng.chance(0.8))
+                  ? rng.pick(aliveTargets)
+                  : null;
+              await new Promise((resolve) => {
+                pInfo.client.emit(
+                  'lunar:submitLastEcho',
+                  { roomCode, token: pInfo.token, targetPlayerId: target },
+                  resolve
+                );
+              });
+            } else {
+              (gateway as any).handleLastEchoTimeout(room, room.gameGeneration);
+              await roomService.getCommandQueue(roomCode).enqueue(async () => {});
+            }
+            checkProjectionInvariants(`R${gs.roundNumber}:PostLastEcho`);
           } else if (gs.phase === 'DAY_MAYOR_ELECTION') {
+            openBallotActiveForLastTally = Boolean(gs.lunarState?.openBallotActiveToday);
             const aliveIds = gs.players.filter((p) => p.isAlive).map((p) => p.id);
             for (const pInfo of playersInfo) {
               const ps = gs.players.find((p) => p.id === pInfo.id);
@@ -324,6 +396,7 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
 
             const aliveIds = gs.players.filter((p) => p.isAlive).map((p) => p.id);
             const focusedTarget = forceProgress ? pickFuzzVoteTarget(gs, aliveIds, rng, true) : null;
+            openBallotActiveForLastTally = Boolean(gs.lunarState?.openBallotActiveToday);
             for (const pInfo of playersInfo) {
               const ps = gs.players.find((p) => p.id === pInfo.id);
               if (!ps?.isAlive || ps.voteWeight <= 0 || pInfo.disconnected) continue;
@@ -341,6 +414,7 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
             gateway.executeFinalizeDayVote(room);
             checkProjectionInvariants(`R${gs.roundNumber}:PostDayTally`);
           } else if (gs.phase === 'DAY_RUNOFF') {
+            openBallotActiveForLastTally = Boolean(gs.lunarState?.openBallotActiveToday);
             const cands = gs.dayState?.runoffCandidates ?? [];
             const forcedRunoff = forceProgress && cands.length > 0 ? cands[0] : null;
             for (const pInfo of playersInfo) {
@@ -407,9 +481,13 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
           const internal = targetAdapter as unknown as {
             clearDayTimer?: () => void;
             clearNightIntroTimer?: () => void;
+            clearSeanceTimer?: () => void;
+            clearLastEchoTimer?: () => void;
           };
           internal.clearDayTimer?.();
           internal.clearNightIntroTimer?.();
+          internal.clearSeanceTimer?.();
+          internal.clearLastEchoTimer?.();
         };
 
         try {
@@ -459,6 +537,23 @@ describe('Server & Adapter - Seeded Fuzzing (Disconnect, Reconnect, Timeout & Se
               const aliveIds = pub.players.filter((p) => p.isAlive).map((p) => p.id);
               const target = !forceProgress && rng.chance(0.18) ? null : rng.pick(aliveIds);
               await adapter.sendMayorTransfer(target);
+            } else if (pub.phase === 'LUNAR_SEANCE') {
+              const rNow = (adapter as unknown as { roomState: any }).roomState;
+              const seance = rNow.gameState?.lunarState?.seanceState;
+              if (seance?.stage === 'PICK_QUESTION') {
+                await adapter.sendSeancePickQuestion(rng.pick(SEANCE_QUESTION_IDS));
+              } else if (seance?.stage === 'WAIT_ANSWER') {
+                await adapter.sendSeanceAnswer(rng.chance(0.5) ? 'YES' : 'NO');
+              } else {
+                (adapter as any).handleSeanceTimeout?.();
+              }
+            } else if (pub.phase === 'LAST_ECHO_MARK') {
+              const aliveIds = pub.players.filter((p) => p.isAlive).map((p) => p.id);
+              const target =
+                aliveIds.length > 0 && (forceProgress || rng.chance(0.8))
+                  ? rng.pick(aliveIds)
+                  : null;
+              await adapter.sendLastEchoTarget(target);
             } else if (pub.phase === 'DAY_MAYOR_ELECTION' || pub.phase === 'DAY_DISCUSS' || pub.phase === 'DAY_RUNOFF') {
               if (pub.dayVerdict?.isPendingNextNight) {
                 await adapter.proceedToNextNight();

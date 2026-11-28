@@ -446,6 +446,13 @@
   gap: 18px;
 }
 
+.masa-lunar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
 .masa-rules-intro {
   display: flex;
   flex-direction: column;

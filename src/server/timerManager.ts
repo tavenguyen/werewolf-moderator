@@ -6,6 +6,10 @@ export const DEFAULT_MAYOR_TIMEOUT_SEC = 10;
 export const DEFAULT_DAY_DISCUSS_SEC = 180;
 export const DEFAULT_VOTE_LOCK_SEC = 60;
 export const DEFAULT_MAYOR_ELECTION_SEC = 45;
+export const DEFAULT_LUNAR_SEANCE_SEC = 20;
+export const DEFAULT_LAST_ECHO_SEC = 10;
+export const FLASH_TRIAL_DISCUSS_SEC = 90;
+export const FLASH_TRIAL_VOTE_LOCK_SEC = 15;
 
 export interface TimerOptions {
   minNightDelaySec?: number;
@@ -133,8 +137,12 @@ export class TimerManager {
   ): { deadlineAt: number; serverCutoffAt: number } {
     this.clearRoomTimer(room);
 
+    const flashTrialActive = room.gameState?.lunarState?.flashTrialActiveToday === true;
+    const effectiveDiscussSec = flashTrialActive ? FLASH_TRIAL_DISCUSS_SEC : customDiscussSec;
+    const effectiveLockSec = flashTrialActive ? FLASH_TRIAL_VOTE_LOCK_SEC : customLockSec;
+
     const now = this.getNow();
-    const deadlineAt = now + customDiscussSec * 1000;
+    const deadlineAt = now + effectiveDiscussSec * 1000;
     const serverCutoffAt = deadlineAt + GRACE_PERIOD_MS;
 
     room.timers.phase = 'DAY_DISCUSS';
@@ -149,8 +157,8 @@ export class TimerManager {
       onCutoffExpire();
     }, timeoutDelay);
 
-    // Timeout độc lập 60s để mở khóa biểu quyết
-    const lockDelayMs = customLockSec * 1000;
+    // Timeout độc lập để mở khóa biểu quyết
+    const lockDelayMs = effectiveLockSec * 1000;
     room.timers.voteLockDeadlineAt = now + lockDelayMs;
     room.timers.remainingVoteLockMs = undefined;
 
@@ -249,6 +257,66 @@ export class TimerManager {
     room.timers.timerId = setTimeout(() => {
       room.timers.timerId = null;
       onCutoffExpire();
+    }, timeoutDelay);
+
+    return { deadlineAt, serverCutoffAt };
+  }
+
+  /**
+   * Bắt đầu timer Cầu Hồn (20s mặc định), có guard gameGeneration để tránh timer mồ côi.
+   */
+  public startLunarSeanceTimer(
+    room: RoomState,
+    onTimeout: () => void,
+    durationSeconds: number = DEFAULT_LUNAR_SEANCE_SEC
+  ): { deadlineAt: number; serverCutoffAt: number } {
+    this.clearRoomTimer(room);
+
+    const expectedGeneration = room.gameGeneration;
+    const now = this.getNow();
+    const deadlineAt = now + durationSeconds * 1000;
+    const serverCutoffAt = deadlineAt + GRACE_PERIOD_MS;
+
+    room.timers.phase = 'LUNAR_SEANCE';
+    room.timers.deadlineAt = deadlineAt;
+    room.timers.serverCutoffAt = serverCutoffAt;
+    room.timers.isPaused = false;
+
+    const timeoutDelay = Math.max(0, serverCutoffAt - now);
+    room.timers.timerId = setTimeout(() => {
+      room.timers.timerId = null;
+      if (room.gameGeneration !== expectedGeneration) return;
+      onTimeout();
+    }, timeoutDelay);
+
+    return { deadlineAt, serverCutoffAt };
+  }
+
+  /**
+   * Bắt đầu timer Dư Âm Cuối Cùng (10s mặc định), có guard gameGeneration để tránh timer mồ côi.
+   */
+  public startLastEchoTimer(
+    room: RoomState,
+    onTimeout: () => void,
+    durationSeconds: number = DEFAULT_LAST_ECHO_SEC
+  ): { deadlineAt: number; serverCutoffAt: number } {
+    this.clearRoomTimer(room);
+
+    const expectedGeneration = room.gameGeneration;
+    const now = this.getNow();
+    const deadlineAt = now + durationSeconds * 1000;
+    const serverCutoffAt = deadlineAt + GRACE_PERIOD_MS;
+
+    room.timers.phase = 'LAST_ECHO_MARK';
+    room.timers.deadlineAt = deadlineAt;
+    room.timers.serverCutoffAt = serverCutoffAt;
+    room.timers.isPaused = false;
+
+    const timeoutDelay = Math.max(0, serverCutoffAt - now);
+    room.timers.timerId = setTimeout(() => {
+      room.timers.timerId = null;
+      if (room.gameGeneration !== expectedGeneration) return;
+      onTimeout();
     }, timeoutDelay);
 
     return { deadlineAt, serverCutoffAt };

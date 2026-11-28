@@ -13,10 +13,13 @@ import type {
   ClientHostControlPayload,
   ClientHunterShotPayload,
   ClientJoinRoomPayload,
+  ClientLastEchoSubmitPayload,
   ClientMayorElectPayload,
   ClientMayorTransferPayload,
   ClientNightActionPayload,
   ClientResumePayload,
+  ClientSeanceAnswerPayload,
+  ClientSeancePickQuestionPayload,
   ClientStartGamePayload,
   ClientUpdateSettingsPayload,
   HostBoardView,
@@ -26,7 +29,7 @@ import type {
   ServerResponse,
   TimerSnapshotPayload,
 } from '../server/types';
-import type { PlayerId, RoomSettings } from '../engine/types';
+import type { PlayerId, RoomSettings, SeanceQuestionId } from '../engine/types';
 
 const STORAGE_KEY = 'werewolf_socket_session';
 
@@ -612,6 +615,36 @@ export class SocketAdapter implements GameSessionAdapter {
       candidateId,
     };
     await this.emitWithAck('mayor:elect', payload);
+  }
+
+  public async sendSeancePickQuestion(questionId: SeanceQuestionId): Promise<void> {
+    if (!this.token) throw new Error('Chưa xác thực');
+    const payload: ClientSeancePickQuestionPayload = {
+      roomCode: this.state.roomCode,
+      token: this.token,
+      questionId,
+    };
+    await this.emitWithAck('seance:pickQuestion', payload);
+  }
+
+  public async sendSeanceAnswer(answer: 'YES' | 'NO'): Promise<void> {
+    if (!this.token) throw new Error('Chưa xác thực');
+    const payload: ClientSeanceAnswerPayload = {
+      roomCode: this.state.roomCode,
+      token: this.token,
+      answer,
+    };
+    await this.emitWithAck('seance:answer', payload);
+  }
+
+  public async sendLastEchoTarget(targetPlayerId: PlayerId | null): Promise<void> {
+    if (!this.token) throw new Error('Chưa xác thực');
+    const payload: ClientLastEchoSubmitPayload = {
+      roomCode: this.state.roomCode,
+      token: this.token,
+      targetPlayerId,
+    };
+    await this.emitWithAck('lunar:submitLastEcho', payload);
   }
 
   public async finalizePublicVote(): Promise<void> {

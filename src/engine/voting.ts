@@ -5,6 +5,7 @@ import type {
   GameState,
   MatchEventMetadata,
   PlayerId,
+  PlayerState,
 } from './types';
 
 export interface DayVoteOutcome {
@@ -425,6 +426,19 @@ export function canHostTallyEarly(state: GameState): boolean {
 }
 
 /**
+ * Tính trọng lượng phiếu thực tế của người chơi trong ngày (bao gồm Cơn Thịnh Nộ Của Hàng Xóm).
+ */
+export function getEffectiveVoterWeight(state: GameState, player: PlayerState): number {
+  if (player.roleId === 'village_idiot' && player.voteWeight === 0) {
+    return 0;
+  }
+  if (state.lunarState?.neighborsFuryPlayerIds?.includes(player.id)) {
+    return Math.max(player.voteWeight, 2);
+  }
+  return player.voteWeight;
+}
+
+/**
  * Tally phiếu biểu quyết treo cổ ban ngày.
  */
 export function tallyDayVotes(state: GameState): {
@@ -441,23 +455,38 @@ export function tallyDayVotes(state: GameState): {
 
   const voteWeights = new Map<PlayerId, number>();
   const voterDetails: Record<PlayerId, PlayerId[]> = {};
-  const livingVoters = nextState.players.filter((p) => p.isAlive && p.voteWeight > 0);
+  const includeVoters = Boolean(
+    nextState.settings.revealVoterIdentities || nextState.lunarState?.openBallotActiveToday
+  );
+
+  // Cộng phiếu phạt từ Dư Âm Cuối Cùng (Last Echo) cho người chơi còn sống trước khi kiểm tra 0 phiếu
+  const penaltyVotes = nextState.lunarState?.todayPenaltyVotes ?? {};
+  for (const [targetId, count] of Object.entries(penaltyVotes)) {
+    if (count > 0 && nextState.players.some((p) => p.id === targetId && p.isAlive)) {
+      voteWeights.set(targetId, (voteWeights.get(targetId) ?? 0) + count);
+    }
+  }
+
+  const livingVoters = nextState.players.filter(
+    (p) => p.isAlive && getEffectiveVoterWeight(nextState, p) > 0
+  );
   let abstainCount = 0;
 
   for (const voter of livingVoters) {
+    const weight = getEffectiveVoterWeight(nextState, voter);
     const targetId = nextState.dayState.ballots[voter.id];
     if (!targetId) {
-      abstainCount += voter.voteWeight;
+      abstainCount += weight;
       continue;
     }
 
     const target = nextState.players.find((p) => p.id === targetId && p.isAlive);
     if (!target) {
-      abstainCount += voter.voteWeight;
+      abstainCount += weight;
       continue;
     }
 
-    voteWeights.set(targetId, (voteWeights.get(targetId) ?? 0) + voter.voteWeight);
+    voteWeights.set(targetId, (voteWeights.get(targetId) ?? 0) + weight);
     if (!voterDetails[targetId]) voterDetails[targetId] = [];
     voterDetails[targetId].push(voter.id);
   }
@@ -476,7 +505,7 @@ export function tallyDayVotes(state: GameState): {
           nextState,
           'DAY',
           { tallies: {}, abstainCount },
-          { includeVoters: true }
+          { includeVoters }
         ),
       },
     });
@@ -513,7 +542,7 @@ export function tallyDayVotes(state: GameState): {
               nextState,
               'DAY',
               { tallies: talliesRecord, abstainCount, voterDetails },
-              { majorityThreshold: threshold, includeVoters: true }
+              { majorityThreshold: threshold, includeVoters }
             ),
           },
         });
@@ -561,7 +590,7 @@ export function tallyDayVotes(state: GameState): {
           nextState,
           'DAY',
           { tallies: talliesRecord, abstainCount, voterDetails },
-          { tiedIds: candidateIds, includeVoters: true }
+          { tiedIds: candidateIds, includeVoters }
         ),
       },
     });
@@ -588,7 +617,7 @@ export function tallyDayVotes(state: GameState): {
         nextState,
         'DAY',
         { tallies: talliesRecord, abstainCount, voterDetails },
-        { tiedIds: candidateIds, includeVoters: true }
+        { tiedIds: candidateIds, includeVoters }
       ),
     },
   });
@@ -646,23 +675,29 @@ export function tallyRunoffVotes(state: GameState): {
 
   const counts = new Map<PlayerId, number>();
   const voterDetails: Record<PlayerId, PlayerId[]> = {};
-  const livingVoters = nextState.players.filter((p) => p.isAlive && p.voteWeight > 0);
+  const includeVoters = Boolean(
+    nextState.settings.revealVoterIdentities || nextState.lunarState?.openBallotActiveToday
+  );
+  const livingVoters = nextState.players.filter(
+    (p) => p.isAlive && getEffectiveVoterWeight(nextState, p) > 0
+  );
   let abstainCount = 0;
 
   for (const voter of livingVoters) {
+    const weight = getEffectiveVoterWeight(nextState, voter);
     const targetId = nextState.dayState.runoffBallots[voter.id];
     if (!targetId) {
-      abstainCount += voter.voteWeight;
+      abstainCount += weight;
       continue;
     }
 
     const target = nextState.players.find((pl) => pl.id === targetId && pl.isAlive);
     if (!target) {
-      abstainCount += voter.voteWeight;
+      abstainCount += weight;
       continue;
     }
 
-    counts.set(targetId, (counts.get(targetId) ?? 0) + voter.voteWeight);
+    counts.set(targetId, (counts.get(targetId) ?? 0) + weight);
     if (!voterDetails[targetId]) voterDetails[targetId] = [];
     voterDetails[targetId].push(voter.id);
   }
@@ -681,7 +716,7 @@ export function tallyRunoffVotes(state: GameState): {
           nextState,
           'RUNOFF',
           { tallies: {}, abstainCount },
-          { includeVoters: true }
+          { includeVoters }
         ),
       },
     });
@@ -721,7 +756,7 @@ export function tallyRunoffVotes(state: GameState): {
               nextState,
               'RUNOFF',
               { tallies: talliesRecord, abstainCount, voterDetails },
-              { majorityThreshold: threshold, includeVoters: true }
+              { majorityThreshold: threshold, includeVoters }
             ),
           },
         });
@@ -764,7 +799,7 @@ export function tallyRunoffVotes(state: GameState): {
         nextState,
         'RUNOFF',
         { tallies: talliesRecord, abstainCount, voterDetails },
-        { tiedIds, includeVoters: true }
+        { tiedIds, includeVoters }
       ),
     },
   });

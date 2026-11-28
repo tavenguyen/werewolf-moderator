@@ -6,9 +6,10 @@ import {
   executeMayorSuccession,
   executeNightPhase,
 } from '../../gameEngine';
+import { drawLunarEventIfNeeded } from '../../lunarEvents';
 import { ROLES, ROLES_BY_ID } from '../../roles';
 import { generateNightTurnPlan } from '../../turnPlan';
-import type { GameState, PlayerId } from '../../types';
+import type { GameState, PlayerId, RoomSettings } from '../../types';
 import {
   buildVoteMetadata,
   castDayVote,
@@ -22,6 +23,8 @@ import {
   generateFuzzMatchConfig,
   generateFuzzNightActions,
   pickFuzzVoteTarget,
+  stepFuzzLastEchoMark,
+  stepFuzzLunarSeance,
 } from './generator';
 import {
   assertFinalMatchInvariants,
@@ -35,6 +38,148 @@ import { SeededRng } from './prng';
 export interface FuzzRunOptions {
   checkImmutability?: boolean;
   allowEmergencyEliminate?: boolean;
+  forceSettings?: Partial<RoomSettings>;
+}
+
+function assertNightEntryLunarHygiene(state: GameState, ctx: InvariantContext): void {
+  const lunar = state.lunarState;
+  if (!lunar) return;
+  if (
+    lunar.flashTrialActiveToday ||
+    lunar.openBallotActiveToday ||
+    lunar.bloodOathPendingToday ||
+    lunar.neighborsFuryPlayerIds.length > 0 ||
+    Object.keys(lunar.todayPenaltyVotes).length > 0
+  ) {
+    throw new InvariantViolationError(
+      'LUNAR_HYGIENE',
+      `Dirty day lunar flags on NIGHT entry: flash=${lunar.flashTrialActiveToday}, open=${lunar.openBallotActiveToday}, oath=${lunar.bloodOathPendingToday}, fury=${lunar.neighborsFuryPlayerIds.length}, penalty=${Object.keys(lunar.todayPenaltyVotes).length}`,
+      ctx
+    );
+  }
+}
+
+function assertPostResolveNightLunarHygiene(state: GameState, ctx: InvariantContext): void {
+  const lunar = state.lunarState;
+  const wolfCubDiedTonight = state.deaths.some(
+    (d) =>
+      d.roundNumber === state.roundNumber &&
+      d.phase === 'NIGHT' &&
+      d.roleId === 'wolf_cub'
+  );
+  if (state.wolfCubDoubleKillNextNight && !wolfCubDiedTonight) {
+    throw new InvariantViolationError(
+      'LUNAR_HYGIENE',
+      'wolfCubDoubleKillNextNight remained true right after resolveNight without a Wolf Cub night death',
+      ctx
+    );
+  }
+  if (!lunar) return;
+  if (
+    lunar.wolfDoubleKillTonight ||
+    lunar.bloodMoonRevealTonight ||
+    lunar.silverShieldActiveTonight ||
+    lunar.mistyMoonActiveTonight ||
+    lunar.mirrorMoonActiveTonight
+  ) {
+    throw new InvariantViolationError(
+      'LUNAR_HYGIENE',
+      `Dirty night lunar flags right after resolveNight: doubleKill=${lunar.wolfDoubleKillTonight}, bloodReveal=${lunar.bloodMoonRevealTonight}, shield=${lunar.silverShieldActiveTonight}, misty=${lunar.mistyMoonActiveTonight}, mirror=${lunar.mirrorMoonActiveTonight}`,
+      ctx
+    );
+  }
+}
+
+function resolveLunarSeancePhase(
+  initialState: GameState,
+  rng: SeededRng,
+  ctx: InvariantContext,
+  forceProgress: boolean,
+  allowEmergency: boolean,
+  checkImmutability: boolean
+): { state: GameState; gameOver: boolean } {
+  let state = initialState;
+  let guard = 0;
+  const maxSteps = 6;
+
+  while (state.phase === 'LUNAR_SEANCE' && guard < maxSteps) {
+    guard += 1;
+    if (allowEmergency && !forceProgress && rng.chance(0.03)) {
+      const alive = state.players.filter((p) => p.isAlive);
+      if (alive.length > 3) {
+        const victim = rng.pick(alive);
+        ctx.stepLabel = `R${state.roundNumber}:LUNAR_SEANCE:Emergency(${victim.id})`;
+        ctx.trace.push(ctx.stepLabel);
+        const before = checkImmutability ? JSON.stringify(state) : '';
+        const res = executeEmergencyEliminate(state, victim.id);
+        IMMUTABLE_OP_CHECK(checkImmutability, before, state, ctx);
+        state = res.nextState;
+        assertGameStateInvariants(state, ctx);
+        if (state.phase === 'GAME_OVER' || res.winOutcome) return { state, gameOver: true };
+        continue;
+      }
+    }
+
+    const before = checkImmutability ? JSON.stringify(state) : '';
+    const step = stepFuzzLunarSeance(state, rng, forceProgress);
+    IMMUTABLE_OP_CHECK(checkImmutability, before, state, ctx);
+    state = step.nextState;
+    ctx.stepLabel = `R${state.roundNumber}:${step.label}`;
+    ctx.trace.push(ctx.stepLabel);
+    assertGameStateInvariants(state, ctx);
+  }
+
+  if (state.phase === 'LUNAR_SEANCE') {
+    throw new InvariantViolationError('DEADLOCK', `Stuck in LUNAR_SEANCE after ${maxSteps} steps`, ctx);
+  }
+
+  return { state, gameOver: state.phase === 'GAME_OVER' };
+}
+
+function resolveLastEchoPhase(
+  initialState: GameState,
+  rng: SeededRng,
+  ctx: InvariantContext,
+  forceProgress: boolean,
+  allowEmergency: boolean,
+  checkImmutability: boolean
+): { state: GameState; gameOver: boolean } {
+  let state = initialState;
+  let guard = 0;
+  const maxSteps = state.players.length + 4;
+
+  while (state.phase === 'LAST_ECHO_MARK' && guard < maxSteps) {
+    guard += 1;
+    if (allowEmergency && !forceProgress && rng.chance(0.03)) {
+      const alive = state.players.filter((p) => p.isAlive);
+      if (alive.length > 3) {
+        const victim = rng.pick(alive);
+        ctx.stepLabel = `R${state.roundNumber}:LAST_ECHO_MARK:Emergency(${victim.id})`;
+        ctx.trace.push(ctx.stepLabel);
+        const before = checkImmutability ? JSON.stringify(state) : '';
+        const res = executeEmergencyEliminate(state, victim.id);
+        IMMUTABLE_OP_CHECK(checkImmutability, before, state, ctx);
+        state = res.nextState;
+        assertGameStateInvariants(state, ctx);
+        if (state.phase === 'GAME_OVER' || res.winOutcome) return { state, gameOver: true };
+        continue;
+      }
+    }
+
+    const before = checkImmutability ? JSON.stringify(state) : '';
+    const step = stepFuzzLastEchoMark(state, rng, forceProgress);
+    IMMUTABLE_OP_CHECK(checkImmutability, before, state, ctx);
+    state = step.nextState;
+    ctx.stepLabel = `R${state.roundNumber}:${step.label}`;
+    ctx.trace.push(ctx.stepLabel);
+    assertGameStateInvariants(state, ctx);
+  }
+
+  if (state.phase === 'LAST_ECHO_MARK') {
+    throw new InvariantViolationError('DEADLOCK', `Stuck in LAST_ECHO_MARK after ${maxSteps} steps`, ctx);
+  }
+
+  return { state, gameOver: state.phase === 'GAME_OVER' };
 }
 
 export interface FuzzRunSummary {
@@ -44,6 +189,7 @@ export interface FuzzRunSummary {
   winner: string | null;
   roleIds: string[];
   settings: GameState['settings'];
+  lunarEventCount: number;
 }
 
 export interface FuzzBatchStats {
@@ -168,6 +314,9 @@ export function runSingleFuzzGame(
   const allowEmergency = options.allowEmergencyEliminate ?? true;
 
   const config = generateFuzzMatchConfig(rng);
+  if (options.forceSettings) {
+    config.settings = { ...config.settings, ...options.forceSettings };
+  }
   const trace: string[] = [
     `Init(${config.playerCount}p, roles=${config.roleIds.join(',')})`,
   ];
@@ -191,6 +340,7 @@ export function runSingleFuzzGame(
     const forceProgress = safetyCounter > config.playerCount + 2;
 
     if (state.phase === 'NIGHT') {
+      assertNightEntryLunarHygiene(state, ctx);
       // Thỉnh thoảng giả lập Trục xuất khẩn cấp ngay giữa Đêm trước khi phân giải
       if (allowEmergency && !forceProgress && rng.chance(0.035)) {
         const alive = state.players.filter((p) => p.isAlive);
@@ -235,6 +385,7 @@ export function runSingleFuzzGame(
       const nightRes = executeNightPhase(state, actions, rng.nextInt(1, 1_000_000));
       IMMUTABLE_OP_CHECK(checkImmutability, before, state, ctx);
       state = nightRes.nextState;
+      assertPostResolveNightLunarHygiene(state, ctx);
       assertGameStateInvariants(state, ctx);
 
       if (state.phase === 'GAME_OVER' || nightRes.winOutcome) break;
@@ -250,6 +401,43 @@ export function runSingleFuzzGame(
         );
         state = specRes.state;
         if (specRes.gameOver) break;
+      }
+
+      if (state.phase === 'DAY_DISCUSS' || state.phase === 'DAY_MAYOR_ELECTION') {
+        const beforeDraw = checkImmutability ? JSON.stringify(state) : '';
+        const drawnState = drawLunarEventIfNeeded(
+          state,
+          rng.nextInt(1, 1_000_000),
+          rng.chance(0.8) ? 'MULTI_DEVICE' : 'SINGLE_DEVICE'
+        );
+        IMMUTABLE_OP_CHECK(checkImmutability, beforeDraw, state, ctx);
+        state = drawnState;
+        assertGameStateInvariants(state, ctx);
+      }
+
+      if (state.phase === 'LUNAR_SEANCE') {
+        const seanceRes = resolveLunarSeancePhase(
+          state,
+          rng,
+          ctx,
+          forceProgress,
+          allowEmergency,
+          checkImmutability
+        );
+        state = seanceRes.state;
+        if (seanceRes.gameOver) break;
+        if (state.phase === 'HUNTER_SHOT' || state.phase === 'MAYOR_SUCCESSION') {
+          const specRes = resolveSpecialTransitions(
+            state,
+            rng,
+            ctx,
+            forceProgress,
+            allowEmergency,
+            checkImmutability
+          );
+          state = specRes.state;
+          if (specRes.gameOver) break;
+        }
       }
     }
 
@@ -418,6 +606,19 @@ export function runSingleFuzzGame(
         if (state.phase === 'GAME_OVER' || dayVoteRes.winOutcome) break;
       }
 
+      if (state.phase === 'LAST_ECHO_MARK') {
+        const echoRes = resolveLastEchoPhase(
+          state,
+          rng,
+          ctx,
+          forceProgress,
+          allowEmergency,
+          checkImmutability
+        );
+        state = echoRes.state;
+        if (echoRes.gameOver) break;
+      }
+
       if (state.phase === 'HUNTER_SHOT' || state.phase === 'MAYOR_SUCCESSION') {
         const specRes = resolveSpecialTransitions(
           state,
@@ -431,11 +632,51 @@ export function runSingleFuzzGame(
         if (specRes.gameOver) break;
       }
     }
+
+    if (state.phase === 'LUNAR_SEANCE') {
+      const seanceRes = resolveLunarSeancePhase(
+        state,
+        rng,
+        ctx,
+        forceProgress,
+        allowEmergency,
+        checkImmutability
+      );
+      state = seanceRes.state;
+      if (seanceRes.gameOver) break;
+    }
+
+    if (state.phase === 'LAST_ECHO_MARK') {
+      const echoRes = resolveLastEchoPhase(
+        state,
+        rng,
+        ctx,
+        forceProgress,
+        allowEmergency,
+        checkImmutability
+      );
+      state = echoRes.state;
+      if (echoRes.gameOver) break;
+    }
+
+    if (state.phase === 'HUNTER_SHOT' || state.phase === 'MAYOR_SUCCESSION') {
+      const specRes = resolveSpecialTransitions(
+        state,
+        rng,
+        ctx,
+        forceProgress,
+        allowEmergency,
+        checkImmutability
+      );
+      state = specRes.state;
+      if (specRes.gameOver) break;
+    }
   }
 
   ctx.stepLabel = 'FINAL';
   assertFinalMatchInvariants(state, ctx);
   const winEvt = state.eventLog.find((e) => e.actionType === 'WIN');
+  const lunarEventCount = state.eventLog.filter((e) => e.actionType.startsWith('LUNAR_')).length;
 
   return {
     seed,
@@ -444,6 +685,7 @@ export function runSingleFuzzGame(
     winner: winEvt?.metadata?.win?.winner ?? null,
     roleIds: config.roleIds,
     settings: state.settings,
+    lunarEventCount,
   };
 }
 

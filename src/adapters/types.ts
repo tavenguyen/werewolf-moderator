@@ -5,7 +5,7 @@ import type {
   PublicRoomView,
   TimerSnapshotPayload,
 } from '../server/types';
-import type { PlayerId, RoomSettings } from '../engine/types';
+import type { PlayerId, RoomSettings, SeanceQuestionId } from '../engine/types';
 
 export type DeviceMode = 'SINGLE_DEVICE' | 'MULTI_DEVICE';
 export type HostMode = 'CENTER_BOARD' | 'PLAYER_HOST';
@@ -67,6 +67,9 @@ export interface GameSessionAdapter {
   sendHunterShot(targetPlayerId: PlayerId | null): Promise<void>;
   sendMayorTransfer(successorPlayerId: PlayerId | null): Promise<void>;
   sendMayorElect(candidateId: PlayerId | null): Promise<void>;
+  sendSeancePickQuestion?(questionId: SeanceQuestionId): Promise<void>;
+  sendSeanceAnswer?(answer: 'YES' | 'NO'): Promise<void>;
+  sendLastEchoTarget?(targetPlayerId: PlayerId | null): Promise<void>;
   finalizePublicVote(): Promise<void>;
 
   hostPause(): Promise<void>;

@@ -8,7 +8,7 @@ import type {
 } from './types';
 import { SocketAdapter } from './socketAdapter';
 import { LocalEngineAdapter } from './localEngineAdapter';
-import type { PlayerId, RoomSettings } from '../engine/types';
+import type { PlayerId, RoomSettings, SeanceQuestionId } from '../engine/types';
 import { requestWakeLock, releaseWakeLock } from '../utils/wakeLock';
 import { audioController } from '../audio/audioController';
 
@@ -32,6 +32,9 @@ export interface GameSessionContextValue {
     sendHunterShot: (targetPlayerId: PlayerId | null) => Promise<void>;
     sendMayorTransfer: (successorPlayerId: PlayerId | null) => Promise<void>;
     sendMayorElect: (candidateId: PlayerId | null) => Promise<void>;
+    sendSeancePickQuestion: (questionId: SeanceQuestionId) => Promise<void>;
+    sendSeanceAnswer: (answer: 'YES' | 'NO') => Promise<void>;
+    sendLastEchoTarget: (targetPlayerId: PlayerId | null) => Promise<void>;
     finalizePublicVote: () => Promise<void>;
     hostPause: () => Promise<void>;
     hostResume: () => Promise<void>;
@@ -261,6 +264,21 @@ export function GameSessionProvider({
       },
       sendMayorElect: async (candidateId: PlayerId | null) => {
         return activeAdapter.sendMayorElect(candidateId);
+      },
+      sendSeancePickQuestion: async (questionId: SeanceQuestionId) => {
+        if (activeAdapter.sendSeancePickQuestion) {
+          return activeAdapter.sendSeancePickQuestion(questionId);
+        }
+      },
+      sendSeanceAnswer: async (answer: 'YES' | 'NO') => {
+        if (activeAdapter.sendSeanceAnswer) {
+          return activeAdapter.sendSeanceAnswer(answer);
+        }
+      },
+      sendLastEchoTarget: async (targetPlayerId: PlayerId | null) => {
+        if (activeAdapter.sendLastEchoTarget) {
+          return activeAdapter.sendLastEchoTarget(targetPlayerId);
+        }
       },
       finalizePublicVote: async () => {
         return activeAdapter.finalizePublicVote();

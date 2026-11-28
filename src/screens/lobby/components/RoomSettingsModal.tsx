@@ -35,6 +35,9 @@ export const DEFAULT_CONFIGURABLE_SETTINGS: Partial<RoomSettings> = {
   tieVoteMode: 'ESCAPE',
   revealOnDeath: false,
   ghostMode: false,
+  lunarEventsEnabled: false,
+  lunarEventCadence: 'ALTERNATE_DAYS',
+  lunarAllowSpiritism: true,
 };
 
 export function getModifiedRulesCount(
@@ -91,6 +94,13 @@ export function getModifiedRulesCount(
 
   // Minh bạch
   if (settings.revealOnDeath === true) count++;
+
+  // Sự kiện Tuần Trăng
+  if (settings.lunarEventsEnabled === true) {
+    count++;
+    if (settings.lunarEventCadence === 'EVERY_DAY') count++;
+    if (settings.lunarAllowSpiritism === false) count++;
+  }
 
   return count;
 }
@@ -787,6 +797,90 @@ export default function RoomSettingsModal({
                   <span className="settings-switch-thumb" />
                 </button>
               </div>
+            </div>
+          </section>
+
+          {/* Nhóm 9: Sự kiện Tuần Trăng */}
+          <section className="settings-modal-group" aria-labelledby="group-lunar-title">
+            <div className="settings-group-header-row">
+              <span id="group-lunar-title" className="settings-group-label">Sự kiện Tuần Trăng</span>
+            </div>
+            <div className="settings-group-list">
+              <div className={`settings-row-item ${!isHost ? 'disabled' : ''}`}>
+                <div className="settings-item-info">
+                  <span className="settings-item-name">Bật Sự kiện Tuần Trăng</span>
+                  <span className="settings-item-desc">
+                    Mỗi sáng từ Ngày 2 bốc ngẫu nhiên 1 sự kiện Tuần Trăng thay đổi nhịp bàn chơi.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={Boolean(currentSettings.lunarEventsEnabled)}
+                  disabled={!isHost}
+                  className={`settings-switch-control ${
+                    currentSettings.lunarEventsEnabled ? 'active' : ''
+                  }`}
+                  onClick={() => handleToggle('lunarEventsEnabled', false)}
+                  aria-label="Bật Sự kiện Tuần Trăng"
+                >
+                  <span className="settings-switch-thumb" />
+                </button>
+              </div>
+
+              {currentSettings.lunarEventsEnabled === true && (
+                <>
+                  <div className={`settings-row-item ${!isHost ? 'disabled' : ''}`}>
+                    <div className="settings-item-info">
+                      <span className="settings-item-name">Nhịp xuất hiện</span>
+                    </div>
+                    <div className="settings-segmented-control" role="group" aria-label="Nhịp xuất hiện">
+                      <button
+                        type="button"
+                        disabled={!isHost}
+                        className={`settings-segmented-button ${
+                          (currentSettings.lunarEventCadence || 'ALTERNATE_DAYS') === 'ALTERNATE_DAYS' ? 'active' : ''
+                        }`}
+                        onClick={() => handleSegmentChange('lunarEventCadence', 'ALTERNATE_DAYS')}
+                      >
+                        Cách ngày (Ngày 2, 4, 6... · Khuyên dùng)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!isHost}
+                        className={`settings-segmented-button ${
+                          currentSettings.lunarEventCadence === 'EVERY_DAY' ? 'active' : ''
+                        }`}
+                        onClick={() => handleSegmentChange('lunarEventCadence', 'EVERY_DAY')}
+                      >
+                        Mỗi ngày từ Ngày 2
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={`settings-row-item ${!isHost ? 'disabled' : ''}`}>
+                    <div className="settings-item-info">
+                      <span className="settings-item-name">Nhóm Thuật Chiêu Hồn</span>
+                      <span className="settings-item-desc">
+                        Cho phép bốc Nghi Thức Chiêu Hồn để hỏi đáp Có/Không 20 giây với người đã chết.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={currentSettings.lunarAllowSpiritism !== false}
+                      disabled={!isHost}
+                      className={`settings-switch-control ${
+                        currentSettings.lunarAllowSpiritism !== false ? 'active' : ''
+                      }`}
+                      onClick={() => handleToggle('lunarAllowSpiritism', true)}
+                      aria-label="Nhóm Thuật Chiêu Hồn"
+                    >
+                      <span className="settings-switch-thumb" />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </section>
         </div>

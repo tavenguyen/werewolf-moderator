@@ -188,15 +188,79 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
   const isDireWolf = currentTurnKey === 'dire_wolf' || currentTurnKey === 'night_dire_wolf';
   const isWolfAccursed = currentTurnKey === 'wolf_accursed' || currentTurnKey === 'night_wolf_accursed';
   const isBigBadWolf = currentTurnKey === 'big_bad_wolf' || currentTurnKey === 'night_big_bad_wolf';
+  const isBodyguard = currentTurnKey === 'bodyguard' || currentTurnKey === 'night_bodyguard';
+  const isSeer = currentTurnKey === 'seer' || currentTurnKey === 'night_seer';
+  const isApprenticeSeer =
+    currentTurnKey === 'apprentice_seer' || currentTurnKey === 'night_apprentice_seer';
+  const isSorcerer = currentTurnKey === 'sorcerer' || currentTurnKey === 'night_sorcerer';
   const isAuraSeer = currentTurnKey === 'aura_seer' || currentTurnKey === 'night_aura_seer';
   const isPi = currentTurnKey === 'pi' || currentTurnKey === 'night_pi';
   const isFox = currentTurnKey === 'fox' || currentTurnKey === 'night_fox';
+  const isMistyMoonSeerRole = isSeer || isApprenticeSeer || isSorcerer || isFox;
   const isSpellcaster = currentTurnKey === 'spellcaster' || currentTurnKey === 'night_spellcaster';
   const isTroublemaker = currentTurnKey === 'troublemaker' || currentTurnKey === 'night_troublemaker';
   const isDoppelganger = currentTurnKey === 'doppelganger' || currentTurnKey === 'night_doppelganger';
   const isPiedPiper = currentTurnKey === 'pied_piper' || currentTurnKey === 'night_pied_piper';
   const isCultLeader = currentTurnKey === 'cult_leader' || currentTurnKey === 'night_cult_leader';
   const isWitch = currentTurnKey === 'witch';
+
+  const renderInvestigationResult = (
+    inv: NonNullable<NonNullable<typeof privateView>['investigationResult']>
+  ) => {
+    if (inv.mistyMoon) {
+      const inspectedNames = (inv.inspectedPlayerIds ?? [])
+        .map((id) => {
+          const p = publicView?.players.find((pl) => pl.id === id);
+          return p ? `#${p.seatIndex} ${p.name}` : id;
+        })
+        .join(', ');
+      const statusText = inv.hasWerewolf
+        ? '🐺 CÓ MA SÓI TRONG NHÓM 3 NGƯỜI!'
+        : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
+      return (
+        <>
+          <span>{`🌫️ ĐÊM SƯƠNG MÙ (CỤM 3 NGƯỜI): ${statusText}`}</span>
+          {inspectedNames && (
+            <small className="misty-moon-inspected-list">Nhóm đã soi: {inspectedNames}</small>
+          )}
+          {(myRoleId === 'fox' || isFox) && inv.keptPower === true && (
+            <small className="misty-moon-fox-kept">
+              ✨ Đêm Sương Mù giữ nguyên quyền năng của Cáo!
+            </small>
+          )}
+        </>
+      );
+    }
+    if (inv.result === 'SPECIAL') {
+      return '🔮 CÓ HÀO QUANG ĐẶC BIỆT';
+    }
+    if (inv.result === 'NORMAL') {
+      return '⚪ HÀO QUANG BÌNH THƯỜNG';
+    }
+    if (typeof inv.hasWerewolf === 'boolean') {
+      const statusText = inv.hasWerewolf
+        ? '🐺 CÓ MA SÓI TRONG NHÓM 3 NGƯỜI!'
+        : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
+      if (privateView?.skills?.mistyMoonActiveTonight && !inv.hasWerewolf && inv.keptPower === true) {
+        return (
+          <>
+            <span>{statusText}</span>
+            <small className="misty-moon-fox-kept">
+              ✨ Đêm Sương Mù giữ nguyên quyền năng của Cáo!
+            </small>
+          </>
+        );
+      }
+      return statusText;
+    }
+    if (typeof inv.result === 'string') {
+      if (inv.result === 'WEREWOLF') return '🐺 LÀ MA SÓI';
+      if (inv.result === 'VILLAGER') return '🛡️ LÀ DÂN LÀNG';
+      const exactRole = ROLES_BY_ID[inv.result];
+      return exactRole ? `🔮 VAI TRÒ: ${exactRole.nameVi}` : `🔮 ${inv.result}`;
+    }
+    return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
+  };
 
   const [isCurseAction, setIsCurseAction] = useState<boolean | null>(null);
   const [isTroublemakerActive, setIsTroublemakerActive] = useState<boolean | null>(null);
@@ -1311,30 +1375,9 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
               <div className="investigation-result-card">
                 <span>KẾT QUẢ ĐIỀU TRA:</span>
                 <strong>
-                  {(() => {
-                    const inv = privateView?.investigationResult;
-                    if (!inv) {
-                      return 'Đang nhận kết quả điều tra...';
-                    }
-                    if (inv.result === 'SPECIAL') {
-                      return '🔮 CÓ HÀO QUANG ĐẶC BIỆT';
-                    }
-                    if (inv.result === 'NORMAL') {
-                      return '⚪ HÀO QUANG BÌNH THƯỜNG';
-                    }
-                    if (typeof inv.hasWerewolf === 'boolean') {
-                      return inv.hasWerewolf
-                        ? '🐺 CÓ MA SÓI TRONG NHÓM 3 NGƯỜI!'
-                        : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
-                    }
-                    if (typeof inv.result === 'string') {
-                      if (inv.result === 'WEREWOLF') return '🐺 LÀ MA SÓI';
-                      if (inv.result === 'VILLAGER') return '🛡️ LÀ DÂN LÀNG';
-                      const exactRole = ROLES_BY_ID[inv.result];
-                      return exactRole ? `🔮 VAI TRÒ: ${exactRole.nameVi}` : `🔮 ${inv.result}`;
-                    }
-                    return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
-                  })()}
+                  {privateView?.investigationResult
+                    ? renderInvestigationResult(privateView.investigationResult)
+                    : 'Đang nhận kết quả điều tra...'}
                 </strong>
               </div>
               <div className="role-actions">
@@ -1672,6 +1715,18 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
               {/* Chọn mục tiêu hợp lệ (ẩn với Phù thủy và Con Cáo đã mất phép) */}
               {!isWitch && !(isFox && privateView?.skills?.foxLostPower) && (
                 <>
+                  {isBodyguard && privateView?.skills?.silverShieldActiveTonight && (
+                    <div className="lunar-night-hint silver-shield-hint" role="status">
+                      <span>🛡️ Khiên Trăng Bạc: Đêm nay được phép bảo vệ lại người đêm qua</span>
+                    </div>
+                  )}
+
+                  {isMistyMoonSeerRole && privateView?.skills?.mistyMoonActiveTonight && (
+                    <div className="lunar-night-hint misty-moon-hint" role="status">
+                      <span>🌫️ Đêm Sương Mù: Chạm 1 người để soi cụm 3 người cạnh nhau</span>
+                    </div>
+                  )}
+
                   <div className="target-heading">
                     <div>
                       <strong>
@@ -1944,29 +1999,7 @@ export default function NightScreen({ onOpenRules }: NightScreenProps) {
               {privateView?.investigationResult && (
                 <div className="investigation-result-card">
                   <span>KẾT QUẢ ĐIỀU TRA:</span>
-                  <strong>
-                    {(() => {
-                      const inv = privateView.investigationResult;
-                      if (inv.result === 'SPECIAL') {
-                        return '🔮 CÓ HÀO QUANG ĐẶC BIỆT';
-                      }
-                      if (inv.result === 'NORMAL') {
-                        return '⚪ HÀO QUANG BÌNH THƯỜNG';
-                      }
-                      if (typeof inv.hasWerewolf === 'boolean') {
-                        return inv.hasWerewolf
-                          ? '🐺 CÓ MA SÓI TRONG NHÓM 3 NGƯỜI!'
-                          : '🛡️ AN TOÀN · KHÔNG CÓ MA SÓI!';
-                      }
-                      if (typeof inv.result === 'string') {
-                        if (inv.result === 'WEREWOLF') return '🐺 LÀ MA SÓI';
-                        if (inv.result === 'VILLAGER') return '🛡️ LÀ DÂN LÀNG';
-                        const exactRole = ROLES_BY_ID[inv.result];
-                        return exactRole ? `🔮 VAI TRÒ: ${exactRole.nameVi}` : `🔮 ${inv.result}`;
-                      }
-                      return inv.result ? '🔮 ĐÚNG LÀ TIÊN TRI' : '❌ KHÔNG PHẢI TIÊN TRI';
-                    })()}
-                  </strong>
+                  <strong>{renderInvestigationResult(privateView.investigationResult)}</strong>
                 </div>
               )}
 

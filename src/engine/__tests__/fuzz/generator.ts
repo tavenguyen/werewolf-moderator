@@ -1,7 +1,15 @@
+import {
+  applyLastEchoChoice,
+  applySeanceAnswer,
+  applySeancePickQuestion,
+  resolveLastEchoTimeout,
+  resolveSeanceTimeout,
+  SEANCE_QUESTIONS,
+} from '../../lunarEvents';
 import { ROLE_PRESETS, isNightHuntingWolf } from '../../presets';
 import { ROLES, ROLES_BY_ID } from '../../roles';
 import type { NightTurnPlanItem } from '../../turnPlan';
-import type { GameState, NightActions, PlayerId, RoomSettings } from '../../types';
+import type { GameState, NightActions, PlayerId, RoomSettings, SeanceQuestionId } from '../../types';
 import { SeededRng } from './prng';
 
 export interface FuzzMatchConfig {
@@ -53,6 +61,9 @@ export function generateFuzzMatchConfig(rng: SeededRng): FuzzMatchConfig {
     lynchThreshold: rng.chance(0.5) ? 'MAJORITY' : 'PLURALITY',
     hunterShootsOnPoison: rng.chance(0.5),
     allowHunterSkipShot: rng.chance(0.5),
+    lunarEventsEnabled: rng.chance(0.45),
+    lunarEventCadence: rng.chance(0.5) ? 'EVERY_DAY' : 'ALTERNATE_DAYS',
+    lunarAllowSpiritism: rng.chance(0.75),
   };
 
   let roleIds: string[] = [];
@@ -204,7 +215,7 @@ export function generateFuzzNightActions(
           break;
         }
 
-        if (state.wolfCubDoubleKillNextNight) {
+        if (state.wolfCubDoubleKillNextNight || state.lunarState?.wolfDoubleKillTonight) {
           const multiVotes: Record<PlayerId, PlayerId[]> = {};
           for (const wId of turn.activePlayerIds) {
             multiVotes[wId] = rng.pickMany(votePool, Math.min(2, votePool.length));
@@ -372,4 +383,77 @@ export function pickFuzzVoteTarget(
 
 export function isEligibleFuzzRole(roleId: string): boolean {
   return Boolean(ROLES_BY_ID[roleId]?.implementedInEngine);
+}
+
+const SEANCE_QUESTION_IDS = Object.keys(SEANCE_QUESTIONS) as SeanceQuestionId[];
+
+/**
+ * Giả lập 1 bước trong pha LUNAR_SEANCE (chọn Q1–Q4, trả lời YES/NO, hoặc timeout).
+ */
+export function stepFuzzLunarSeance(
+  state: GameState,
+  rng: SeededRng,
+  forceProgress: boolean
+): { nextState: GameState; label: string } {
+  const seance = state.lunarState?.seanceState;
+  if (state.phase !== 'LUNAR_SEANCE' || !seance) {
+    return { nextState: state, label: 'Seance(NOOP)' };
+  }
+
+  if (!forceProgress && rng.chance(0.18)) {
+    return {
+      nextState: resolveSeanceTimeout(state),
+      label: `Seance(TIMEOUT:${seance.stage})`,
+    };
+  }
+
+  if (seance.stage === 'PICK_QUESTION') {
+    const qId = rng.pick(SEANCE_QUESTION_IDS);
+    return {
+      nextState: applySeancePickQuestion(state, seance.mediumPlayerId, qId),
+      label: `Seance(Pick:${qId})`,
+    };
+  }
+
+  if (seance.stage === 'WAIT_ANSWER') {
+    const answer: 'YES' | 'NO' = rng.chance(0.5) ? 'YES' : 'NO';
+    return {
+      nextState: applySeanceAnswer(state, seance.targetDeadPlayerId, answer),
+      label: `Seance(Answer:${answer})`,
+    };
+  }
+
+  return {
+    nextState: resolveSeanceTimeout(state),
+    label: 'Seance(Resolve)',
+  };
+}
+
+/**
+ * Giả lập 1 bước trong pha LAST_ECHO_MARK (chọn mục tiêu sống hoặc timeout).
+ */
+export function stepFuzzLastEchoMark(
+  state: GameState,
+  rng: SeededRng,
+  forceProgress: boolean
+): { nextState: GameState; label: string } {
+  const lastEcho = state.lunarState?.lastEchoState;
+  const executorId = lastEcho?.activeExecutorId;
+  if (state.phase !== 'LAST_ECHO_MARK' || !lastEcho || !executorId) {
+    return { nextState: state, label: 'LastEcho(NOOP)' };
+  }
+
+  const aliveIds = state.players.filter((p) => p.isAlive).map((p) => p.id);
+  if ((!forceProgress && rng.chance(0.18)) || aliveIds.length === 0) {
+    return {
+      nextState: resolveLastEchoTimeout(state),
+      label: `LastEcho(${executorId}->TIMEOUT)`,
+    };
+  }
+
+  const targetId = rng.pick(aliveIds);
+  return {
+    nextState: applyLastEchoChoice(state, executorId, targetId),
+    label: `LastEcho(${executorId}->${targetId})`,
+  };
 }
