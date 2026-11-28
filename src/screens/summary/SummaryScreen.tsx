@@ -117,6 +117,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
   const postGame = state.postGameView;
   const publicView = state.publicView;
   const roomCode = state.roomCode || '7290';
+  const gameKey = `${roomCode}:${publicView?.gameGeneration ?? 0}`;
 
   const enteredAtRef = useRef(Date.now());
   const [tab, setTab] = useState<'roles' | 'timeline'>('roles');
@@ -125,6 +126,15 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
   const [showEarlyRematchConfirm, setShowEarlyRematchConfirm] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isRematching, setIsRematching] = useState(false);
+
+  useEffect(() => {
+    setTab('roles');
+    setShowEarlyRematchConfirm(false);
+    setShowExitConfirm(false);
+    setIsRematching(false);
+    setNotice('');
+    enteredAtRef.current = Date.now();
+  }, [gameKey]);
 
   useEffect(() => {
     if (!showEarlyRematchConfirm && !showExitConfirm) return;
@@ -227,8 +237,8 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể bắt đầu ván mới lúc này';
       setNotice(msg);
-      setIsRematching(false);
     } finally {
+      setIsRematching(false);
       setShowEarlyRematchConfirm(false);
     }
   };
@@ -300,6 +310,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
         {/* Tabs */}
         <div className="summary-tabs" role="tablist" aria-label="Nội dung tổng kết">
           <button
+            type="button"
             role="tab"
             aria-selected={tab === 'roles'}
             className={tab === 'roles' ? 'active' : ''}
@@ -309,6 +320,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
             <span>VAI TRÒ TOÀN BÀN ({rolesList.length})</span>
           </button>
           <button
+            type="button"
             role="tab"
             aria-selected={tab === 'timeline'}
             className={tab === 'timeline' ? 'active' : ''}
@@ -371,7 +383,7 @@ export default function SummaryScreen({ onNavigate, onOpenRules }: SummaryScreen
           <MatchTimeline
             postGame={postGame}
             publicView={publicView}
-            gameKey={`${roomCode}:${publicView?.gameGeneration ?? 0}`}
+            gameKey={gameKey}
           />
         )}
       </div>

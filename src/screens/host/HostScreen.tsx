@@ -4,7 +4,7 @@ import { useGameSession } from '../../adapters/useGameSession';
 import { audioController, type AudioStatus } from '../../audio/audioController';
 import { formatTime } from '../../utils/formatTime';
 import { generateQrSvgString } from '../../utils/qrCodeSvg';
-import type { PlayerId } from '../../engine/types';
+import type { PlayerId, PublicMatchLogItem } from '../../engine/types';
 import './host.css';
 
 type HostScreenProps = {
@@ -575,27 +575,39 @@ export default function HostScreen({ onNavigate, onOpenRules }: HostScreenProps)
             <div className="logs-list">
               {publicView?.publicTimeline && publicView.publicTimeline.length > 0 ? (
                 (() => {
-                  const grouped = new Map<number, typeof publicView.publicTimeline>();
-                  for (const item of publicView.publicTimeline) {
-                    const list = grouped.get(item.roundNumber) ?? [];
-                    list.push(item);
-                    grouped.set(item.roundNumber, list);
+                  const sortedItems = [...publicView.publicTimeline].sort((a, b) => a.seq - b.seq);
+                  const grouped = new Map<string, { label: string; items: PublicMatchLogItem[] }>();
+                  for (const item of sortedItems) {
+                    const key =
+                      item.roundNumber === 0
+                        ? 'setup-0'
+                        : item.stage === 'DAY_ANNOUNCEMENT'
+                        ? `night-${item.roundNumber}`
+                        : `day-${item.roundNumber}`;
+                    const label =
+                      item.roundNumber === 0
+                        ? 'KHỞI ĐẦU'
+                        : item.stage === 'DAY_ANNOUNCEMENT'
+                        ? `ĐÊM ${item.roundNumber}`
+                        : `NGÀY ${item.roundNumber}`;
+                    const existing = grouped.get(key);
+                    if (existing) {
+                      existing.items.push(item);
+                    } else {
+                      grouped.set(key, { label, items: [item] });
+                    }
                   }
-                  return Array.from(grouped.entries())
-                    .sort((a, b) => a[0] - b[0])
-                    .map(([roundNum, items]) => (
-                      <div key={roundNum} className="host-log-round-group">
-                        <span className="host-log-round-label">
-                          {roundNum === 0 ? 'KHỞI ĐẦU' : `VÒNG ${roundNum}`}
-                        </span>
-                        {items.map((item) => (
-                          <div key={item.id} className="log-entry">
-                            <span className="log-bullet">•</span>
-                            <span>{item.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ));
+                  return Array.from(grouped.entries()).map(([groupKey, group]) => (
+                    <div key={groupKey} className="host-log-round-group">
+                      <span className="host-log-round-label">{group.label}</span>
+                      {group.items.map((item) => (
+                        <div key={item.id} className="log-entry">
+                          <span className="log-bullet">•</span>
+                          <span>{item.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ));
                 })()
               ) : (
                 (publicView?.publicLogs ?? []).map((log, index) => (

@@ -9,14 +9,22 @@ import {
   type PlayerSetupInput,
 } from '../gameEngine';
 import {
+  buildCascadeTree,
   buildPublicTimeline,
+  filterMatchEvents,
   formatPostGameRoleLabel,
   getMorningAnnouncements,
+  groupMatchEventsForTimeline,
+  isLethalOrVoteEvent,
+  recordWinOutcomeEvent,
+  summarizeDayCardStats,
 } from '../matchLog';
 import { formatMatchEventText } from '../matchLogFormatter';
-import { getWitchVictimsPreview } from '../nightResolution';
+import { getWitchVictimsPreview, resolveNight } from '../nightResolution';
 import { ROLES } from '../roles';
 import type { NightActions } from '../types';
+import { castMayorBallot, tallyMayorElection } from '../voting';
+import { checkWinCondition } from '../winConditions';
 
 function makePlayers(count: number): PlayerSetupInput[] {
   return Array.from({ length: count }, (_, idx) => ({
@@ -572,5 +580,764 @@ describe('Engine - Structured MatchEvent Log & Edge Cases (39 Roles)', () => {
     expect(
       getWitchVictimsPreview(peaceState, { wolfPack: { targets: ['p5'] } })
     ).toEqual([]);
+  });
+
+  it('Tough Guy bị cắn lại ở Đêm 2: guard alreadyDyingTonight ngăn chết kép, chỉ 1 collapse death', () => {
+    const state = createInitialGameState(makePlayers(6), [
+      'tough_guy',
+      'werewolf',
+      'seer',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const n1 = executeNightPhase(state, { wolfPack: { targets: ['p1'] } }).nextState;
+    expect(n1.players.find((p) => p.id === 'p1')!.isAlive).toBe(true);
+    expect(n1.players.find((p) => p.id === 'p1')!.toughGuyBittenNight).toBe(1);
+
+    n1.roundNumber = 2;
+    n1.phase = 'NIGHT';
+    const n2 = executeNightPhase(n1, { wolfPack: { targets: ['p1'] } });
+
+    const tgDeaths = n2.nextState.deaths.filter((d) => d.playerId === 'p1');
+    expect(tgDeaths).toHaveLength(1);
+    expect(tgDeaths[0].cause).toBe('TOUGH_GUY_COLLAPSE');
+    expect(n2.nightOutput.newDeaths.filter((d) => d.playerId === 'p1')).toHaveLength(1);
+
+    const n2Attack = n2.nextState.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'ATTACK' && e.targets[0]?.playerId === 'p1'
+    );
+    expect(n2Attack?.outcome).toBe('NO_EFFECT');
+    expect(formatMatchEventText(n2Attack!, { mode: 'POST_GAME' })).toContain('vô hiệu');
+    expect(formatMatchEventText(n2Attack!, { mode: 'POST_GAME' })).not.toContain('cắn chết');
+  });
+
+  it('NIGHT_IDLE_SUMMARY ghi nhận & format khi Witch, WolfAccursed, Troublemaker, PI giữ phép', () => {
+    const state = createInitialGameState(makePlayers(6), [
+      'witch',
+      'wolf_accursed',
+      'troublemaker',
+      'pi',
+      'villager',
+      'villager',
+    ]);
+    const n1 = executeNightPhase(state, {
+      wolfPack: { targets: ['p5'] },
+    });
+
+    const idleEvt = n1.nextState.eventLog.find((e) => e.actionType === 'NIGHT_IDLE_SUMMARY');
+    expect(idleEvt).toBeDefined();
+    expect(idleEvt?.stage).toBe('NIGHT');
+    expect(idleEvt?.outcome).toBe('SKIPPED');
+    const idleText = formatMatchEventText(idleEvt!, { mode: 'POST_GAME' });
+    expect(idleText).toContain('Phù thủy Người 1 giữ nguyên thuốc');
+    expect(idleText).toContain('Sói nguyền Người 2 không nguyền');
+    expect(idleText).toContain('Kẻ phá rối Người 3 chưa kích hoạt phép');
+    expect(idleText).toContain('Thám tử Người 4 chưa dùng lượt soi');
+
+    const grouped = groupMatchEventsForTimeline(n1.nextState.eventLog);
+    expect(grouped.roundGroups[0].nightIdleEvents).toHaveLength(1);
+  });
+
+  it('Bodyguard chặn wolf_accursed (CURSE -> BLOCKED_BY_BODYGUARD)', () => {
+    const state = createInitialGameState(makePlayers(6), [
+      'bodyguard',
+      'wolf_accursed',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const res = executeNightPhase(state, {
+      bodyguard: { targetId: 'p4' },
+      wolfPack: { targets: ['p4'] },
+      accursedWolf: { curseTargetId: 'p4' },
+    });
+
+    expect(res.nextState.accursedWolfUsed).toBe(false);
+    expect(res.nextState.players.find((p) => p.id === 'p4')!.faction).toBe('VILLAGER');
+    const curseEvt = res.nextState.eventLog.find((e) => e.actionType === 'CURSE');
+    expect(curseEvt?.outcome).toBe('BLOCKED_BY_BODYGUARD');
+    expect(curseEvt?.metadata?.protector?.playerId).toBe('p1');
+    expect(curseEvt?.involvedPlayerIds).toContain('p1');
+    expect(formatMatchEventText(curseEvt!, { mode: 'POST_GAME' })).toContain('hoàn trả phép');
+  });
+
+  it('bao phủ đầy đủ các edge cases của Phù thủy (overdose, cứu+độc đè, cứu mù hoàn/mất/chặn bởi BG, cấm tự cứu sole-victim, cấm dùng 2 bình)', () => {
+    // 1. OVERDOSE_DOUBLE_PROTECT
+    const overdoseState = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'bodyguard', 'werewolf', 'villager', 'villager', 'villager'],
+      { witchDoubleProtectKills: true, witchHealMode: 'AOE' }
+    );
+    const overdoseRes = executeNightPhase(overdoseState, {
+      bodyguard: { targetId: 'p4' },
+      wolfPack: { targets: ['p4'] },
+      witch: { heal: true },
+    });
+    expect(overdoseRes.nextState.players.find((p) => p.id === 'p4')!.isAlive).toBe(false);
+    expect(overdoseRes.nextState.witchHealUsed).toBe(true);
+    const odEvt = overdoseRes.nextState.eventLog.find(
+      (e) => e.actionType === 'HEAL' && e.outcome === 'OVERDOSE_DOUBLE_PROTECT'
+    );
+    expect(odEvt).toBeDefined();
+    expect(odEvt?.metadata?.protector?.playerId).toBe('p2');
+    expect(odEvt?.involvedPlayerIds).toContain('p2');
+    expect(isLethalOrVoteEvent(odEvt!)).toBe(true);
+    expect(formatMatchEventText(odEvt!, { mode: 'POST_GAME' })).toContain('sốc thuốc tử vong');
+
+    // 2. SAVED_BY_WITCH + POISON OVERRIDDEN_BY_POISON
+    const overrideState = createInitialGameState(makePlayers(6), [
+      'witch',
+      'werewolf',
+      'seer',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const overrideRes = executeNightPhase(overrideState, {
+      wolfPack: { targets: ['p4'] },
+      witch: { heal: true, poisonTargetId: 'p4' },
+    });
+    expect(overrideRes.nextState.players.find((p) => p.id === 'p4')!.isAlive).toBe(false);
+    const savedAtk = overrideRes.nextState.eventLog.find(
+      (e) => e.actionType === 'ATTACK' && e.outcome === 'SAVED_BY_WITCH'
+    );
+    const overriddenPoison = overrideRes.nextState.eventLog.find(
+      (e) => e.actionType === 'POISON' && e.outcome === 'OVERRIDDEN_BY_POISON'
+    );
+    expect(savedAtk).toBeDefined();
+    expect(overriddenPoison).toBeDefined();
+    expect(formatMatchEventText(overriddenPoison!, { mode: 'POST_GAME' })).toContain('đè lên bình cứu');
+
+    // 3. Blind heal refunded (không ai bị cắn, witchKnowsVictim=false, witchWasteHealOnEmpty=false)
+    const blindRefundState = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'werewolf', 'seer', 'villager', 'villager', 'villager'],
+      { allowWolfSkip: true, witchKnowsVictim: false, witchWasteHealOnEmpty: false }
+    );
+    const blindRefundRes = executeNightPhase(blindRefundState, {
+      wolfPack: { isSkip: true },
+      witch: { heal: true },
+    });
+    expect(blindRefundRes.nextState.witchHealUsed).toBe(false);
+    const refundEvt = blindRefundRes.nextState.eventLog.find((e) => e.actionType === 'HEAL');
+    expect(refundEvt?.outcome).toBe('NO_EFFECT');
+    expect(refundEvt?.metadata?.witch?.refundedHeal).toBe(true);
+    expect(formatMatchEventText(refundEvt!, { mode: 'POST_GAME' })).toContain('hoàn bình');
+
+    // 4. Blind heal wasted (không ai bị cắn, witchWasteHealOnEmpty=true)
+    const blindWasteState = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'werewolf', 'seer', 'villager', 'villager', 'villager'],
+      { allowWolfSkip: true, witchKnowsVictim: false, witchWasteHealOnEmpty: true }
+    );
+    const blindWasteRes = executeNightPhase(blindWasteState, {
+      wolfPack: { isSkip: true },
+      witch: { heal: true },
+    });
+    expect(blindWasteRes.nextState.witchHealUsed).toBe(true);
+    const wasteEvt = blindWasteRes.nextState.eventLog.find((e) => e.actionType === 'HEAL');
+    expect(wasteEvt?.outcome).toBe('NO_EFFECT');
+    expect(wasteEvt?.metadata?.witch?.wastedHeal).toBe(true);
+    expect(formatMatchEventText(wasteEvt!, { mode: 'POST_GAME' })).toContain('mất bình');
+
+    // 5. Blind heal blocked by Bodyguard (bodyguard trong involvedPlayerIds & metadata.protector)
+    const blindBgState = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'bodyguard', 'werewolf', 'villager', 'villager', 'villager'],
+      { witchKnowsVictim: false, witchWasteHealOnEmpty: true }
+    );
+    const blindBgRes = executeNightPhase(blindBgState, {
+      bodyguard: { targetId: 'p4' },
+      wolfPack: { targets: ['p4'] },
+      witch: { heal: true },
+    });
+    const blindBgEvt = blindBgRes.nextState.eventLog.find((e) => e.actionType === 'HEAL');
+    expect(blindBgEvt?.outcome).toBe('NO_EFFECT');
+    expect(blindBgEvt?.metadata?.witch?.blockedByBodyguard).toBe(true);
+    expect(blindBgEvt?.metadata?.protector?.playerId).toBe('p2');
+    expect(blindBgEvt?.involvedPlayerIds).toContain('p2');
+    expect(formatMatchEventText(blindBgEvt!, { mode: 'POST_GAME' })).toContain('Bảo vệ đã chặn đòn trước');
+
+    // 6. allowWitchSelfHeal = false và Phù thủy là nạn nhân duy nhất
+    const selfHealBlockedState = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'werewolf', 'seer', 'villager', 'villager', 'villager'],
+      { allowWitchSelfHeal: false, witchKnowsVictim: false, witchWasteHealOnEmpty: false }
+    );
+    const selfHealBlockedRes = executeNightPhase(selfHealBlockedState, {
+      wolfPack: { targets: ['p1'] },
+      witch: { heal: true },
+    });
+    expect(selfHealBlockedRes.nextState.players.find((p) => p.id === 'p1')!.isAlive).toBe(false);
+    const selfHealEvt = selfHealBlockedRes.nextState.eventLog.find((e) => e.actionType === 'HEAL');
+    expect(selfHealEvt?.outcome).toBe('NO_EFFECT');
+    expect(selfHealEvt?.metadata?.witch?.selfHealBlocked).toBe(true);
+    const selfHealText = formatMatchEventText(selfHealEvt!, { mode: 'POST_GAME' });
+    expect(selfHealText).toContain('cấm tự cứu');
+    expect(selfHealText).not.toContain('không có ai bị cắn');
+    expect(selfHealText).not.toContain('không có nạn nhân');
+
+    // 7. allowWitchBothPotionsSameNight = false
+    const onePotionState = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'werewolf', 'seer', 'villager', 'villager', 'villager'],
+      { allowWitchBothPotionsSameNight: false }
+    );
+    const onePotionRes = executeNightPhase(onePotionState, {
+      wolfPack: { targets: ['p4'] },
+      witch: { heal: true, poisonTargetId: 'p2' },
+    });
+    expect(onePotionRes.nextState.players.find((p) => p.id === 'p4')!.isAlive).toBe(true);
+    expect(onePotionRes.nextState.players.find((p) => p.id === 'p2')!.isAlive).toBe(true);
+    const blockedPoisonEvt = onePotionRes.nextState.eventLog.find((e) => e.actionType === 'POISON');
+    expect(blockedPoisonEvt?.outcome).toBe('NO_EFFECT');
+    expect(blockedPoisonEvt?.metadata?.witch?.blockedByBothRule).toBe(true);
+    expect(formatMatchEventText(blockedPoisonEvt!, { mode: 'POST_GAME' })).toContain('cấm dùng 2 bình');
+  });
+
+  it('Setup Đêm 1 edge cases: solo Mason, setup timeout SKIPPED, và Cupid allowCupidSelfMatch = false', () => {
+    const soloAndSkipState = createInitialGameState(makePlayers(7), [
+      'mason',
+      'cupid',
+      'doppelganger',
+      'wild_child',
+      'hoodlum',
+      'dire_wolf',
+      'werewolf',
+    ]);
+    const skipRes = executeNightPhase(soloAndSkipState, {});
+    const soloMasonEvt = skipRes.nextState.eventLog.find((e) => e.actionType === 'MASON_MEET');
+    expect(soloMasonEvt?.metadata?.setup?.soloMason).toBe(true);
+    expect(formatMatchEventText(soloMasonEvt!, { mode: 'POST_GAME' })).toContain('một mình');
+
+    for (const actionType of [
+      'PAIR_LOVERS',
+      'CHOOSE_COPY_TARGET',
+      'CHOOSE_IDOL',
+      'CHOOSE_HOODLUM_TARGETS',
+      'CHOOSE_COMPANION',
+    ] as const) {
+      const evt = skipRes.nextState.eventLog.find((e) => e.actionType === actionType);
+      expect(evt?.stage).toBe('SETUP');
+      expect(evt?.outcome).toBe('SKIPPED');
+      expect(formatMatchEventText(evt!, { mode: 'POST_GAME' })).toContain('hết giờ');
+    }
+
+    const cupidSelfState = createInitialGameState(
+      makePlayers(6),
+      ['cupid', 'werewolf', 'seer', 'villager', 'villager', 'villager'],
+      { allowCupidSelfMatch: false }
+    );
+    const cupidSelfRes = executeNightPhase(cupidSelfState, {
+      cupid: { target1: 'p1', target2: 'p4' },
+    });
+    const pairEvt = cupidSelfRes.nextState.eventLog.find((e) => e.actionType === 'PAIR_LOVERS');
+    expect(pairEvt?.outcome).toBe('NO_EFFECT');
+    expect(formatMatchEventText(pairEvt!, { mode: 'POST_GAME' })).toContain('luật phòng cấm');
+  });
+
+  it('Angel Đêm 1 chết theo COUPLE_HEARTBREAK (không thắng) và sống sót Ngày 1 khi người khác bị treo (ANGEL_TO_VILLAGER)', () => {
+    // 1. Angel chết bởi COUPLE_HEARTBREAK ở Đêm 1 -> KHÔNG thắng
+    const angelCoupleState = createInitialGameState(makePlayers(6), [
+      'angel',
+      'cupid',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const coupleNight = executeNightPhase(angelCoupleState, {
+      cupid: { target1: 'p1', target2: 'p4' },
+      wolfPack: { targets: ['p4'] },
+    });
+    expect(coupleNight.nextState.players.find((p) => p.id === 'p1')!.isAlive).toBe(false);
+    expect(
+      coupleNight.nextState.deaths.some(
+        (d) => d.playerId === 'p1' && d.cause === 'COUPLE_HEARTBREAK'
+      )
+    ).toBe(true);
+    expect(coupleNight.winOutcome?.winner).not.toBe('ANGEL');
+
+    // 2. Angel sống sót qua Ngày 1 khi người khác bị treo cổ -> ANGEL_TO_VILLAGER
+    const angelSurviveState = createInitialGameState(makePlayers(6), [
+      'angel',
+      'werewolf',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const n1 = executeNightPhase(angelSurviveState, { wolfPack: { targets: ['p4'] } }).nextState;
+    const d1 = executeDayVote(n1, 'p5');
+    const a2v = d1.nextState.eventLog.find((e) => e.actionType === 'ANGEL_TO_VILLAGER');
+    expect(a2v).toBeDefined();
+    expect(isLethalOrVoteEvent(a2v!)).toBe(true);
+    expect(formatMatchEventText(a2v!, { mode: 'POST_GAME' })).toContain('hòa mình thành Dân làng');
+  });
+
+  it('bao phủ active logs còn thiếu: apprentice_seer, pi (hết phép), elder, cult_leader, fox, village_idiot, pied_piper clear/skip, wolf skip, firstNightNoKill & isLethalOrVoteEvent', () => {
+    // 1. apprentice_seer + pi (hết phép) + elder (1st bite IMMUNE + unjust ELDER_CURSE_VILLAGE)
+    const state1 = createInitialGameState(makePlayers(7), [
+      'seer',            // p1
+      'apprentice_seer', // p2
+      'pi',              // p3
+      'elder',           // p4
+      'werewolf',        // p5
+      'witch',           // p6
+      'villager',        // p7
+    ]);
+    // Đêm 1: Sói cắn Tiên tri p1, PI soi p5
+    const r1 = executeNightPhase(state1, {
+      wolfPack: { targets: ['p1'] },
+      pi: { targetId: 'p5' },
+    }).nextState;
+    const piInspect = r1.eventLog.find(
+      (e) => e.actionType === 'INSPECT' && e.actor?.roleId === 'pi'
+    );
+    expect(formatMatchEventText(piInspect!, { mode: 'POST_GAME' })).toContain('(hết phép)');
+
+    const d1 = executeDayVote(r1, null).nextState;
+    // Đêm 2: Apprentice Seer kế thừa soi p5, Sói cắn Già làng p4 lần 1 (IMMUNE), Phù thủy đầu độc Già làng? Để Đêm 3 mới đầu độc để thấy IMMUNE trước!
+    const r2 = executeNightPhase(d1, {
+      apprenticeSeer: { targetId: 'p5' },
+      wolfPack: { targets: ['p4'] },
+    }).nextState;
+    const appInspect = r2.eventLog.find(
+      (e) => e.actionType === 'INSPECT' && e.actor?.roleId === 'apprentice_seer'
+    );
+    expect(appInspect).toBeDefined();
+    expect(formatMatchEventText(appInspect!, { mode: 'POST_GAME' })).toContain(
+      'Tiên tri tập sự Người 2 (kế thừa Tiên tri) soi'
+    );
+    const elderShieldEvt = r2.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'ATTACK' && e.outcome === 'IMMUNE'
+    );
+    expect(elderShieldEvt).toBeDefined();
+    expect(formatMatchEventText(elderShieldEvt!, { mode: 'POST_GAME' })).toContain('mất 1 giáp');
+
+    // Ngày 2: treo cổ Già làng p4 -> ELDER_CURSE_VILLAGE
+    const d2 = executeDayVote(r2, 'p4').nextState;
+    const elderCurseEvt = d2.eventLog.find((e) => e.actionType === 'ELDER_CURSE_VILLAGE');
+    expect(elderCurseEvt).toBeDefined();
+    expect(d2.villagePowerStripped).toBe(true);
+    expect(formatMatchEventText(elderCurseEvt!, { mode: 'POST_GAME' })).toContain('chết oan');
+
+    // 2. cult_leader (CONVERT_CULT + CULT_DISBAND), fox (giữ phép & SKIPPED), pied_piper (ENCHANT NO_EFFECT/SKIPPED + PIED_PIPER_CLEAR), village_idiot (VOTE_SURVIVED_REVEAL)
+    const state2 = createInitialGameState(
+      makePlayers(7),
+      ['cult_leader', 'fox', 'pied_piper', 'village_idiot', 'werewolf', 'villager', 'villager'],
+      { revealOnDeath: false }
+    );
+    const s2n1 = executeNightPhase(state2, {
+      cultLeader: { targetId: 'p6' },
+      fox: { targetId: 'p5' }, // p5 là werewolf -> giữ phép
+      piedPiper: { targetIds: ['p6'] },
+      wolfPack: { targets: ['p7'] },
+    }).nextState;
+
+    const convertEvt = s2n1.eventLog.find((e) => e.actionType === 'CONVERT_CULT');
+    expect(convertEvt?.outcome).toBe('SUCCESS');
+    expect(formatMatchEventText(convertEvt!, { mode: 'POST_GAME' })).toContain('kết nạp');
+
+    const foxKeepEvt = s2n1.eventLog.find(
+      (e) => e.actionType === 'INSPECT' && e.actor?.roleId === 'fox'
+    );
+    expect(foxKeepEvt?.outcome).toBe('SUCCESS');
+    expect(formatMatchEventText(foxKeepEvt!, { mode: 'POST_GAME' })).toContain('(giữ phép)');
+
+    // Ngày 1: treo Thằng ngốc p4 -> VOTE_SURVIVED_REVEAL
+    const s2d1 = executeDayVote(s2n1, 'p4').nextState;
+    const idiotReveal = s2d1.eventLog.find((e) => e.actionType === 'VOTE_SURVIVED_REVEAL');
+    expect(idiotReveal?.actor?.roleId).toBe('village_idiot');
+    expect(s2d1.players.find((p) => p.id === 'p4')!.voteWeight).toBe(0);
+    expect(buildPublicTimeline(s2d1).some((item) => item.text.includes('Thằng ngốc'))).toBe(true);
+    const dayStats = summarizeDayCardStats(
+      groupMatchEventsForTimeline(s2d1.eventLog).roundGroups[0]
+    );
+    expect(dayStats.some((b) => b.label === 'Thằng ngốc lật bài')).toBe(true);
+
+    // Đêm 2: fox skip, pied_piper target đã bị thôi miên trước đó (NO_EFFECT), Sói cắn chết cult_leader p1 -> CULT_DISBAND
+    const s2n2 = executeNightPhase(s2d1, {
+      fox: { isSkip: true },
+      piedPiper: { targetIds: ['p6'] },
+      wolfPack: { targets: ['p1'] },
+    }).nextState;
+    const foxSkipEvt = s2n2.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'INSPECT' && e.actor?.roleId === 'fox'
+    );
+    expect(foxSkipEvt?.outcome).toBe('SKIPPED');
+    const enchantNoEffect = s2n2.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'ENCHANT'
+    );
+    expect(enchantNoEffect?.outcome).toBe('NO_EFFECT');
+    const cultDisband = s2n2.eventLog.find((e) => e.actionType === 'CULT_DISBAND');
+    expect(cultDisband).toBeDefined();
+    expect(isLethalOrVoteEvent(cultDisband!)).toBe(true);
+    expect(s2n2.players.every((p) => !p.isCultMember)).toBe(true);
+
+    // Ngày 2: treo pied_piper p3 -> PIED_PIPER_CLEAR; Đêm 3 bỏ qua ENCHANT -> SKIPPED
+    const s2d2 = executeDayVote(s2n2, 'p3').nextState;
+    const piperClear = s2d2.eventLog.find((e) => e.actionType === 'PIED_PIPER_CLEAR');
+    expect(piperClear).toBeDefined();
+    expect(isLethalOrVoteEvent(piperClear!)).toBe(true);
+    expect(s2d2.players.every((p) => !p.isEnchanted)).toBe(true);
+
+    // Kiểm tra ENCHANT SKIPPED khi không truyền action piedPiper
+    const piperSkipState = createInitialGameState(makePlayers(6), [
+      'pied_piper',
+      'werewolf',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const piperSkipRes = executeNightPhase(piperSkipState, { wolfPack: { targets: ['p3'] } });
+    const enchantSkipped = piperSkipRes.nextState.eventLog.find((e) => e.actionType === 'ENCHANT');
+    expect(enchantSkipped?.outcome).toBe('SKIPPED');
+
+    // 3. wolf_pack skip (allowWolfSkip) & firstNightNoKill
+    const skipWolfState = createInitialGameState(
+      makePlayers(6),
+      ['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'],
+      { allowWolfSkip: true }
+    );
+    const skipWolfRes = executeNightPhase(skipWolfState, { wolfPack: { isSkip: true } });
+    const wolfSkipEvt = skipWolfRes.nextState.eventLog.find((e) => e.actionType === 'ATTACK');
+    expect(wolfSkipEvt?.outcome).toBe('SKIPPED');
+    expect(wolfSkipEvt?.metadata?.wolfPack?.skipWon).toBe(true);
+    expect(isLethalOrVoteEvent(wolfSkipEvt!)).toBe(false);
+    expect(formatMatchEventText(wolfSkipEvt!, { mode: 'POST_GAME' })).toContain('bỏ qua không cắn');
+
+    const skipVotesState = createInitialGameState(
+      makePlayers(6),
+      ['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'],
+      { allowWolfSkip: true }
+    );
+    const skipVotesRes = executeNightPhase(skipVotesState, {
+      wolfPack: { individualVotes: { p1: null } },
+    });
+    const wolfSkipVotesEvt = skipVotesRes.nextState.eventLog.find(
+      (e) => e.actionType === 'ATTACK'
+    );
+    expect(wolfSkipVotesEvt?.outcome).toBe('SKIPPED');
+    expect(wolfSkipVotesEvt?.metadata?.wolfPack?.skipWon).toBe(true);
+
+    const peaceState2 = createInitialGameState(
+      makePlayers(6),
+      ['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'],
+      { firstNightNoKill: true }
+    );
+    const peaceRes = executeNightPhase(peaceState2, { wolfPack: { targets: ['p3'] } });
+    const peaceEvt = peaceRes.nextState.eventLog.find((e) => e.actionType === 'ATTACK');
+    expect(peaceEvt?.metadata?.wolfPack?.firstNightPeaceRule).toBe(true);
+    expect(isLethalOrVoteEvent(peaceEvt!)).toBe(false);
+    expect(formatMatchEventText(peaceEvt!, { mode: 'POST_GAME' })).toContain('luật hòa bình');
+
+    // 4. Kiểm tra isLethalOrVoteEvent giữ DRUNK_AWAKEN & DREAM_WOLF_AWAKEN
+    const dummyBase = {
+      id: 'evt_test',
+      seq: 1,
+      roundNumber: 2,
+      stage: 'NIGHT' as const,
+      visibility: 'SECRET_NIGHT' as const,
+      actor: null,
+      targets: [],
+      outcome: 'SUCCESS' as const,
+      involvedPlayerIds: [],
+    };
+    expect(isLethalOrVoteEvent({ ...dummyBase, actionType: 'DRUNK_AWAKEN' })).toBe(true);
+    expect(isLethalOrVoteEvent({ ...dummyBase, actionType: 'DREAM_WOLF_AWAKEN' })).toBe(true);
+    expect(isLethalOrVoteEvent({ ...dummyBase, actionType: 'ANGEL_TO_VILLAGER' })).toBe(true);
+    expect(isLethalOrVoteEvent({ ...dummyBase, actionType: 'PIED_PIPER_CLEAR' })).toBe(true);
+    expect(isLethalOrVoteEvent({ ...dummyBase, actionType: 'CULT_DISBAND' })).toBe(true);
+  });
+
+  it('MAYOR_ELECTED, MAYOR_TIE và MAYOR_SUCCESSION gắn parentEventId từ sự kiện cái chết gốc', () => {
+    // 1. MAYOR_TIE
+    const tieBase = createInitialGameState(
+      makePlayers(6),
+      ['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'],
+      { hasMayor: true }
+    );
+    let tieState = executeNightPhase(tieBase, { wolfPack: { targets: ['p6'] } }).nextState;
+    tieState = castMayorBallot(tieState, 'p1', 'p2');
+    tieState = castMayorBallot(tieState, 'p2', 'p3');
+    const tieRes = tallyMayorElection(tieState);
+    expect(tieRes.electedMayorId).toBeNull();
+    const mayorTieEvt = tieRes.nextState.eventLog.find((e) => e.actionType === 'MAYOR_TIE');
+    expect(mayorTieEvt).toBeDefined();
+    expect(formatMatchEventText(mayorTieEvt!, { mode: 'PUBLIC' })).toContain('hòa phiếu');
+
+    // 2. MAYOR_ELECTED + Mayor chết đêm -> MAYOR_SUCCESSION có parentEventId trỏ tới ATTACK
+    const electBase = createInitialGameState(
+      makePlayers(6),
+      ['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager'],
+      { hasMayor: true }
+    );
+    let s = executeNightPhase(electBase, { wolfPack: { targets: ['p6'] } }).nextState;
+    s = castMayorBallot(s, 'p1', 'p2');
+    s = castMayorBallot(s, 'p2', 'p2');
+    const electedRes = tallyMayorElection(s);
+    expect(electedRes.electedMayorId).toBe('p2');
+    const mayorElectedEvt = electedRes.nextState.eventLog.find(
+      (e) => e.actionType === 'MAYOR_ELECTED'
+    );
+    expect(mayorElectedEvt).toBeDefined();
+    expect(formatMatchEventText(mayorElectedEvt!, { mode: 'PUBLIC' })).toContain('đắc cử');
+
+    // Đêm 2: Sói cắn Trưởng làng p2 -> MAYOR_SUCCESSION gắn parentEventId về ATTACK của Đêm 2
+    s = electedRes.nextState;
+    s.roundNumber = 2;
+    s.phase = 'NIGHT';
+    const n2MayorDies = executeNightPhase(s, { wolfPack: { targets: ['p2'] } });
+    expect(n2MayorDies.nextState.phase).toBe('MAYOR_SUCCESSION');
+    const expectedParentId = n2MayorDies.nextState.pendingMayorDeathEventIds?.['p2'];
+    expect(expectedParentId).toBeDefined();
+
+    const succRes = executeMayorSuccession(n2MayorDies.nextState, 'p3');
+    expect(succRes.nextState.pendingMayorDeathEventIds?.['p2']).toBeUndefined();
+    const succEvt = succRes.nextState.eventLog.find((e) => e.actionType === 'MAYOR_SUCCESSION');
+    expect(succEvt?.parentEventId).toBe(expectedParentId);
+    expect(succEvt?.outcome).toBe('SUCCESS');
+
+    const grouped = groupMatchEventsForTimeline(succRes.nextState.eventLog);
+    const byId = new Map(succRes.nextState.eventLog.map((e) => [e.id, e] as const));
+    const dawnTree = buildCascadeTree(grouped.roundGroups[1].dawnEvents, byId);
+    const succNode = dawnTree.find((n) => n.event.actionType === 'MAYOR_SUCCESSION');
+    expect(succNode?.crossBlockParent?.id).toBe(expectedParentId);
+  });
+
+  it('bao phủ đầy đủ các biến thể WIN (LONE_WOLF, WHITE_WOLF, PIED_PIPER, CULT_LEADER, TANNER, COUPLE, DRAW) & chống lặp Hoodlum co-winner', () => {
+    const verifyWin = (
+      roles: string[],
+      setupMutate: (s: ReturnType<typeof createInitialGameState>) => void,
+      expectedWinner: string
+    ) => {
+      const s = createInitialGameState(makePlayers(roles.length), roles);
+      setupMutate(s);
+      const outcome = checkWinCondition(s);
+      expect(outcome?.winner).toBe(expectedWinner as NonNullable<typeof outcome>['winner']);
+      const evt = recordWinOutcomeEvent(s, outcome!, s.roundNumber);
+      expect(evt).not.toBeNull();
+      const pubText = formatMatchEventText(evt!, { mode: 'PUBLIC' });
+      const postText = formatMatchEventText(evt!, { mode: 'POST_GAME' });
+      expect(pubText.length).toBeGreaterThan(0);
+      expect(postText.length).toBeGreaterThan(0);
+      return { evt: evt!, pubText, postText };
+    };
+
+    // LONE_WOLF
+    verifyWin(
+      ['lone_wolf', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players.slice(1).forEach((p) => (p.isAlive = false));
+      },
+      'LONE_WOLF'
+    );
+
+    // WHITE_WOLF
+    verifyWin(
+      ['white_wolf', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players.slice(1).forEach((p) => (p.isAlive = false));
+      },
+      'WHITE_WOLF'
+    );
+
+    // PIED_PIPER
+    verifyWin(
+      ['pied_piper', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players.slice(1).forEach((p) => (p.isEnchanted = true));
+      },
+      'PIED_PIPER'
+    );
+
+    // CULT_LEADER
+    verifyWin(
+      ['cult_leader', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players.slice(1).forEach((p) => (p.isCultMember = true));
+      },
+      'CULT_LEADER'
+    );
+
+    // TANNER
+    const tannerBase = createInitialGameState(makePlayers(6), [
+      'tanner',
+      'werewolf',
+      'seer',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    const tannerDay = executeDayVote(tannerBase, 'p1');
+    expect(tannerDay.winOutcome?.winner).toBe('TANNER');
+    const tannerWinEvt = tannerDay.nextState.eventLog.find((e) => e.actionType === 'WIN')!;
+    expect(formatMatchEventText(tannerWinEvt, { mode: 'POST_GAME' })).toContain('Người 1');
+
+    // COUPLE
+    verifyWin(
+      ['cupid', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players[1].loverId = 'p3';
+        s.players[2].loverId = 'p2';
+        s.players[1].isCrossFactionCouple = true;
+        s.players[2].isCrossFactionCouple = true;
+        s.players[0].isAlive = false;
+        s.players[3].isAlive = false;
+        s.players[4].isAlive = false;
+        s.players[5].isAlive = false;
+      },
+      'COUPLE'
+    );
+
+    // DRAW
+    verifyWin(
+      ['werewolf', 'hunter', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players.forEach((p) => (p.isAlive = false));
+      },
+      'DRAW'
+    );
+
+    // HOODLUM co-winner anti-duplication (với VILLAGER và với COUPLE)
+    const hoodlumVillager = verifyWin(
+      ['hoodlum', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players[0].hoodlumTargetIds = ['p2', 'p6'];
+        s.players[1].isAlive = false;
+        s.players[5].isAlive = false;
+      },
+      'VILLAGER'
+    );
+    expect(hoodlumVillager.evt.involvedPlayerIds).toContain('p1');
+    expect(hoodlumVillager.postText).toContain('Du côn (Người 1)');
+    expect(hoodlumVillager.postText).not.toContain('Đồng chiến thắng');
+    expect(filterMatchEvents([hoodlumVillager.evt], 'player', 'p1')).toHaveLength(1);
+
+    const hoodlumCouple = verifyWin(
+      ['hoodlum', 'werewolf', 'villager', 'villager', 'villager', 'villager'],
+      (s) => {
+        s.players[0].hoodlumTargetIds = ['p4', 'p5'];
+        s.players[1].loverId = 'p3';
+        s.players[2].loverId = 'p2';
+        s.players[1].isCrossFactionCouple = true;
+        s.players[2].isCrossFactionCouple = true;
+        s.players[3].isAlive = false;
+        s.players[4].isAlive = false;
+        s.players[5].isAlive = false;
+      },
+      'COUPLE'
+    );
+    expect(hoodlumCouple.postText).toContain('Du côn (Người 1)');
+    expect(hoodlumCouple.postText).not.toContain('Đồng chiến thắng');
+  });
+
+  it('tích lũy resolvedEvents qua nhiều đêm và chặn trùng tử vong TETANUS với whiteWolf / witchPoison', () => {
+    const state = createInitialGameState(makePlayers(7), [
+      'rusty_knight', // p1
+      'werewolf',     // p2 (nhiễm TETANUS Đêm 1)
+      'white_wolf',   // p3
+      'witch',        // p4
+      'villager',     // p5
+      'villager',     // p6
+      'villager',     // p7
+    ]);
+
+    // Đêm 1: Sói cắn Kỵ sĩ gỉ sắt p1 -> Sói p2 nhiễm uốn ván
+    const n1 = resolveNight(state, { wolfPack: { targets: ['p1'] } });
+    const countAfterN1 = n1.nextState.resolvedEvents?.length ?? 0;
+    expect(countAfterN1).toBeGreaterThan(0);
+
+    // Đêm 2: p2 sụp đổ bởi TETANUS ở đầu đêm, đồng thời Sói trắng p3 ám sát p2 và Phù thủy p4 ném độc p2
+    n1.nextState.roundNumber = 2;
+    const n2 = resolveNight(n1.nextState, {
+      wolfPack: { targets: ['p5'] },
+      whiteWolf: { targetId: 'p2' },
+      witch: { poisonTargetId: 'p2' },
+    });
+
+    // resolvedEvents tích lũy cả Đêm 1 lẫn Đêm 2
+    expect((n2.nextState.resolvedEvents?.length ?? 0)).toBe(
+      countAfterN1 + n2.output.events.length
+    );
+
+    // p2 chỉ có 1 DeathRecord duy nhất là TETANUS
+    const p2Deaths = n2.nextState.deaths.filter((d) => d.playerId === 'p2');
+    expect(p2Deaths).toHaveLength(1);
+    expect(p2Deaths[0].cause).toBe('TETANUS');
+
+    // Sự kiện ATTACK của Sói trắng & POISON của Phù thủy nhắm vào p2 đều ở trạng thái NO_EFFECT
+    const wwAttack = n2.nextState.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'ATTACK' && e.actor?.roleId === 'white_wolf'
+    );
+    const witchPoison = n2.nextState.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'POISON'
+    );
+    expect(wwAttack?.outcome).toBe('NO_EFFECT');
+    expect(witchPoison?.outcome).toBe('NO_EFFECT');
+    expect(formatMatchEventText(wwAttack!, { mode: 'POST_GAME' })).toContain('vô hiệu');
+    expect(formatMatchEventText(witchPoison!, { mode: 'POST_GAME' })).toContain('vô hiệu');
+  });
+
+  it('HEAL NO_EFFECT có metadata.note hiển thị đúng lý do quá liều bị hủy và EMERGENCY_ELIMINATE ban ngày giữ stage DAY_VOTE cho MAYOR_SUCCESSION / HUNTER_SHOT', () => {
+    // 1. Overdose bị chặn vì tough_guy đã kiệt sức gục ngã đầu đêm
+    const tgOverdose = createInitialGameState(
+      makePlayers(6),
+      ['witch', 'bodyguard', 'werewolf', 'tough_guy', 'villager', 'villager'],
+      { witchDoubleProtectKills: true }
+    );
+    const n1Tg = executeNightPhase(tgOverdose, {
+      wolfPack: { targets: ['p4'] },
+    }).nextState;
+    const d1Tg = executeDayVote(n1Tg, null).nextState;
+    const n2Tg = executeNightPhase(d1Tg, {
+      bodyguard: { targetId: 'p4' },
+      wolfPack: { targets: ['p4'] },
+      witch: { heal: true },
+    }).nextState;
+    const healNoEffect = n2Tg.eventLog.find(
+      (e) => e.roundNumber === 2 && e.actionType === 'HEAL' && e.outcome === 'NO_EFFECT'
+    );
+    expect(healNoEffect).toBeDefined();
+    expect(healNoEffect?.metadata?.note).toContain('tử vong');
+    const healText = formatMatchEventText(healNoEffect!, { mode: 'POST_GAME' });
+    expect(healText).toContain('tử vong');
+    expect(healText).not.toContain('không có ai bị cắn');
+
+    // 2. EMERGENCY_ELIMINATE ban ngày (DAY_DISCUSS) giết Trưởng làng & Thợ săn có người yêu Cupid -> hậu quả giữ stage 'DAY_VOTE'
+    const dayElimState = createInitialGameState(makePlayers(7), [
+      'hunter',
+      'werewolf',
+      'seer',
+      'villager',
+      'villager',
+      'villager',
+      'villager',
+    ]);
+    dayElimState.phase = 'DAY_DISCUSS';
+    dayElimState.roundNumber = 1;
+    dayElimState.mayorId = 'p4';
+    dayElimState.players[4].loverId = 'p6';
+    dayElimState.players[5].loverId = 'p5';
+
+    // Trục xuất Trưởng làng p4 -> truyền ngôi giữ stage DAY_VOTE
+    const afterMayorElim = executeEmergencyEliminate(dayElimState, 'p4').nextState;
+    expect(afterMayorElim.phase).toBe('MAYOR_SUCCESSION');
+    const afterMayorPass = executeMayorSuccession(afterMayorElim, 'p3').nextState;
+    const mayorSuccEvt = afterMayorPass.eventLog.find((e) => e.actionType === 'MAYOR_SUCCESSION');
+    expect(mayorSuccEvt?.stage).toBe('DAY_VOTE');
+
+    // Trục xuất Thợ săn p1 trong DAY_DISCUSS -> bắn chết p5 (kéo theo người yêu p6) -> HUNTER_SHOT & CASCADE_DEATH đều giữ stage DAY_VOTE
+    const afterHunterElim = executeEmergencyEliminate(afterMayorPass, 'p1').nextState;
+    expect(afterHunterElim.phase).toBe('HUNTER_SHOT');
+    const afterHunterShot = executeHunterShot(afterHunterElim, 'p5').nextState;
+    const shotEvt = afterHunterShot.eventLog.find((e) => e.actionType === 'HUNTER_SHOT');
+    const cascadeEvt = afterHunterShot.eventLog.find((e) => e.actionType === 'CASCADE_DEATH');
+    expect(shotEvt?.stage).toBe('DAY_VOTE');
+    expect(cascadeEvt?.stage).toBe('DAY_VOTE');
   });
 });

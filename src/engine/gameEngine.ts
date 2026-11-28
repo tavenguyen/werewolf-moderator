@@ -1,5 +1,10 @@
 import { processDeathCascade } from './deathCascade';
-import { appendMatchEvent, recordWinOutcomeEvent, snapshotPlayer } from './matchLog';
+import {
+  appendMatchEvent,
+  recordWinOutcomeEvent,
+  resolveFollowupEventStage,
+  snapshotPlayer,
+} from './matchLog';
 import { resolveNight, type NightResolutionOutput } from './nightResolution';
 import { isBitingWolf, ROLES_BY_ID } from './roles';
 import { getAliveNeighbors } from './seating';
@@ -601,10 +606,11 @@ export function executeHunterShot(
   }
 
   const shotRound = nextState.roundNumber;
-  const fromMorning =
-    nextState.previousPhaseBeforeHunter === 'DAY_DISCUSS' ||
-    nextState.previousPhaseBeforeHunter === 'DAY_MAYOR_ELECTION';
-  const shotStage = fromMorning ? 'DAY_ANNOUNCEMENT' : 'DAY_VOTE';
+  const shotStage = resolveFollowupEventStage(
+    nextState,
+    nextState.previousPhaseBeforeHunter,
+    parentDeathEventId
+  );
 
   if (targetPlayerId) {
     const target = nextState.players.find((p) => p.id === targetPlayerId);

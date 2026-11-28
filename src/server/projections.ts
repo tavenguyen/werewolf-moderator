@@ -93,17 +93,33 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     voteProgress = { submitted, total: eligibleTotal };
   }
 
-  const publicTimeline = gameState ? buildPublicTimeline(gameState) : [];
+  const timelineState =
+    gameState && room.settings.revealOnDeath !== gameState.settings.revealOnDeath
+      ? {
+          ...gameState,
+          settings: {
+            ...gameState.settings,
+            revealOnDeath: room.settings.revealOnDeath,
+          },
+        }
+      : gameState;
+  const publicTimeline = timelineState ? buildPublicTimeline(timelineState) : [];
   const morningAnnouncements = gameState
     ? getMorningAnnouncements(publicTimeline, gameState.roundNumber)
     : [];
-  const operationalNotices = (room.publicHistoryLogs ?? []).filter(
-    (msg) => msg === 'Quản trò đã mở hòm phiếu sớm!'
-  );
-  const publicLogs =
-    gameState && publicTimeline.length > 0
-      ? [...publicTimeline.map((item) => item.text), ...operationalNotices]
-      : (room.publicHistoryLogs ?? []);
+  const operationalNotices =
+    gameState?.phase === 'DAY_DISCUSS'
+      ? Array.from(
+          new Set(
+            (room.publicHistoryLogs ?? []).filter(
+              (msg) => msg === 'Quản trò đã mở hòm phiếu sớm!'
+            )
+          )
+        )
+      : [];
+  const publicLogs = gameState
+    ? [...publicTimeline.map((item) => item.text), ...operationalNotices]
+    : (room.publicHistoryLogs ?? []);
 
   return {
     roomCode: room.roomCode,

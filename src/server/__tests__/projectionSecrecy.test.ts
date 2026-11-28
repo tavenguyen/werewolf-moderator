@@ -11,6 +11,8 @@ import {
 } from '../projections';
 import type { HostBoardView, PlayerPrivateView, PublicRoomView } from '../types';
 import { executeDayVote, executeHunterShot, executeNightPhase } from '../../engine/gameEngine';
+import { appendMatchEvent } from '../../engine/matchLog';
+import { createInitialDayState } from '../../engine/voting';
 
 describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
   let mockIo: MockSocketIOServer;
@@ -581,5 +583,144 @@ describe('Realtime Backend - Projection Secrecy & Information Hiding', () => {
     expect(pubR2Text).toContain('Thằng ngốc');
     expect(pubR2Text).toContain('Thợ săn');
     expect(pubR2Text).not.toContain('Nhân bản');
+  });
+
+  it('lọc bỏ sự kiện SYSTEM_DEBUG khỏi PostGameView.matchEvents và giữ PUBLIC / SECRET_NIGHT', async () => {
+    const { roomCode } = await setupGame();
+    const room = roomService.getRoom(roomCode)!;
+    const p1 = room.gameState!.players[0];
+
+    room.gameState = executeNightPhase(room.gameState!, {
+      wolfPack: { targets: [p1.id] },
+    }).nextState;
+
+    appendMatchEvent(room.gameState!, {
+      roundNumber: 1,
+      stage: 'NIGHT',
+      actionType: 'NIGHT_IDLE_SUMMARY',
+      visibility: 'SYSTEM_DEBUG',
+      actor: null,
+      targets: [],
+      outcome: 'NO_EFFECT',
+      metadata: { note: 'internal debug trace' },
+    });
+
+    room.gameState!.phase = 'GAME_OVER';
+    const postGame = createPostGameView(room)!;
+    expect(postGame).not.toBeNull();
+    expect(postGame.matchEvents.some((e) => e.visibility === 'SYSTEM_DEBUG')).toBe(false);
+    expect(postGame.matchEvents.some((e) => e.visibility === 'SECRET_NIGHT')).toBe(true);
+    expect(postGame.matchEvents.some((e) => e.visibility === 'PUBLIC')).toBe(true);
+  });
+
+  it('ẩn vai trò nạn nhân EMERGENCY_ELIMINATE trong publicTimeline & publicView.deaths khi revealOnDeath = false (kể cả khi room.settings lệch gameState.settings)', async () => {
+    const { roomCode, hostToken } = await setupGame([
+      'werewolf',
+      'werewolf',
+      'seer',
+      'witch',
+      'villager',
+      'villager',
+    ]);
+    const room = roomService.getRoom(roomCode)!;
+    room.settings.revealOnDeath = false;
+    // Giả lập lệch giữa room.settings và gameState.settings để kiểm chứng projections đồng bộ revealOnDeath
+    room.gameState!.settings.revealOnDeath = true;
+
+    const seer = room.gameState!.players.find((p) => p.roleId === 'seer')!;
+    roomService.emergencyEliminate(roomCode, hostToken, seer.id);
+
+    const publicView = createPublicRoomView(room);
+    const death = publicView.deaths.find((d) => d.playerId === seer.id);
+    expect(death).toBeDefined();
+    expect(death!.roleId).toBe('unknown');
+    expect(death!.cause).toBe('EMERGENCY_ELIMINATE');
+    expect(death!.cascadeDepth).toBeUndefined();
+
+    const timelineText = publicView.publicTimeline.map((i) => i.text).join('\n');
+    expect(timelineText).toContain(seer.name);
+    expect(timelineText).toContain('trục xuất khẩn cấp');
+    expect(timelineText).not.toContain('Tiên tri');
+    expect(publicView.publicLogs.join('\n')).not.toContain('Tiên tri');
+  });
+
+  it('revealVoterIdentities = false ẩn voterDetails trong PublicRoomView nhưng PostGameView.matchEvents mở danh sách voters khi GAME_OVER', async () => {
+    const { hostClient, roomCode, hostToken, players } = await setupGame([
+      'werewolf',
+      'werewolf',
+      'seer',
+      'witch',
+      'villager',
+      'villager',
+    ]);
+    const room = roomService.getRoom(roomCode)!;
+    expect(room.settings.revealVoterIdentities).toBe(false);
+
+    room.gameState!.phase = 'DAY_DISCUSS';
+    room.gameState!.dayState = createInitialDayState();
+    room.gameState!.dayState.voteLocked = false;
+    room.gameState!.dayState.voteLockRemainingSeconds = 0;
+
+    const target = players[4];
+    for (let i = 0; i < 4; i++) {
+      await new Promise((resolve) => {
+        players[i].client.emit(
+          'day:vote',
+          { roomCode, token: players[i].token, targetPlayerId: target.id },
+          resolve
+        );
+      });
+    }
+    await new Promise((resolve) => {
+      players[4].client.emit('day:vote', { roomCode, token: players[4].token, targetPlayerId: null }, resolve);
+    });
+    await new Promise((resolve) => {
+      players[5].client.emit('day:vote', { roomCode, token: players[5].token, targetPlayerId: null }, resolve);
+    });
+
+    const finalizeRes: any = await new Promise((resolve) => {
+      hostClient.emit('day:finalizePublicVote', { roomCode, token: hostToken }, resolve);
+    });
+    expect(finalizeRes.ok).toBe(true);
+
+    // PublicRoomView tuyệt đối không lộ voterDetails khi revealVoterIdentities = false
+    const pubView = createPublicRoomView(room);
+    expect(pubView.lastVoteTally?.tallies[target.id]).toBe(4);
+    expect(pubView.lastVoteTally?.abstainCount).toBe(2);
+    expect(pubView.lastVoteTally?.voterDetails).toBeUndefined();
+    expect(pubView.publicTimeline.map((i) => i.text).join('\n')).not.toContain(players[0].id);
+
+    // PostGameView mở toàn bộ danh sách voters cho phiếu kín
+    room.gameState!.phase = 'GAME_OVER';
+    const postGame = createPostGameView(room)!;
+    expect(postGame).not.toBeNull();
+    const execEvt = postGame.matchEvents.find((e) => e.actionType === 'VOTE_EXECUTION');
+    expect(execEvt).toBeDefined();
+    const targetTallyMeta = execEvt!.metadata?.vote?.tallies.find(
+      (t) => t.target.playerId === target.id
+    );
+    expect(targetTallyMeta?.votes).toBe(4);
+    expect(targetTallyMeta?.voters?.map((v) => v.playerId)).toEqual([
+      players[0].id,
+      players[1].id,
+      players[2].id,
+      players[3].id,
+    ]);
+  });
+
+  it('PublicRoomView.publicLogs không fallback về room.publicHistoryLogs cũ khi gameState đang hoạt động (kể cả trước Bình minh 1)', async () => {
+    const { roomCode } = await setupGame();
+    const room = roomService.getRoom(roomCode)!;
+
+    // Giả lập rác tồn đọng trong room.publicHistoryLogs ở Đêm 1 (khi publicTimeline.length === 0)
+    room.publicHistoryLogs.push('Log cũ không hợp lệ trước Bình minh 1');
+    room.publicHistoryLogs.push('Quản trò đã mở hòm phiếu sớm!');
+
+    // Đang ở NIGHT -> không có publicTimeline và không giữ cả operational notice của DAY_DISCUSS
+    expect(createPublicRoomView(room).publicLogs).toEqual([]);
+
+    // Khi sang DAY_DISCUSS -> chỉ giữ operational notice hợp lệ, vẫn loại bỏ rác cũ
+    room.gameState!.phase = 'DAY_DISCUSS';
+    expect(createPublicRoomView(room).publicLogs).toEqual(['Quản trò đã mở hòm phiếu sớm!']);
   });
 });

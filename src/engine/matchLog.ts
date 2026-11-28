@@ -5,6 +5,7 @@ import {
 } from './matchLogFormatter';
 import type {
   EventParticipantSnapshot,
+  GamePhase,
   GameState,
   MatchActionType,
   MatchEvent,
@@ -144,6 +145,30 @@ export function appendMatchEvent(
 }
 
 /**
+ * Xác định stage ('DAY_ANNOUNCEMENT' cho bình minh sau đêm vs 'DAY_VOTE' cho sự kiện trong ngày)
+ * dựa trên event cha (`parentEventId`) hoặc pha gốc trước khi chen pha chuyển tiếp.
+ */
+export function resolveFollowupEventStage(
+  state: GameState,
+  previousPhase?: GamePhase,
+  parentEventId?: string | null
+): 'DAY_ANNOUNCEMENT' | 'DAY_VOTE' {
+  if (parentEventId && state.eventLog) {
+    const parentEvt = state.eventLog.find((e) => e.id === parentEventId);
+    if (parentEvt) {
+      if (parentEvt.stage === 'DAY_VOTE') return 'DAY_VOTE';
+      if (parentEvt.stage === 'NIGHT' || parentEvt.stage === 'DAY_ANNOUNCEMENT') {
+        return 'DAY_ANNOUNCEMENT';
+      }
+    }
+  }
+  if (previousPhase === 'DAY_DISCUSS' || previousPhase === 'DAY_MAYOR_ELECTION') {
+    return 'DAY_ANNOUNCEMENT';
+  }
+  return 'DAY_VOTE';
+}
+
+/**
  * Tạo danh sách PublicMatchLogItem an toàn để hiển thị trên màn hình Ngày & Bảng Host.
  * Loại bỏ hoàn toàn SECRET_NIGHT và SYSTEM_DEBUG, đồng thời tuân thủ revealOnDeath + 3 ngoại lệ lộ vai.
  */
@@ -241,6 +266,11 @@ export function isLethalOrVoteEvent(event: MatchEvent): boolean {
     case 'CURSED_TURN':
     case 'WILD_CHILD_TURN':
     case 'DOPPELGANGER_INHERIT':
+    case 'DRUNK_AWAKEN':
+    case 'DREAM_WOLF_AWAKEN':
+    case 'ANGEL_TO_VILLAGER':
+    case 'PIED_PIPER_CLEAR':
+    case 'CULT_DISBAND':
     case 'WIN':
       return true;
     default:

@@ -212,10 +212,11 @@ function resolveRawWolfDetails(
     );
   }
 
+  if (actions.wolfPack.isSkip && state.settings.allowWolfSkip) {
+    return { targets: [], tieBreakRandom: false, skipWon: true, friendlyFireBlocked: false };
+  }
+
   if (actions.wolfPack.targets) {
-    if (actions.wolfPack.isSkip && state.settings.allowWolfSkip) {
-      return { targets: [], tieBreakRandom: false, skipWon: true, friendlyFireBlocked: false };
-    }
     let friendlyFireBlocked = false;
     let targets = [...actions.wolfPack.targets];
     if (!state.settings.allowWolfFriendlyFire) {
@@ -919,6 +920,7 @@ export function resolveNight(
   let poisonRequestedTargetId: PlayerId | null = null;
   const witchSavedIds = new Set<PlayerId>();
   let witchSelfHealBlockedTargetId: PlayerId | null = null;
+  let witchSelfHealBlockedOnly = false;
   let witchDoubleOverdoseId: PlayerId | null = null;
   let witchBlindHealInfo: {
     triggered: boolean;
@@ -998,7 +1000,12 @@ export function resolveNight(
             nextState.historyLogs.push(`Phù thủy dùng bình Cứu giải cứu nạn nhân [${savedId}]!`);
           }
         }
-      } else {
+      } else if (witchSelfHealBlockedTargetId === witchPlayer.id) {
+        witchSelfHealBlockedOnly = true;
+        nextState.historyLogs.push(
+          'Phù thủy dùng bình Cứu cho bản thân nhưng luật phòng cấm tự cứu!'
+        );
+      } else if (!witchDoubleOverdoseId) {
         const blockedByBg = Boolean(
           protectedPlayerId && allBittenBeforeBg.has(protectedPlayerId)
         );
@@ -1253,6 +1260,24 @@ export function resolveNight(
       }
     }
 
+    if (pendingDeaths.some((d) => d.playerId === victim.id)) {
+      appendMatchEvent(nextState, {
+        roundNumber: round,
+        stage: 'NIGHT',
+        actionType: 'ATTACK',
+        visibility: 'SECRET_NIGHT',
+        actor: actorSnap,
+        coActors,
+        targets: [snapshotPlayer(victim)],
+        outcome: 'NO_EFFECT',
+        metadata: {
+          wolfPack: baseWolfMeta,
+          note: 'nạn nhân đã tử vong từ hiệu ứng trước đó trong đêm',
+        },
+      });
+      return;
+    }
+
     const atkEvt = appendMatchEvent(nextState, {
       roundNumber: round,
       stage: 'NIGHT',
@@ -1356,20 +1381,33 @@ export function resolveNight(
     if (whiteWolfVictim) {
       const target = nextState.players.find((p) => p.id === whiteWolfVictim);
       if (target) {
-        const wwEvt = appendMatchEvent(nextState, {
-          roundNumber: round,
-          stage: 'NIGHT',
-          actionType: 'ATTACK',
-          visibility: 'SECRET_NIGHT',
-          actor: snapshotPlayer(whiteWolfPlayer),
-          targets: [snapshotPlayer(target)],
-          outcome: 'SUCCESS',
-        });
-        pendingDeaths.push({
-          playerId: target.id,
-          cause: 'WHITE_WOLF',
-          parentEventId: wwEvt.id,
-        });
+        if (pendingDeaths.some((d) => d.playerId === target.id)) {
+          appendMatchEvent(nextState, {
+            roundNumber: round,
+            stage: 'NIGHT',
+            actionType: 'ATTACK',
+            visibility: 'SECRET_NIGHT',
+            actor: snapshotPlayer(whiteWolfPlayer),
+            targets: [snapshotPlayer(target)],
+            outcome: 'NO_EFFECT',
+            metadata: { note: 'nạn nhân đã tử vong từ hiệu ứng trước đó trong đêm' },
+          });
+        } else {
+          const wwEvt = appendMatchEvent(nextState, {
+            roundNumber: round,
+            stage: 'NIGHT',
+            actionType: 'ATTACK',
+            visibility: 'SECRET_NIGHT',
+            actor: snapshotPlayer(whiteWolfPlayer),
+            targets: [snapshotPlayer(target)],
+            outcome: 'SUCCESS',
+          });
+          pendingDeaths.push({
+            playerId: target.id,
+            cause: 'WHITE_WOLF',
+            parentEventId: wwEvt.id,
+          });
+        }
       }
     } else if (actions.whiteWolf && actions.whiteWolf.targetId === null) {
       appendMatchEvent(nextState, {
@@ -1389,23 +1427,56 @@ export function resolveNight(
     if (witchDoubleOverdoseId) {
       const target = nextState.players.find((p) => p.id === witchDoubleOverdoseId);
       if (target) {
-        const odEvt = appendMatchEvent(nextState, {
-          roundNumber: round,
-          stage: 'NIGHT',
-          actionType: 'HEAL',
-          visibility: 'SECRET_NIGHT',
-          actor: witchSnap,
-          targets: [snapshotPlayer(target)],
-          outcome: 'OVERDOSE_DOUBLE_PROTECT',
-          involvedPlayerIds: bodyguardSnap ? [bodyguardSnap.playerId] : [],
-          metadata: bodyguardSnap ? { protector: bodyguardSnap } : undefined,
-        });
-        pendingDeaths.push({
-          playerId: target.id,
-          cause: 'WOLF_PACK',
-          parentEventId: odEvt.id,
-        });
+        if (pendingDeaths.some((d) => d.playerId === target.id)) {
+          appendMatchEvent(nextState, {
+            roundNumber: round,
+            stage: 'NIGHT',
+            actionType: 'HEAL',
+            visibility: 'SECRET_NIGHT',
+            actor: witchSnap,
+            targets: [snapshotPlayer(target)],
+            outcome: 'NO_EFFECT',
+            involvedPlayerIds: bodyguardSnap ? [bodyguardSnap.playerId] : [],
+            metadata: {
+              ...(bodyguardSnap ? { protector: bodyguardSnap } : {}),
+              note: 'nạn nhân đã tử vong từ hiệu ứng trước đó trong đêm',
+            },
+          });
+        } else {
+          const odEvt = appendMatchEvent(nextState, {
+            roundNumber: round,
+            stage: 'NIGHT',
+            actionType: 'HEAL',
+            visibility: 'SECRET_NIGHT',
+            actor: witchSnap,
+            targets: [snapshotPlayer(target)],
+            outcome: 'OVERDOSE_DOUBLE_PROTECT',
+            involvedPlayerIds: bodyguardSnap ? [bodyguardSnap.playerId] : [],
+            metadata: bodyguardSnap ? { protector: bodyguardSnap } : undefined,
+          });
+          pendingDeaths.push({
+            playerId: target.id,
+            cause: 'WOLF_PACK',
+            parentEventId: odEvt.id,
+          });
+        }
       }
+    } else if (witchSelfHealBlockedOnly) {
+      appendMatchEvent(nextState, {
+        roundNumber: round,
+        stage: 'NIGHT',
+        actionType: 'HEAL',
+        visibility: 'SECRET_NIGHT',
+        actor: witchSnap,
+        targets: [witchSnap],
+        outcome: 'NO_EFFECT',
+        metadata: {
+          witch: {
+            mode: nextState.settings.witchHealMode,
+            selfHealBlocked: true,
+          },
+        },
+      });
     } else if (witchBlindHealInfo?.triggered) {
       appendMatchEvent(nextState, {
         roundNumber: round,
@@ -1415,7 +1486,13 @@ export function resolveNight(
         actor: witchSnap,
         targets: [],
         outcome: 'NO_EFFECT',
+        ...(witchBlindHealInfo.blockedByBodyguard && bodyguardSnap
+          ? { involvedPlayerIds: [bodyguardSnap.playerId] }
+          : {}),
         metadata: {
+          ...(witchBlindHealInfo.blockedByBodyguard && bodyguardSnap
+            ? { protector: bodyguardSnap }
+            : {}),
           witch: {
             mode: nextState.settings.witchHealMode,
             blockedByBodyguard: witchBlindHealInfo.blockedByBodyguard,
@@ -1443,21 +1520,34 @@ export function resolveNight(
     } else if (poisonVictim) {
       const target = nextState.players.find((p) => p.id === poisonVictim);
       if (target) {
-        const overridden = witchSavedIds.has(target.id);
-        const poisonEvt = appendMatchEvent(nextState, {
-          roundNumber: round,
-          stage: 'NIGHT',
-          actionType: 'POISON',
-          visibility: 'SECRET_NIGHT',
-          actor: witchSnap,
-          targets: [snapshotPlayer(target)],
-          outcome: overridden ? 'OVERRIDDEN_BY_POISON' : 'SUCCESS',
-        });
-        pendingDeaths.push({
-          playerId: target.id,
-          cause: 'WITCH_POISON',
-          parentEventId: poisonEvt.id,
-        });
+        if (pendingDeaths.some((d) => d.playerId === target.id)) {
+          appendMatchEvent(nextState, {
+            roundNumber: round,
+            stage: 'NIGHT',
+            actionType: 'POISON',
+            visibility: 'SECRET_NIGHT',
+            actor: witchSnap,
+            targets: [snapshotPlayer(target)],
+            outcome: 'NO_EFFECT',
+            metadata: { note: 'nạn nhân đã tử vong từ hiệu ứng trước đó trong đêm' },
+          });
+        } else {
+          const overridden = witchSavedIds.has(target.id);
+          const poisonEvt = appendMatchEvent(nextState, {
+            roundNumber: round,
+            stage: 'NIGHT',
+            actionType: 'POISON',
+            visibility: 'SECRET_NIGHT',
+            actor: witchSnap,
+            targets: [snapshotPlayer(target)],
+            outcome: overridden ? 'OVERRIDDEN_BY_POISON' : 'SUCCESS',
+          });
+          pendingDeaths.push({
+            playerId: target.id,
+            cause: 'WITCH_POISON',
+            parentEventId: poisonEvt.id,
+          });
+        }
       }
     }
   }
@@ -1743,9 +1833,10 @@ export function resolveNight(
   const alivePiedPiper = nextState.players.find(
     (p) => p.isAlive && p.roleId === 'pied_piper'
   );
-  if (actions.piedPiper?.targetIds && alivePiedPiper) {
+  if (alivePiedPiper) {
+    const requestedIds = actions.piedPiper?.targetIds ?? [];
     const newlyEnchanted: EventParticipantSnapshot[] = [];
-    for (const tId of actions.piedPiper.targetIds) {
+    for (const tId of requestedIds) {
       const target = nextState.players.find((p) => p.id === tId && p.isAlive);
       if (target && !target.isEnchanted) {
         target.isEnchanted = true;
@@ -1768,6 +1859,16 @@ export function resolveNight(
         actor: snapshotPlayer(alivePiedPiper),
         targets: newlyEnchanted,
         outcome: 'SUCCESS',
+      });
+    } else {
+      appendMatchEvent(nextState, {
+        roundNumber: round,
+        stage: 'NIGHT',
+        actionType: 'ENCHANT',
+        visibility: 'SECRET_NIGHT',
+        actor: snapshotPlayer(alivePiedPiper),
+        targets: [],
+        outcome: requestedIds.length > 0 ? 'NO_EFFECT' : 'SKIPPED',
       });
     }
   }
@@ -1917,7 +2018,7 @@ export function resolveNight(
     });
   }
 
-  nextState.resolvedEvents = events;
+  nextState.resolvedEvents = [...(nextState.resolvedEvents ?? []), ...events];
 
   // Tổng kết bình minh (DAWN_SUMMARY) luôn ghi nhận ở cuối đêm (kể cả khi kết thúc game ngay cuối đêm)
   const dawnDeaths = newDeaths

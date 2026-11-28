@@ -264,6 +264,7 @@ export class SocketGateway {
           room.foxInvestigationResult = undefined;
           room.piInvestigationResult = undefined;
           room.lastVoteTally = undefined;
+          room.publicHistoryLogs = [];
 
           // Bắt đầu timer cho lượt đêm đầu tiên
           this.startCurrentNightTurnTimer(room);
@@ -594,7 +595,10 @@ export class SocketGateway {
           }
           const ok = this.timerManager.unlockVoteEarly(room);
           if (ok) {
-            room.publicHistoryLogs.push('Quản trò đã mở hòm phiếu sớm!');
+            const unlockNotice = 'Quản trò đã mở hòm phiếu sớm!';
+            if (!room.publicHistoryLogs.includes(unlockNotice)) {
+              room.publicHistoryLogs.push(unlockNotice);
+            }
             this.broadcastRoom(room);
           }
           return { unlocked: ok };
@@ -743,6 +747,7 @@ export class SocketGateway {
    */
   private resolveNightAndTransition(room: RoomState): void {
     if (!room.gameState) return;
+    this.clearUnlockVoteNotice(room);
 
     const nightSeed = room.currentNightSeed ?? crypto.randomInt(1, 1_000_000);
     const { nextState, winOutcome } = executeNightPhase(
@@ -795,6 +800,7 @@ export class SocketGateway {
    * Bắt đầu pha Thảo luận ban ngày (tùy chỉnh thảo luận & khóa vote).
    */
   private startDayDiscussion(room: RoomState): void {
+    this.clearUnlockVoteNotice(room);
     const discussSec = room.settings.dayDiscussionSeconds ?? DEFAULT_DAY_DISCUSS_SEC;
     const lockSec = room.settings.dayVoteLockSeconds ?? DEFAULT_VOTE_LOCK_SEC;
     const expectedGeneration = room.gameGeneration;
@@ -827,20 +833,15 @@ export class SocketGateway {
     if (!room.gameState || room.gameState.phase !== 'DAY_MAYOR_ELECTION') return;
     if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
 
-    const { nextState, electedMayorId } = tallyMayorElection(room.gameState);
-    room.gameState = nextState;
+    const mayorTally = this.computeBallotTally(
+      room,
+      room.gameState.dayState?.mayorBallots,
+      false
+    );
+    this.setRoomLastVoteTally(room, mayorTally);
 
-    if (electedMayorId) {
-      const mayor = room.gameState.players.find((p) => p.id === electedMayorId);
-      room.publicHistoryLogs.push(
-        `Ngày ${room.gameState.roundNumber}: ${mayor?.name ?? 'Người chơi'} được bầu làm Trưởng làng (lá phiếu tính x2).`
-      );
-    } else {
-      const lastLog = room.gameState.historyLogs[room.gameState.historyLogs.length - 1];
-      if (lastLog) {
-        room.publicHistoryLogs.push(lastLog);
-      }
-    }
+    const { nextState } = tallyMayorElection(room.gameState);
+    room.gameState = nextState;
 
     // Sau khi bầu Mayor xong, chuyển sang DAY_DISCUSS
     this.startDayDiscussion(room);
@@ -863,31 +864,16 @@ export class SocketGateway {
     if (room.gameState.phase !== 'DAY_DISCUSS' && room.gameState.phase !== 'DAY_VOTE') return;
 
     // Tally vote kín: chỉ công bố map số phiếu + abstainCount, nếu bật revealVoterIdentities thì bổ sung voterDetails
-    const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
-    const tallies: Record<PlayerId, number> = {};
-    const voterDetails: Record<PlayerId, PlayerId[]> = {};
-    let abstainCount = 0;
-
-    for (const voter of livingVoters) {
-      const targetId = room.gameState.dayState?.ballots[voter.id];
-      if (!targetId) {
-        abstainCount += voter.voteWeight;
-      } else {
-        tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
-        if (!voterDetails[targetId]) voterDetails[targetId] = [];
-        voterDetails[targetId].push(voter.id);
-      }
-    }
-
-    if (room.settings.revealVoterIdentities) {
-      room.lastVoteTally = { tallies, abstainCount, voterDetails };
-    } else {
-      room.lastVoteTally = { tallies, abstainCount };
-    }
+    const { tallies, abstainCount, voterDetails } = this.computeBallotTally(
+      room,
+      room.gameState.dayState?.ballots,
+      true
+    );
+    this.setRoomLastVoteTally(room, { tallies, abstainCount, voterDetails });
 
     const { nextState: talliedState, outcome } = tallyDayVotes(room.gameState);
     room.gameState = talliedState;
-    room.publicHistoryLogs.push(outcome.reason);
+    this.clearUnlockVoteNotice(room);
 
     if (outcome.type === 'RUNOFF' && outcome.candidateIds) {
       // Hòa phiếu -> Vòng Runoff
@@ -900,6 +886,7 @@ export class SocketGateway {
         },
         30
       );
+      room.timers.phase = 'DAY_RUNOFF';
       this.broadcastRoom(room);
       return;
     }
@@ -925,21 +912,12 @@ export class SocketGateway {
       { includeVoters: true }
     );
 
-    const prevHistoryLen = room.gameState.historyLogs.length;
-    const { nextState, survivedByReveal, winOutcome } = executeDayVote(
+    const { nextState, winOutcome } = executeDayVote(
       room.gameState,
       targetsToExecute,
       voteSummary
     );
     room.gameState = nextState;
-
-    if (survivedByReveal) {
-      for (const log of nextState.historyLogs.slice(prevHistoryLen)) {
-        if (log.includes('Thằng ngốc') || log.includes('Hoàng tử')) {
-          room.publicHistoryLogs.push(log);
-        }
-      }
-    }
 
     if (winOutcome) {
       room.gameState.phase = 'GAME_OVER';
@@ -984,31 +962,16 @@ export class SocketGateway {
     if (!room.gameState || room.gameState.phase !== 'DAY_RUNOFF') return;
     if (expectedGeneration !== undefined && room.gameGeneration !== expectedGeneration) return;
 
-    const livingVoters = room.gameState.players.filter((p) => p.isAlive && p.voteWeight > 0);
-    const tallies: Record<PlayerId, number> = {};
-    const voterDetails: Record<PlayerId, PlayerId[]> = {};
-    let abstainCount = 0;
-
-    for (const voter of livingVoters) {
-      const targetId = room.gameState.dayState?.runoffBallots?.[voter.id];
-      if (!targetId) {
-        abstainCount += voter.voteWeight;
-      } else {
-        tallies[targetId] = (tallies[targetId] ?? 0) + voter.voteWeight;
-        if (!voterDetails[targetId]) voterDetails[targetId] = [];
-        voterDetails[targetId].push(voter.id);
-      }
-    }
-
-    if (room.settings.revealVoterIdentities) {
-      room.lastVoteTally = { tallies, abstainCount, voterDetails };
-    } else {
-      room.lastVoteTally = { tallies, abstainCount };
-    }
+    const { tallies, abstainCount, voterDetails } = this.computeBallotTally(
+      room,
+      room.gameState.dayState?.runoffBallots,
+      true
+    );
+    this.setRoomLastVoteTally(room, { tallies, abstainCount, voterDetails });
 
     const { nextState: runoffState, outcome } = tallyRunoffVotes(room.gameState);
     room.gameState = runoffState;
-    room.publicHistoryLogs.push(outcome.reason);
+    this.clearUnlockVoteNotice(room);
 
     const executeTargetId =
       outcome.type === 'EXECUTE' ? (outcome.targetPlayerId ?? null) : null;
@@ -1020,21 +983,12 @@ export class SocketGateway {
       { includeVoters: true }
     );
 
-    const prevHistoryLen = room.gameState.historyLogs.length;
-    const { nextState, survivedByReveal, winOutcome } = executeDayVote(
+    const { nextState, winOutcome } = executeDayVote(
       room.gameState,
       executeTargetId,
       voteSummary
     );
     room.gameState = nextState;
-
-    if (survivedByReveal) {
-      for (const log of nextState.historyLogs.slice(prevHistoryLen)) {
-        if (log.includes('Thằng ngốc') || log.includes('Hoàng tử')) {
-          room.publicHistoryLogs.push(log);
-        }
-      }
-    }
 
     if (winOutcome) {
       room.gameState.phase = 'GAME_OVER';
@@ -1070,6 +1024,8 @@ export class SocketGateway {
    */
   private startNewNight(room: RoomState): void {
     if (!room.gameState) return;
+    this.clearUnlockVoteNotice(room);
+    room.gameState.dayState = undefined;
 
     room.nightTurnPlan = generateNightTurnPlan(room.gameState);
     room.currentNightTurnIndex = 0;
@@ -1128,6 +1084,7 @@ export class SocketGateway {
     resumedInterruptedNight?: boolean
   ): void {
     if (winOutcome || room.gameState?.phase === 'GAME_OVER') {
+      this.clearUnlockVoteNotice(room);
       this.timerManager.clearRoomTimer(room);
       this.broadcastRoom(room);
       return;
@@ -1153,6 +1110,7 @@ export class SocketGateway {
 
     if (room.gameState?.phase === 'NIGHT') {
       if (resumedInterruptedNight) {
+        this.clearUnlockVoteNotice(room);
         if (room.currentNightTurnIndex < room.nightTurnPlan.length) {
           this.startCurrentNightTurnTimer(room);
           this.broadcastRoom(room);
@@ -1166,6 +1124,7 @@ export class SocketGateway {
     }
 
     if (room.gameState?.phase === 'DAY_MAYOR_ELECTION') {
+      this.clearUnlockVoteNotice(room);
       this.timerManager.startMayorElectionTimer(room, () => {
         this.finalizeMayorElection(room, expectedGeneration);
       });
@@ -1174,6 +1133,7 @@ export class SocketGateway {
     }
 
     if (room.gameState?.phase === 'DAY_RUNOFF') {
+      this.clearUnlockVoteNotice(room);
       this.timerManager.startMayorElectionTimer(
         room,
         () => {
@@ -1181,6 +1141,7 @@ export class SocketGateway {
         },
         30
       );
+      room.timers.phase = 'DAY_RUNOFF';
       this.broadcastRoom(room);
       return;
     }
@@ -1200,6 +1161,7 @@ export class SocketGateway {
     resumedInterruptedNight?: boolean
   ): void {
     if (winOutcome || room.gameState?.phase === 'GAME_OVER') {
+      this.clearUnlockVoteNotice(room);
       this.timerManager.clearRoomTimer(room);
       this.broadcastRoom(room);
       return;
@@ -1209,6 +1171,7 @@ export class SocketGateway {
 
     if (room.gameState?.phase === 'NIGHT') {
       if (resumedInterruptedNight) {
+        this.clearUnlockVoteNotice(room);
         if (room.currentNightTurnIndex < room.nightTurnPlan.length) {
           this.startCurrentNightTurnTimer(room);
           this.broadcastRoom(room);
@@ -1222,6 +1185,7 @@ export class SocketGateway {
     }
 
     if (room.gameState?.phase === 'DAY_MAYOR_ELECTION') {
+      this.clearUnlockVoteNotice(room);
       this.timerManager.startMayorElectionTimer(room, () => {
         this.finalizeMayorElection(room, expectedGeneration);
       });
@@ -1230,6 +1194,7 @@ export class SocketGateway {
     }
 
     if (room.gameState?.phase === 'DAY_RUNOFF') {
+      this.clearUnlockVoteNotice(room);
       this.timerManager.startMayorElectionTimer(
         room,
         () => {
@@ -1237,6 +1202,7 @@ export class SocketGateway {
         },
         30
       );
+      room.timers.phase = 'DAY_RUNOFF';
       this.broadcastRoom(room);
       return;
     }
@@ -1594,6 +1560,71 @@ export class SocketGateway {
           this.sendError(cb, 'INTERNAL_ERROR', message);
         }
       });
+  }
+
+  private clearUnlockVoteNotice(room: RoomState): void {
+    room.publicHistoryLogs = room.publicHistoryLogs.filter(
+      (msg) => msg !== 'Quản trò đã mở hòm phiếu sớm!'
+    );
+  }
+
+  private computeBallotTally(
+    room: RoomState,
+    ballots: Record<PlayerId, PlayerId | null> | undefined,
+    useVoteWeight: boolean
+  ): {
+    tallies: Record<PlayerId, number>;
+    abstainCount: number;
+    voterDetails: Record<PlayerId, PlayerId[]>;
+  } {
+    const gameState = room.gameState!;
+    const livingVoters = gameState.players.filter((p) =>
+      useVoteWeight ? p.isAlive && p.voteWeight > 0 : p.isAlive
+    );
+    const tallies: Record<PlayerId, number> = {};
+    const voterDetails: Record<PlayerId, PlayerId[]> = {};
+    let abstainCount = 0;
+
+    for (const voter of livingVoters) {
+      const weight = useVoteWeight ? voter.voteWeight : 1;
+      const targetId = ballots?.[voter.id];
+      if (!targetId) {
+        abstainCount += weight;
+        continue;
+      }
+
+      const target = gameState.players.find((pl) => pl.id === targetId && pl.isAlive);
+      if (!target) {
+        abstainCount += weight;
+        continue;
+      }
+
+      tallies[targetId] = (tallies[targetId] ?? 0) + weight;
+      if (!voterDetails[targetId]) voterDetails[targetId] = [];
+      voterDetails[targetId].push(voter.id);
+    }
+
+    return { tallies, abstainCount, voterDetails };
+  }
+
+  private setRoomLastVoteTally(
+    room: RoomState,
+    tally: {
+      tallies: Record<PlayerId, number>;
+      abstainCount: number;
+      voterDetails: Record<PlayerId, PlayerId[]>;
+    }
+  ): void {
+    room.lastVoteTally = room.settings.revealVoterIdentities
+      ? {
+          tallies: tally.tallies,
+          abstainCount: tally.abstainCount,
+          voterDetails: tally.voterDetails,
+        }
+      : {
+          tallies: tally.tallies,
+          abstainCount: tally.abstainCount,
+        };
   }
 
   private sendOk<T>(cb: ((res: ServerResponse<T>) => void) | undefined, data: T): void {

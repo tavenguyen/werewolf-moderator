@@ -189,6 +189,10 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         roomCode: this.roomState.roomCode,
         gameGeneration: this.roomState.gameGeneration,
         hostMode: this.state.hostMode,
+        host: {
+          isPlayer: this.roomState.host.isPlayer,
+          playerId: this.roomState.host.playerId,
+        },
         activePlayerId: this.activeLocalPlayerId,
         nextPlayerIdSeq: this.nextPlayerIdSeq,
         settings: this.roomState.settings,
@@ -213,6 +217,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         auraInvestigationResult: this.roomState.auraInvestigationResult,
         foxInvestigationResult: this.roomState.foxInvestigationResult,
         piInvestigationResult: this.roomState.piInvestigationResult,
+        lastVoteTally: this.roomState.lastVoteTally,
         publicHistoryLogs: this.roomState.publicHistoryLogs,
         pendingDayVerdict: this.pendingDayVerdict,
         savedAt: Date.now(),
@@ -276,7 +281,17 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.roomState.auraInvestigationResult = data.auraInvestigationResult;
       this.roomState.foxInvestigationResult = data.foxInvestigationResult;
       this.roomState.piInvestigationResult = data.piInvestigationResult;
+      this.roomState.lastVoteTally = data.lastVoteTally;
       this.roomState.publicHistoryLogs = data.publicHistoryLogs || [];
+
+      if (data.host) {
+        this.roomState.host.isPlayer = Boolean(data.host.isPlayer);
+        this.roomState.host.playerId = data.host.playerId ?? undefined;
+      } else {
+        const isPlayerHost = data.hostMode === 'PLAYER_HOST';
+        this.roomState.host.isPlayer = isPlayerHost;
+        this.roomState.host.playerId = isPlayerHost ? (data.players[0]?.id ?? undefined) : undefined;
+      }
 
       if (data.timers) {
         this.roomState.timers = {
@@ -435,13 +450,18 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
     // Chuyển sang FIRST_NIGHT_SETUP để lần lượt từng người xem vai bí mật (1 máy dùng chung)
     this.roomState.gameState.phase = 'FIRST_NIGHT_SETUP';
+    this.roomState.publicHistoryLogs = [];
+    this.roomState.lastVoteTally = undefined;
+    this.pendingDayVerdict = null;
     this.activeLocalPlayerId = playersList[0]?.id;
     this.emitState();
   }
 
   public async startFirstNight(): Promise<void> {
     if (!this.roomState.gameState) return;
+    this.clearUnlockVoteNotice();
     this.roomState.gameState.phase = 'NIGHT';
+    this.roomState.timers.phase = 'NIGHT';
     this.roomState.nightTurnPlan = generateNightTurnPlan(this.roomState.gameState);
     this.roomState.currentNightTurnIndex = 0;
     this.roomState.nightActionsAccumulator = {};
@@ -804,6 +824,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   private resolveLocalNight(): void {
     if (!this.roomState.gameState) return;
     this.clearNightIntroTimer();
+    this.clearUnlockVoteNotice();
 
     audioController.stopNightBGM();
 
@@ -816,15 +837,18 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.roomState.timers.phase = 'GAME_OVER';
       this.emitState();
       return;
     }
 
     if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+      this.roomState.timers.phase = 'HUNTER_SHOT';
       if (this.roomState.gameState.pendingHunterShotPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      this.roomState.timers.phase = 'MAYOR_SUCCESSION';
       if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
       }
@@ -858,6 +882,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.emitState();
   }
 
+  private clearUnlockVoteNotice(): void {
+    this.roomState.publicHistoryLogs = this.roomState.publicHistoryLogs.filter(
+      (msg) => msg !== 'Quản trò đã mở hòm phiếu sớm!'
+    );
+  }
+
   private clearDayTimer(): void {
     if (this.dayTimerInterval !== null) {
       clearInterval(this.dayTimerInterval);
@@ -876,12 +906,16 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     const lockSec = this.roomState.settings.dayVoteLockSeconds ?? 60;
 
     if (!isResume) {
+      this.clearUnlockVoteNotice();
       this.roomState.timers.deadlineAt = Date.now() + durationSec * 1000;
       this.roomState.timers.isPaused = false;
       this.roomState.timers.remainingBeforePause = undefined;
 
       // DAY_RUNOFF never locks voting
       const phase = this.roomState.gameState?.phase;
+      if (phase) {
+        this.roomState.timers.phase = phase;
+      }
       const isRunoff = phase === 'DAY_RUNOFF';
       if (this.roomState.gameState?.dayState) {
         this.roomState.gameState.dayState.voteLocked = !isRunoff && lockSec > 0;
@@ -945,6 +979,9 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   private startNewLocalNight(): void {
     if (!this.roomState.gameState) return;
+    this.clearUnlockVoteNotice();
+    this.roomState.gameState.dayState = undefined;
+    this.roomState.timers.phase = 'NIGHT';
     this.roomState.nightTurnPlan = generateNightTurnPlan(this.roomState.gameState);
     this.roomState.currentNightTurnIndex = 0;
     this.roomState.nightActionsAccumulator = {};
@@ -972,18 +1009,23 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.gameState = nextState;
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.roomState.timers.phase = 'GAME_OVER';
       this.pendingDayVerdict = null;
+      this.clearUnlockVoteNotice();
       this.clearDayTimer();
       this.clearNightIntroTimer();
     } else if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+      this.roomState.timers.phase = 'HUNTER_SHOT';
       if (this.roomState.gameState.pendingHunterShotPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      this.roomState.timers.phase = 'MAYOR_SUCCESSION';
       if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'DAY_RUNOFF') {
+      this.roomState.timers.phase = 'DAY_RUNOFF';
       this.startLocalDayTimer(false, 30);
     } else if (
       this.roomState.gameState.phase === 'DAY_DISCUSS' ||
@@ -992,6 +1034,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.startLocalDayTimer();
     } else if (this.roomState.gameState.phase === 'NIGHT') {
       if (resumedInterruptedNight) {
+        this.clearUnlockVoteNotice();
+        this.roomState.timers.phase = 'NIGHT';
         const aliveIds = new Set(
           this.roomState.gameState.players.filter((pl) => pl.isAlive).map((pl) => pl.id)
         );
@@ -1014,10 +1058,13 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     this.roomState.gameState = nextState;
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.roomState.timers.phase = 'GAME_OVER';
       this.pendingDayVerdict = null;
+      this.clearUnlockVoteNotice();
       this.clearDayTimer();
       this.clearNightIntroTimer();
     } else if (this.roomState.gameState.phase === 'DAY_RUNOFF') {
+      this.roomState.timers.phase = 'DAY_RUNOFF';
       this.startLocalDayTimer(false, 30);
     } else if (
       this.roomState.gameState.phase === 'DAY_DISCUSS' ||
@@ -1026,6 +1073,8 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       this.startLocalDayTimer();
     } else if (this.roomState.gameState.phase === 'NIGHT') {
       if (resumedInterruptedNight) {
+        this.clearUnlockVoteNotice();
+        this.roomState.timers.phase = 'NIGHT';
         const aliveIds = new Set(
           this.roomState.gameState.players.filter((pl) => pl.isAlive).map((pl) => pl.id)
         );
@@ -1053,12 +1102,22 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public async finalizePublicVote(): Promise<void> {
     if (!this.roomState.gameState) return;
+    if (this.pendingDayVerdict?.isPendingNextNight) return;
+    const phase = this.roomState.gameState.phase;
+    if (
+      phase !== 'DAY_MAYOR_ELECTION' &&
+      phase !== 'DAY_DISCUSS' &&
+      phase !== 'DAY_VOTE' &&
+      phase !== 'DAY_RUNOFF'
+    ) {
+      return;
+    }
     if (this.dayTimerInterval) {
       clearInterval(this.dayTimerInterval);
       this.dayTimerInterval = null;
     }
 
-    if (this.roomState.gameState.phase === 'DAY_MAYOR_ELECTION') {
+    if (phase === 'DAY_MAYOR_ELECTION') {
       const livingVoters = this.roomState.gameState.players.filter((p) => p.isAlive);
       const mayorBallots = this.roomState.gameState.dayState?.mayorBallots ?? {};
       const tallies: Record<PlayerId, number> = {};
@@ -1085,20 +1144,14 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         ? { tallies, abstainCount, voterDetails }
         : { tallies, abstainCount };
 
-      const { nextState, electedMayorId } = tallyMayorElection(this.roomState.gameState);
+      const { nextState } = tallyMayorElection(this.roomState.gameState);
       this.roomState.gameState = nextState;
-      if (electedMayorId) {
-        const mayor = this.roomState.gameState.players.find((p) => p.id === electedMayorId);
-        this.roomState.publicHistoryLogs.push(
-          `Ngày ${this.roomState.gameState.roundNumber}: ${mayor?.name ?? 'Người chơi'} được bầu làm Trưởng làng (lá phiếu tính x2).`
-        );
-      }
       this.startLocalDayTimer();
       this.emitState();
       return;
     }
 
-    const isRunoff = this.roomState.gameState.phase === 'DAY_RUNOFF';
+    const isRunoff = phase === 'DAY_RUNOFF';
     const livingVoters = this.roomState.gameState.players.filter(
       (p) => p.isAlive && p.voteWeight > 0
     );
@@ -1141,17 +1194,17 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     if (isRunoff) {
       const { nextState: runoffState, outcome } = tallyRunoffVotes(this.roomState.gameState);
       this.roomState.gameState = runoffState;
-      this.roomState.publicHistoryLogs.push(outcome.reason);
       if (outcome.type === 'EXECUTE' && outcome.targetPlayerId) {
         targetsToExecute = [outcome.targetPlayerId];
       }
     } else {
       const { nextState: talliedState, outcome } = tallyDayVotes(this.roomState.gameState);
       this.roomState.gameState = talliedState;
-      this.roomState.publicHistoryLogs.push(outcome.reason);
 
       if (outcome.type === 'RUNOFF' && outcome.candidateIds) {
-        this.roomState.timers.deadlineAt = Date.now() + 30 * 1000;
+        this.clearUnlockVoteNotice();
+        this.roomState.timers.phase = 'DAY_RUNOFF';
+        this.startLocalDayTimer(false, 30);
         this.emitState();
         return;
       }
@@ -1177,43 +1230,36 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       { includeVoters: true }
     );
 
-    const prevHistoryLen = this.roomState.gameState.historyLogs.length;
-    this.applyDayVoteExecution(targetsToExecute, prevHistoryLen, voteSummary);
+    this.applyDayVoteExecution(targetsToExecute, voteSummary);
   }
 
   private applyDayVoteExecution(
     targetsToExecute: PlayerId[],
-    prevHistoryLen: number,
     voteSummary?: ReturnType<typeof buildVoteMetadata>
   ): void {
     if (!this.roomState.gameState) return;
-    const { nextState, survivedByReveal, winOutcome } = executeDayVote(
+    this.clearUnlockVoteNotice();
+    const { nextState, winOutcome } = executeDayVote(
       this.roomState.gameState,
       targetsToExecute.length > 0 ? targetsToExecute : null,
       voteSummary
     );
     this.roomState.gameState = nextState;
 
-    if (survivedByReveal) {
-      const newLogs = nextState.historyLogs.slice(prevHistoryLen);
-      for (const log of newLogs) {
-        if (log.includes('Thằng ngốc') || log.includes('Hoàng tử')) {
-          this.roomState.publicHistoryLogs.push(log);
-        }
-      }
-    }
-
     if (winOutcome) {
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.roomState.timers.phase = 'GAME_OVER';
       this.pendingDayVerdict = null;
       this.clearDayTimer();
       this.clearNightIntroTimer();
     } else if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+      this.roomState.timers.phase = 'HUNTER_SHOT';
       this.pendingDayVerdict = null;
       if (this.roomState.gameState.pendingHunterShotPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
       }
     } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+      this.roomState.timers.phase = 'MAYOR_SUCCESSION';
       this.pendingDayVerdict = null;
       if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
         this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
@@ -1281,6 +1327,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public async proceedToNextNight(): Promise<void> {
     if (!this.roomState.gameState) return;
+    this.clearUnlockVoteNotice();
     this.pendingDayVerdict = null;
     this.roomState.gameState.roundNumber += 1;
     this.roomState.gameState.phase = 'NIGHT';
@@ -1290,13 +1337,22 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public async submitPublicHandVotes(rawTallies: Record<PlayerId, number>): Promise<void> {
     if (!this.roomState.gameState) return;
+    if (this.pendingDayVerdict?.isPendingNextNight) return;
+    const gameState = this.roomState.gameState;
+    const phase = gameState.phase;
+    if (
+      phase !== 'DAY_MAYOR_ELECTION' &&
+      phase !== 'DAY_DISCUSS' &&
+      phase !== 'DAY_VOTE' &&
+      phase !== 'DAY_RUNOFF'
+    ) {
+      return;
+    }
     if (this.dayTimerInterval) {
       clearInterval(this.dayTimerInterval);
       this.dayTimerInterval = null;
     }
 
-    const gameState = this.roomState.gameState;
-    const phase = gameState.phase;
     const isRunoff = phase === 'DAY_RUNOFF';
     const runoffSet =
       isRunoff && gameState.dayState?.runoffCandidates?.length
@@ -1332,9 +1388,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           if (mayor) {
             gameState.mayorId = winnerId;
             mayor.voteWeight = 2;
-            this.roomState.publicHistoryLogs.push(
-              `Ngày ${gameState.roundNumber}: ${mayor.name} được bầu làm Trưởng làng (lá phiếu tính x2).`
-            );
             appendMatchEvent(gameState, {
               roundNumber: gameState.roundNumber,
               stage: 'DAY_VOTE',
@@ -1352,9 +1405,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
             });
           }
         } else {
-          this.roomState.publicHistoryLogs.push(
-            'Hòa phiếu bầu Trưởng làng. Ván đấu tiếp tục mà không có Trưởng làng!'
-          );
           appendMatchEvent(gameState, {
             roundNumber: gameState.roundNumber,
             stage: 'DAY_VOTE',
@@ -1374,9 +1424,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           });
         }
       } else {
-        this.roomState.publicHistoryLogs.push(
-          'Không có ai nhận được phiếu bầu Trưởng làng. Không có Trưởng làng!'
-        );
         appendMatchEvent(gameState, {
           roundNumber: gameState.roundNumber,
           stage: 'DAY_VOTE',
@@ -1406,7 +1453,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
     let voteSummary: ReturnType<typeof buildVoteMetadata> | undefined;
 
     if (sorted.length === 0) {
-      this.roomState.publicHistoryLogs.push('Không ai nhận được phiếu treo cổ hôm nay.');
       appendMatchEvent(gameState, {
         roundNumber: gameState.roundNumber,
         stage: 'DAY_VOTE',
@@ -1426,14 +1472,10 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       if (topCandidates.length === 1) {
         const targetId = topCandidates[0][0];
         const targetPlayer = gameState.players.find((p) => p.id === targetId);
-        const targetName = targetPlayer?.name ?? targetId;
-        if (!isRunoff && gameState.settings.lynchThreshold === 'MAJORITY') {
+        if (gameState.settings.lynchThreshold === 'MAJORITY') {
           const livingCount = gameState.players.filter((p) => p.isAlive).length;
           const threshold = Math.floor(livingCount / 2);
           if (highestWeight <= livingCount / 2) {
-            this.roomState.publicHistoryLogs.push(
-              `${targetName} nhận nhiều phiếu nhất (${highestWeight}) nhưng chưa đạt quá bán (> ${threshold}/${livingCount} phiếu). Cả làng tha bổng hôm nay.`
-            );
             appendMatchEvent(gameState, {
               roundNumber: gameState.roundNumber,
               stage: 'DAY_VOTE',
@@ -1451,16 +1493,12 @@ export class LocalEngineAdapter implements GameSessionAdapter {
                 ),
               },
             });
-            const prevHistoryLen = gameState.historyLogs.length;
-            this.applyDayVoteExecution([], prevHistoryLen);
+            this.applyDayVoteExecution([]);
             return;
           }
         }
 
         targetsToExecute = [targetId];
-        this.roomState.publicHistoryLogs.push(
-          `${targetName} nhận số phiếu cao nhất (${highestWeight} phiếu).`
-        );
 
         if (!isRunoff && gameState.doubleVoteDay && sorted.length > 1) {
           targetsToExecute.push(sorted[1][0]);
@@ -1489,9 +1527,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         }
         gameState.dayState.runoffCandidates = candidateIds;
         gameState.dayState.runoffBallots = {};
-        this.roomState.publicHistoryLogs.push(
-          `Hòa phiếu giữa ${candidateIds.length} người. Bắt đầu vòng biểu quyết Runoff!`
-        );
         appendMatchEvent(gameState, {
           roundNumber: gameState.roundNumber,
           stage: 'DAY_VOTE',
@@ -1509,7 +1544,9 @@ export class LocalEngineAdapter implements GameSessionAdapter {
             ),
           },
         });
-        this.roomState.timers.deadlineAt = Date.now() + 30 * 1000;
+        this.clearUnlockVoteNotice();
+        this.roomState.timers.phase = 'DAY_RUNOFF';
+        this.startLocalDayTimer(false, 30);
         this.emitState();
         return;
       } else {
@@ -1518,11 +1555,6 @@ export class LocalEngineAdapter implements GameSessionAdapter {
           .map((id) => gameState.players.find((p) => p.id === id))
           .filter((p): p is NonNullable<typeof p> => Boolean(p))
           .map((p) => snapshotPlayer(p));
-        this.roomState.publicHistoryLogs.push(
-          isRunoff
-            ? 'Vòng Runoff hòa phiếu: Cả làng tha bổng, không ai bị treo cổ hôm nay.'
-            : 'Hòa phiếu: Cả làng tha bổng, không ai bị treo cổ hôm nay.'
-        );
         appendMatchEvent(gameState, {
           roundNumber: gameState.roundNumber,
           stage: 'DAY_VOTE',
@@ -1543,8 +1575,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
       }
     }
 
-    const prevHistoryLen = gameState.historyLogs.length;
-    this.applyDayVoteExecution(targetsToExecute, prevHistoryLen, voteSummary);
+    this.applyDayVoteExecution(targetsToExecute, voteSummary);
   }
 
   public async hostPause(): Promise<void> {
@@ -1569,13 +1600,22 @@ export class LocalEngineAdapter implements GameSessionAdapter {
 
   public async hostUnlockVote(): Promise<void> {
     const gameState = this.roomState.gameState;
-    if (!gameState || gameState.phase !== 'DAY_DISCUSS' || !gameState.dayState?.voteLocked) {
+    if (
+      !gameState ||
+      this.pendingDayVerdict?.isPendingNextNight ||
+      gameState.phase !== 'DAY_DISCUSS' ||
+      !gameState.dayState?.voteLocked
+    ) {
       return;
     }
     gameState.dayState.voteLocked = false;
     gameState.dayState.voteLockRemainingSeconds = 0;
     this.roomState.timers.voteLockDeadlineAt = undefined;
     this.roomState.timers.remainingVoteLockMs = undefined;
+    const unlockNotice = 'Quản trò đã mở hòm phiếu sớm!';
+    if (!this.roomState.publicHistoryLogs.includes(unlockNotice)) {
+      this.roomState.publicHistoryLogs.push(unlockNotice);
+    }
     this.emitState();
   }
 
@@ -1602,26 +1642,33 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         targetPlayerId
       );
       this.roomState.gameState = nextState;
-      this.roomState.publicHistoryLogs.push(`Quản trò đã trục xuất khẩn cấp [${p.name}] khỏi bàn.`);
 
       if (winOutcome || this.roomState.gameState.phase === 'GAME_OVER') {
+        this.roomState.timers.phase = 'GAME_OVER';
         this.pendingDayVerdict = null;
+        this.clearUnlockVoteNotice();
         this.clearDayTimer();
         this.clearNightIntroTimer();
       } else if (this.roomState.gameState.phase === 'HUNTER_SHOT') {
+        this.roomState.timers.phase = 'HUNTER_SHOT';
         this.pendingDayVerdict = null;
+        this.clearUnlockVoteNotice();
         if (this.roomState.gameState.pendingHunterShotPlayerId) {
           this.activeLocalPlayerId = this.roomState.gameState.pendingHunterShotPlayerId;
         }
         this.clearDayTimer();
         this.clearNightIntroTimer();
       } else if (this.roomState.gameState.phase === 'MAYOR_SUCCESSION') {
+        this.roomState.timers.phase = 'MAYOR_SUCCESSION';
         this.pendingDayVerdict = null;
+        this.clearUnlockVoteNotice();
         if (this.roomState.gameState.pendingMayorSuccessionPlayerId) {
           this.activeLocalPlayerId = this.roomState.gameState.pendingMayorSuccessionPlayerId;
         }
         this.clearDayTimer();
         this.clearNightIntroTimer();
+      } else if (this.roomState.gameState.phase !== 'DAY_DISCUSS') {
+        this.clearUnlockVoteNotice();
       }
 
       if (this.roomState.gameState.phase === 'NIGHT') {
@@ -1692,6 +1739,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
   public async endGameToSummary(): Promise<void> {
     this.clearNightIntroTimer();
     this.clearDayTimer();
+    this.clearUnlockVoteNotice();
     audioController.stopNightBGM();
     this.pendingDayVerdict = null;
     this.nightIntroUntil = null;
@@ -1701,6 +1749,7 @@ export class LocalEngineAdapter implements GameSessionAdapter {
         (e) => e.actionType === 'WIN'
       );
       this.roomState.gameState.phase = 'GAME_OVER';
+      this.roomState.timers.phase = 'GAME_OVER';
       if (!hasWinEvent) {
         recordWinOutcomeEvent(
           this.roomState.gameState,

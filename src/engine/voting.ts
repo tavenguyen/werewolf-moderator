@@ -1,4 +1,4 @@
-import { appendMatchEvent, snapshotPlayer } from './matchLog';
+import { appendMatchEvent, resolveFollowupEventStage, snapshotPlayer } from './matchLog';
 import type {
   DayState,
   EventParticipantSnapshot,
@@ -318,45 +318,38 @@ export function passMayorTitle(
   const nextState: GameState = structuredClone(state);
   const oldMayor = nextState.players.find((p) => p.id === currentMayorId);
   const oldMayorSnap = oldMayor ? snapshotPlayer(oldMayor) : null;
-  const fromMorning =
-    nextState.previousPhaseBeforeMayorSuccession === 'DAY_DISCUSS' ||
-    nextState.previousPhaseBeforeMayorSuccession === 'DAY_MAYOR_ELECTION';
-  const stage = fromMorning ? 'DAY_ANNOUNCEMENT' : 'DAY_VOTE';
+  const parentDeathEventId = nextState.pendingMayorDeathEventIds?.[currentMayorId];
+  if (nextState.pendingMayorDeathEventIds) {
+    delete nextState.pendingMayorDeathEventIds[currentMayorId];
+  }
+  const stage = resolveFollowupEventStage(
+    nextState,
+    nextState.previousPhaseBeforeMayorSuccession,
+    parentDeathEventId
+  );
 
   nextState.pendingMayorSuccessionPlayerId = null;
 
-  if (nextMayorId) {
-    const successor = nextState.players.find((p) => p.id === nextMayorId && p.isAlive);
-    if (successor) {
-      nextState.mayorId = successor.id;
-      successor.voteWeight = 2;
-      nextState.historyLogs.push(
-        `Trưởng làng cũ đã trao lại huy hiệu Trưởng làng cho [${successor.name}]!`
-      );
-      appendMatchEvent(nextState, {
-        roundNumber: nextState.roundNumber,
-        stage,
-        actionType: 'MAYOR_SUCCESSION',
-        visibility: 'PUBLIC',
-        actor: oldMayorSnap,
-        targets: [snapshotPlayer(successor)],
-        outcome: 'SUCCESS',
-      });
-    } else {
-      nextState.mayorId = null;
-      nextState.historyLogs.push(
-        'Hết thời gian truyền ngôi. Danh hiệu Trưởng làng chính thức biến mất vĩnh viễn!'
-      );
-      appendMatchEvent(nextState, {
-        roundNumber: nextState.roundNumber,
-        stage,
-        actionType: 'MAYOR_SUCCESSION',
-        visibility: 'PUBLIC',
-        actor: oldMayorSnap,
-        targets: [],
-        outcome: 'NO_EFFECT',
-      });
-    }
+  const successor = nextMayorId
+    ? nextState.players.find((p) => p.id === nextMayorId && p.isAlive)
+    : undefined;
+
+  if (successor) {
+    nextState.mayorId = successor.id;
+    successor.voteWeight = 2;
+    nextState.historyLogs.push(
+      `Trưởng làng cũ đã trao lại huy hiệu Trưởng làng cho [${successor.name}]!`
+    );
+    appendMatchEvent(nextState, {
+      roundNumber: nextState.roundNumber,
+      stage,
+      actionType: 'MAYOR_SUCCESSION',
+      visibility: 'PUBLIC',
+      actor: oldMayorSnap,
+      targets: [snapshotPlayer(successor)],
+      outcome: 'SUCCESS',
+      parentEventId: parentDeathEventId ?? null,
+    });
   } else {
     nextState.mayorId = null;
     nextState.historyLogs.push(
@@ -370,6 +363,7 @@ export function passMayorTitle(
       actor: oldMayorSnap,
       targets: [],
       outcome: 'NO_EFFECT',
+      parentEventId: parentDeathEventId ?? null,
     });
   }
 
@@ -658,6 +652,12 @@ export function tallyRunoffVotes(state: GameState): {
   for (const voter of livingVoters) {
     const targetId = nextState.dayState.runoffBallots[voter.id];
     if (!targetId) {
+      abstainCount += voter.voteWeight;
+      continue;
+    }
+
+    const target = nextState.players.find((pl) => pl.id === targetId && pl.isAlive);
+    if (!target) {
       abstainCount += voter.voteWeight;
       continue;
     }

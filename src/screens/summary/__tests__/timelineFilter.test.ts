@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { createInitialGameState } from '../../../engine/gameEngine';
 import {
+  appendMatchEvent,
   buildCascadeTree,
   filterMatchEvents,
   formatCrossLinkContext,
@@ -155,6 +157,270 @@ describe('Summary Screen - MatchTimeline Filtering, Grouping & Cascade Tree', ()
     expect(lethalIds.has('e5')).toBe(true);  // HUNTER_SHOT giữ
     expect(lethalIds.has('e6')).toBe(true);  // CASCADE_DEATH giữ
     expect(lethalIds.has('e7')).toBe(true);  // WIN giữ
+
+    const allMap = new Map(sampleEvents.map((e) => [e.id, e]));
+    const sections = groupMatchEventsForTimeline(lethalOnly);
+    const dawnTree = buildCascadeTree(sections.roundGroups[0].dawnEvents, allMap);
+    expect(dawnTree.length).toBe(2);
+    expect(dawnTree.find((n) => n.event.id === 'e5')?.crossBlockParent?.id).toBe('e3');
+
+    // Khi cha cùng khối bị bộ lọc 'lethal' loại bỏ, buildCascadeTree phải thăng cấp node con lên root
+    const sameBlockFilteredParent: MatchEvent[] = [
+      makeEvent({
+        id: 'p_hidden',
+        seq: 1,
+        roundNumber: 2,
+        stage: 'NIGHT',
+        actionType: 'ATTACK',
+        outcome: 'SKIPPED',
+        involvedPlayerIds: ['p1'],
+      }),
+      makeEvent({
+        id: 'c_kept',
+        seq: 2,
+        roundNumber: 2,
+        stage: 'NIGHT',
+        actionType: 'CURSED_TURN',
+        actor: pVillager,
+        parentEventId: 'p_hidden',
+        involvedPlayerIds: ['p4'],
+      }),
+    ];
+    const promotedOnly = filterMatchEvents(sameBlockFilteredParent, 'lethal', null);
+    expect(promotedOnly.map((e) => e.id)).toEqual(['c_kept']);
+    const promotedSections = groupMatchEventsForTimeline(promotedOnly);
+    const nightTree = buildCascadeTree(
+      promotedSections.roundGroups[0].nightActions,
+      new Map(sameBlockFilteredParent.map((e) => [e.id, e]))
+    );
+    expect(nightTree.length).toBe(1);
+    expect(nightTree[0].event.id).toBe('c_kept');
+    expect(nightTree[0].crossBlockParent?.id).toBe('p_hidden');
+  });
+
+  it('bộ lọc "lethal" giữ đủ cứu/đỡ/lật bài/biến đổi và ẩn SKIPPED + DAWN_SUMMARY bình yên', () => {
+    const matrixEvents: MatchEvent[] = [
+      makeEvent({
+        id: 'm_bg',
+        seq: 1,
+        roundNumber: 1,
+        stage: 'NIGHT',
+        actionType: 'ATTACK',
+        outcome: 'BLOCKED_BY_BODYGUARD',
+        targets: [pVillager],
+        involvedPlayerIds: ['p1', 'p4'],
+      }),
+      makeEvent({
+        id: 'm_witch',
+        seq: 2,
+        roundNumber: 1,
+        stage: 'NIGHT',
+        actionType: 'ATTACK',
+        outcome: 'SAVED_BY_WITCH',
+        targets: [pSeer],
+        involvedPlayerIds: ['p1', 'p3'],
+      }),
+      makeEvent({
+        id: 'm_reveal',
+        seq: 3,
+        roundNumber: 1,
+        stage: 'DAY_VOTE',
+        actionType: 'VOTE_SURVIVED_REVEAL',
+        visibility: 'PUBLIC',
+        actor: snap('p6', 'Quốc Bảo', 5, 'prince', 'VILLAGER'),
+        outcome: 'IMMUNE',
+      }),
+      makeEvent({
+        id: 'm_cursed',
+        seq: 4,
+        roundNumber: 2,
+        stage: 'NIGHT',
+        actionType: 'CURSED_TURN',
+        actor: pVillager,
+      }),
+      makeEvent({
+        id: 'm_drunk',
+        seq: 5,
+        roundNumber: 3,
+        stage: 'NIGHT',
+        actionType: 'DRUNK_AWAKEN',
+        actor: snap('p7', 'Nam', 6, 'drunk', 'VILLAGER'),
+      }),
+      makeEvent({
+        id: 'm_dream',
+        seq: 6,
+        roundNumber: 2,
+        stage: 'DAY_VOTE',
+        actionType: 'DREAM_WOLF_AWAKEN',
+        actor: snap('p8', 'Hùng', 7, 'dream_wolf', 'WEREWOLF'),
+      }),
+      makeEvent({
+        id: 'm_angel',
+        seq: 7,
+        roundNumber: 1,
+        stage: 'DAY_VOTE',
+        actionType: 'ANGEL_TO_VILLAGER',
+        actor: snap('p9', 'Ngọc', 8, 'angel', 'THIRD_PARTY'),
+      }),
+      makeEvent({
+        id: 'm_piper',
+        seq: 8,
+        roundNumber: 2,
+        stage: 'DAY_VOTE',
+        actionType: 'PIED_PIPER_CLEAR',
+        actor: snap('p10', 'Huy', 9, 'pied_piper', 'THIRD_PARTY'),
+      }),
+      makeEvent({
+        id: 'm_cult',
+        seq: 9,
+        roundNumber: 2,
+        stage: 'DAY_VOTE',
+        actionType: 'CULT_DISBAND',
+        actor: snap('p11', 'Sơn', 10, 'cult_leader', 'THIRD_PARTY'),
+      }),
+      makeEvent({
+        id: 'm_skip_attack',
+        seq: 10,
+        roundNumber: 1,
+        stage: 'NIGHT',
+        actionType: 'ATTACK',
+        outcome: 'SKIPPED',
+      }),
+      makeEvent({
+        id: 'm_skip_fox',
+        seq: 11,
+        roundNumber: 1,
+        stage: 'NIGHT',
+        actionType: 'INSPECT',
+        outcome: 'SKIPPED',
+      }),
+      makeEvent({
+        id: 'm_peaceful_dawn',
+        seq: 12,
+        roundNumber: 1,
+        stage: 'DAY_ANNOUNCEMENT',
+        actionType: 'DAWN_SUMMARY',
+        visibility: 'PUBLIC',
+        metadata: { dawnDeaths: [] },
+      }),
+    ];
+
+    const keptIds = new Set(filterMatchEvents(matrixEvents, 'lethal', null).map((e) => e.id));
+    expect(keptIds.has('m_bg')).toBe(true);
+    expect(keptIds.has('m_witch')).toBe(true);
+    expect(keptIds.has('m_reveal')).toBe(true);
+    expect(keptIds.has('m_cursed')).toBe(true);
+    expect(keptIds.has('m_drunk')).toBe(true);
+    expect(keptIds.has('m_dream')).toBe(true);
+    expect(keptIds.has('m_angel')).toBe(true);
+    expect(keptIds.has('m_piper')).toBe(true);
+    expect(keptIds.has('m_cult')).toBe(true);
+    expect(keptIds.has('m_skip_attack')).toBe(false);
+    expect(keptIds.has('m_skip_fox')).toBe(false);
+    expect(keptIds.has('m_peaceful_dawn')).toBe(false);
+  });
+
+  it('bộ lọc "player" dùng involvedPlayerIds cho Bảo vệ, Phù thủy, cụm PI/Fox và Vote (không rò người chỉ đi bầu)', () => {
+    const state = createInitialGameState(
+      [
+        { id: 'p1', name: 'An', seatIndex: 0 },
+        { id: 'p2', name: 'Bình', seatIndex: 1 },
+        { id: 'p3', name: 'Chi', seatIndex: 2 },
+        { id: 'p4', name: 'Dũng', seatIndex: 3 },
+        { id: 'p5', name: 'Hà', seatIndex: 4 },
+        { id: 'p6', name: 'Khánh', seatIndex: 5 },
+      ],
+      ['werewolf', 'bodyguard', 'witch', 'fox', 'villager', 'villager']
+    );
+
+    const sWolf = snap('p1', 'An', 0, 'werewolf', 'WEREWOLF');
+    const sBg = snap('p2', 'Bình', 1, 'bodyguard', 'VILLAGER');
+    const sWitch = snap('p3', 'Chi', 2, 'witch', 'VILLAGER');
+    const sFox = snap('p4', 'Dũng', 3, 'fox', 'VILLAGER');
+    const sV5 = snap('p5', 'Hà', 4, 'villager', 'VILLAGER');
+    const sV6 = snap('p6', 'Khánh', 5, 'villager', 'VILLAGER');
+
+    const bgBlockEvt = appendMatchEvent(state, {
+      roundNumber: 1,
+      stage: 'NIGHT',
+      actionType: 'ATTACK',
+      visibility: 'SECRET_NIGHT',
+      actor: sWolf,
+      coActors: [sWolf],
+      targets: [sV5],
+      outcome: 'BLOCKED_BY_BODYGUARD',
+      metadata: { protector: sBg },
+    });
+
+    const witchSaveEvt = appendMatchEvent(state, {
+      roundNumber: 2,
+      stage: 'NIGHT',
+      actionType: 'ATTACK',
+      visibility: 'SECRET_NIGHT',
+      actor: sWolf,
+      coActors: [sWolf],
+      targets: [sV6],
+      outcome: 'SAVED_BY_WITCH',
+      metadata: { healer: sWitch },
+    });
+
+    const foxInspectEvt = appendMatchEvent(state, {
+      roundNumber: 2,
+      stage: 'NIGHT',
+      actionType: 'INSPECT',
+      visibility: 'SECRET_NIGHT',
+      actor: sFox,
+      targets: [sV5],
+      outcome: 'SUCCESS',
+      metadata: {
+        investigation: {
+          kind: 'GROUP_HAS_WOLF',
+          resultLabel: 'Có Ma Sói',
+          rawValue: true,
+          inspectedPlayers: [sWolf, sV5, sBg],
+          keptPower: true,
+        },
+      },
+    });
+
+    const voteTallyEvt = appendMatchEvent(state, {
+      roundNumber: 2,
+      stage: 'DAY_VOTE',
+      actionType: 'VOTE_TALLY',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: [sWolf, sV5],
+      outcome: 'TIED_RUNOFF',
+      metadata: {
+        vote: {
+          voteKind: 'DAY',
+          tallies: [
+            { target: sWolf, votes: 2, voters: [sV6, sBg] },
+            { target: sV5, votes: 2, voters: [sWitch, sFox] },
+            { target: sWitch, votes: 0 },
+          ],
+          abstainVotes: 0,
+          tiedCandidates: [sWolf, sV5],
+        },
+      },
+    });
+
+    const events = state.eventLog;
+
+    // 1. Bảo vệ được giữ ở đòn cắn BLOCKED_BY_BODYGUARD
+    expect(filterMatchEvents(events, 'player', 'p2').map((e) => e.id)).toContain(bgBlockEvt.id);
+    // 2. Phù thủy được giữ ở đòn cắn SAVED_BY_WITCH
+    expect(filterMatchEvents(events, 'player', 'p3').map((e) => e.id)).toContain(witchSaveEvt.id);
+    // 3. Cụm 3 người của PI/Fox: cả 3 thành viên trong cụm (p1, p5, p2) + Fox (p4) đều khớp; người ngoài cụm (p6) không khớp
+    expect(filterMatchEvents(events, 'player', 'p1').map((e) => e.id)).toContain(foxInspectEvt.id);
+    expect(filterMatchEvents(events, 'player', 'p5').map((e) => e.id)).toContain(foxInspectEvt.id);
+    expect(filterMatchEvents(events, 'player', 'p2').map((e) => e.id)).toContain(foxInspectEvt.id);
+    expect(filterMatchEvents(events, 'player', 'p6').map((e) => e.id)).not.toContain(foxInspectEvt.id);
+    // 4. VOTE_TALLY: giữ ứng viên có phiếu / hòa phiếu (p1, p5), loại người chỉ đi bỏ phiếu không bị vote (p6, p3)
+    expect(filterMatchEvents(events, 'player', 'p1').map((e) => e.id)).toContain(voteTallyEvt.id);
+    expect(filterMatchEvents(events, 'player', 'p5').map((e) => e.id)).toContain(voteTallyEvt.id);
+    expect(filterMatchEvents(events, 'player', 'p6').map((e) => e.id)).not.toContain(voteTallyEvt.id);
+    expect(filterMatchEvents(events, 'player', 'p3').map((e) => e.id)).not.toContain(voteTallyEvt.id);
   });
 
   it('bộ lọc "player" giữ đúng các sự kiện có mặt người chơi được chọn + WIN và bảo toàn crossBlockParent khi cha bị lọc', () => {

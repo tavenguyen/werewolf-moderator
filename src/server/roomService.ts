@@ -405,6 +405,7 @@ export class RoomService {
 
     // Chuyển sang NIGHT ở lượt đầu
     room.gameState.phase = 'NIGHT';
+    room.publicHistoryLogs = [];
     this.touchRoom(roomCode);
   }
 
@@ -453,9 +454,11 @@ export class RoomService {
       if (pState && pState.isAlive) {
         const { nextState } = executeEmergencyEliminate(room.gameState, targetPlayerId);
         room.gameState = nextState;
-        room.publicHistoryLogs.push(
-          `Quản trò đã trục xuất khẩn cấp [${player.name}] khỏi bàn.`
-        );
+        if (room.gameState.phase !== 'DAY_DISCUSS') {
+          room.publicHistoryLogs = room.publicHistoryLogs.filter(
+            (msg) => msg !== 'Quản trò đã mở hòm phiếu sớm!'
+          );
+        }
 
         for (const gsPlayer of room.gameState.players) {
           const rp = room.players.get(gsPlayer.id);

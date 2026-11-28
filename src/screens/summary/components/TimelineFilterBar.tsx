@@ -5,6 +5,8 @@ export interface TimelinePlayerChipItem {
   id: PlayerId;
   name: string;
   seatIndex: number;
+  roleId?: string;
+  roleLabel?: string;
 }
 
 export interface TimelineFilterBarProps {
@@ -56,7 +58,7 @@ export default function TimelineFilterBar({
             onSelectPlayer(null);
           }}
         >
-          <span>Án mạng &amp; Treo cổ</span>
+          <span>Chỉ án mạng &amp; Treo cổ</span>
         </button>
 
         <button
@@ -105,18 +107,22 @@ export default function TimelineFilterBar({
       {mode !== 'all' && (
         <div className="tl-filter-status">
           <span>
-            Đang hiển thị {visibleCount}/{totalCount} sự kiện
-            {mode === 'player' && activePlayer ? ` liên quan tới ${activePlayer.name}` : ''}
+            Hiển thị {visibleCount}/{totalCount} sự kiện
           </span>
           <button
             type="button"
             className="tl-filter-reset"
+            title="Bấm để xóa bộ lọc"
             onClick={() => {
               onChangeMode('all');
               onSelectPlayer(null);
             }}
           >
-            Xóa bộ lọc
+            {mode === 'player' && activePlayer
+              ? `Đang lọc: ${activePlayer.name}${activePlayer.roleLabel ? ` (${activePlayer.roleLabel})` : ''} ×`
+              : mode === 'lethal'
+              ? 'Đang lọc: Chỉ án mạng & Treo cổ ×'
+              : 'Đang lọc: Theo người chơi ×'}
           </button>
         </div>
       )}

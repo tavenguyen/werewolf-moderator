@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   createInitialGameState,
   executeDayVote,
+  executeHunterShot,
   executeNightPhase,
   evaluateBearGrowl,
   type PlayerSetupInput,
@@ -429,6 +430,35 @@ describe('Phase 1 Roles - Passive & Day Event Roles', () => {
         witch: { poisonTargetId: 'p1' },
       });
       expect(nightPoison.winOutcome?.winner).not.toBe('ANGEL');
+    });
+
+    it('Thiên sứ và Thợ săn cùng bị bầy Sói cắn chết Đêm 1: mở HUNTER_SHOT trước, ghi DAWN_SUMMARY trước WIN, và sau phát súng vẫn thắng ANGEL', () => {
+      const setup = create6PlayerSetup();
+      const roles = ['angel', 'hunter', 'werewolf', 'big_bad_wolf', 'villager', 'villager'];
+      const state = createInitialGameState(setup, roles);
+
+      const nightRes = executeNightPhase(state, {
+        wolfPack: { targets: ['p1'] },
+        bigBadWolf: { targetId: 'p2' },
+      });
+
+      expect(nightRes.winOutcome).toBeNull();
+      expect(nightRes.nextState.phase).toBe('HUNTER_SHOT');
+      expect(nightRes.nextState.pendingHunterShotPlayerId).toBe('p2');
+
+      const dawnIdx = nightRes.nextState.eventLog.findIndex((e) => e.actionType === 'DAWN_SUMMARY');
+      expect(dawnIdx).toBeGreaterThanOrEqual(0);
+      expect(nightRes.nextState.eventLog.some((e) => e.actionType === 'WIN')).toBe(false);
+
+      const shotRes = executeHunterShot(nightRes.nextState, 'p3');
+      expect(shotRes.winOutcome?.winner).toBe('ANGEL');
+      expect(shotRes.winOutcome?.winningPlayerIds).toEqual(['p1']);
+      expect(shotRes.nextState.phase).toBe('GAME_OVER');
+
+      const shotIdx = shotRes.nextState.eventLog.findIndex((e) => e.actionType === 'HUNTER_SHOT');
+      const winIdx = shotRes.nextState.eventLog.findIndex((e) => e.actionType === 'WIN');
+      expect(dawnIdx).toBeLessThan(shotIdx);
+      expect(shotIdx).toBeLessThan(winIdx);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { appendMatchEvent, snapshotPlayer } from './matchLog';
+import { appendMatchEvent, resolveFollowupEventStage, snapshotPlayer } from './matchLog';
 import { ROLES_BY_ID } from './roles';
 import { findClockwiseAliveWolf } from './seating';
 import type {
@@ -20,7 +20,8 @@ export interface DeathInput {
 
 function getCascadeContext(
   state: GameState,
-  cause: DeathCause
+  cause: DeathCause,
+  parentEventId?: string | null
 ): { stage: MatchLogStage; visibility: MatchLogVisibility } {
   if (
     cause === 'EMERGENCY_ELIMINATE' ||
@@ -33,11 +34,13 @@ function getCascadeContext(
   }
 
   if (state.phase === 'HUNTER_SHOT') {
-    const fromMorning =
-      state.previousPhaseBeforeHunter === 'DAY_DISCUSS' ||
-      state.previousPhaseBeforeHunter === 'DAY_MAYOR_ELECTION';
+    const stage = resolveFollowupEventStage(
+      state,
+      state.previousPhaseBeforeHunter,
+      parentEventId
+    );
     return {
-      stage: fromMorning ? 'DAY_ANNOUNCEMENT' : 'DAY_VOTE',
+      stage,
       visibility: 'PUBLIC',
     };
   }
@@ -102,7 +105,8 @@ export function processDeathCascade(
 
     const { stage: cascadeStage, visibility: cascadeVisibility } = getCascadeContext(
       state,
-      next.cause
+      next.cause,
+      next.parentEventId
     );
 
     // 1. Đánh dấu chết và thêm vào danh sách đã xử lý
@@ -254,6 +258,12 @@ export function processDeathCascade(
     // 7. Trưởng làng chết (Mayor) -> Mở 10s truyền danh hiệu kế nhiệm
     if (state.mayorId === victim.id) {
       state.pendingMayorSuccessionPlayerId = victim.id;
+      if (deathCauseEventId) {
+        if (!state.pendingMayorDeathEventIds) {
+          state.pendingMayorDeathEventIds = {};
+        }
+        state.pendingMayorDeathEventIds[victim.id] = deathCauseEventId;
+      }
       state.mayorId = null;
       state.historyLogs.push(
         `Trưởng làng (${victim.name}) đã qua đời và có cơ hội truyền lại danh hiệu!`

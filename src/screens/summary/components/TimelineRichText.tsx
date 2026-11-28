@@ -31,6 +31,7 @@ export default function TimelineRichText({
               <button
                 key={`${seg.playerId}-${idx}`}
                 type="button"
+                aria-pressed={isSelected}
                 className={`tl-player-btn tl-faction-${factionTone}${isSelected ? ' is-selected-player' : ''}`}
                 onClick={() => onSelectPlayer(seg.playerId)}
                 title={`Lọc nhật ký theo ${seg.name}`}

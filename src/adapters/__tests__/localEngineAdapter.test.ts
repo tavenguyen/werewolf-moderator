@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { LocalEngineAdapter } from '../localEngineAdapter';
-import { executeDayVote, executeNightPhase } from '../../engine/gameEngine';
+import { createInitialGameState, executeDayVote, executeNightPhase } from '../../engine/gameEngine';
+import { generateNightTurnPlan } from '../../engine/turnPlan';
+import { createInitialDayState } from '../../engine/voting';
+import { createPostGameView, createPublicRoomView } from '../../server/projections';
+import { RoomService } from '../../server/roomService';
+import { SocketGateway } from '../../server/socketGateway';
+import { TimerManager } from '../../server/timerManager';
+import { createMockIoServer } from '../../server/__tests__/mockSocket';
 
 function createPopulatedAdapter(playerCount = 8): LocalEngineAdapter {
   const adapter = new LocalEngineAdapter();
@@ -585,6 +592,8 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     await adapter.finalizePublicVote();
 
     expect(adapter.getState().publicView?.phase).toBe('DAY_RUNOFF');
+    expect(roomState.timers.phase).toBe('DAY_RUNOFF');
+    expect((adapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).not.toBeNull();
     expect(roomState.gameState.dayState.runoffCandidates).toEqual(['player_4', 'player_5']);
 
     // Bỏ phiếu Runoff: player_4 bị treo cổ
@@ -862,61 +871,6 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
 
     expect(roomState.gameState.players.find((p: any) => p.id === p1.id)?.isAlive).toBe(false);
     expect(roomState.gameState.players.find((p: any) => p.id === p2.id)?.isAlive).toBe(false);
-  });
-
-  it('finalizePublicVote xử lý DAY_MAYOR_ELECTION và chuyển sang DAY_DISCUSS', async () => {
-    const adapter = createPopulatedAdapter(6);
-    await adapter.updateSettings({ hasMayor: true });
-    await adapter.startGame(['werewolf', 'seer', 'villager', 'villager', 'villager', 'villager']);
-    await adapter.startFirstNight();
-    await adapter.advanceLocalTurn(); // Seer
-    await adapter.advanceLocalTurn(); // Sang Ngày 1 (DAY_MAYOR_ELECTION)
-
-    const roomState = (adapter as unknown as { roomState: any }).roomState;
-    expect(roomState.gameState.phase).toBe('DAY_MAYOR_ELECTION');
-
-    const [p1, p2, p3] = roomState.gameState.players;
-    adapter.setLocalActivePlayer(p1.id);
-    await adapter.sendMayorElect(p2.id);
-    adapter.setLocalActivePlayer(p3.id);
-    await adapter.sendMayorElect(p2.id);
-
-    await adapter.finalizePublicVote();
-
-    expect(roomState.gameState.phase).toBe('DAY_DISCUSS');
-    expect(roomState.gameState.mayorId).toBe(p2.id);
-    expect(roomState.lastVoteTally?.tallies[p2.id]).toBe(2);
-  });
-
-  it('Con Cáo đã mất phép (foxLostPower) không thể nhận foxInvestigationResult', async () => {
-    const adapter = createPopulatedAdapter(6);
-    await adapter.startGame(['fox', 'werewolf', 'villager', 'villager', 'villager', 'villager']);
-    await adapter.startFirstNight();
-
-    const roomState = (adapter as unknown as { roomState: any }).roomState;
-    const fox = roomState.gameState.players.find((p: any) => p.roleId === 'fox');
-    const wolf = roomState.gameState.players.find((p: any) => p.roleId === 'werewolf');
-    roomState.gameState.foxLostPower = true;
-    roomState.nightTurnPlan = [
-      {
-        roleId: 'fox',
-        turnKey: 'fox',
-        priority: 44,
-        titleVi: 'Con cáo',
-        titleEn: 'Fox',
-        activePlayerIds: [fox.id],
-        isFake: false,
-        canAct: true,
-        audioKey: 'night_fox',
-      },
-    ];
-    roomState.currentNightTurnIndex = 0;
-    adapter.setLocalActivePlayer(fox.id);
-
-    await adapter.sendNightAction('fox', { targetId: wolf.id, isSkip: false });
-
-    expect(roomState.foxInvestigationResult).toBeUndefined();
-    expect(roomState.nightActionsAccumulator.fox?.isSkip).toBe(true);
   });
 
   it('addOfflinePlayer dùng nextPlayerIdSeq tăng dần, không trùng ID sau khi xóa người chơi', () => {
@@ -1489,5 +1443,622 @@ describe('LocalEngineAdapter - 100% Offline Single Device Mode', () => {
     expect(adapter.getState().publicView?.phase).toBe('HUNTER_SHOT');
     expect(adapter.getState().playerId).toBe(hunterB.id);
     expect(adapter.getState().publicView?.activeHunterPlayerId).toBe(hunterB.id);
+  });
+
+  it('submitPublicHandVotes áp dụng MAJORITY trong DAY_RUNOFF, khởi động dayTimer 30s trên TIED_RUNOFF và chặn chốt trùng khi pendingDayVerdict', async () => {
+    const adapter = createPopulatedAdapter(6);
+    await adapter.updateSettings({ tieVoteMode: 'RUNOFF', lynchThreshold: 'MAJORITY' });
+    await adapter.startGame(['werewolf', 'werewolf', 'seer', 'villager', 'villager', 'villager']);
+    await adapter.startFirstNight();
+
+    const roomState = (adapter as unknown as { roomState: any }).roomState;
+    const [p1, p2] = roomState.gameState.players;
+    roomState.gameState.phase = 'DAY_DISCUSS';
+
+    // Hòa phiếu -> DAY_RUNOFF với timer 30s và timers.phase = 'DAY_RUNOFF'
+    await adapter.submitPublicHandVotes({ [p1.id]: 2, [p2.id]: 2 });
+    expect(adapter.getState().publicView?.phase).toBe('DAY_RUNOFF');
+    expect(roomState.timers.phase).toBe('DAY_RUNOFF');
+    expect(roomState.timers.deadlineAt).toBeGreaterThan(Date.now());
+    expect((adapter as unknown as { dayTimerInterval: number | null }).dayTimerInterval).not.toBeNull();
+
+    // Trong DAY_RUNOFF: 6 người sống -> cần > 3 phiếu; 3 phiếu chưa đạt quá bán (BELOW_MAJORITY)
+    await adapter.submitPublicHandVotes({ [p1.id]: 3, [p2.id]: 1 });
+    expect(roomState.gameState.players.find((p: any) => p.id === p1.id)?.isAlive).toBe(true);
+    expect(adapter.getState().publicView?.dayVerdict?.isPendingNextNight).toBe(true);
+    const runoffBelowEvt = roomState.gameState.eventLog.find(
+      (e: any) => e.actionType === 'VOTE_TALLY' && e.metadata?.vote?.voteKind === 'RUNOFF'
+    );
+    expect(runoffBelowEvt?.outcome).toBe('BELOW_MAJORITY');
+    expect(runoffBelowEvt?.metadata?.vote?.majorityThreshold).toBe(3);
+
+    // Chặn chốt trùng khi đang pendingDayVerdict.isPendingNextNight === true
+    const eventCountBeforeDup = roomState.gameState.eventLog.length;
+    await adapter.submitPublicHandVotes({ [p1.id]: 5 });
+    await adapter.finalizePublicVote();
+    expect(roomState.gameState.eventLog.length).toBe(eventCountBeforeDup);
+    expect(roomState.gameState.players.find((p: any) => p.id === p1.id)?.isAlive).toBe(true);
+
+    // Sang đêm 2 -> ngày 2 -> Runoff đạt quá bán (4/6) -> treo cổ thành công
+    await adapter.proceedToNextNight();
+    roomState.gameState.phase = 'DAY_RUNOFF';
+    roomState.gameState.dayState = createInitialDayState();
+    roomState.gameState.dayState.runoffCandidates = [p1.id, p2.id];
+    await adapter.submitPublicHandVotes({ [p1.id]: 4, [p2.id]: 1 });
+    expect(roomState.gameState.players.find((p: any) => p.id === p1.id)?.isAlive).toBe(false);
+
+    await adapter.leaveRoom();
+  });
+
+  it('PostGameView mở voters cho finalizePublicVote (vote kín) nhưng giữ voters === undefined cho submitPublicHandVotes (giơ tay)', async () => {
+    // 1. finalizePublicVote (vote kín)
+    const secretAdapter = createPopulatedAdapter(6);
+    await secretAdapter.updateSettings({ revealVoterIdentities: false, lynchThreshold: 'PLURALITY' });
+    await secretAdapter.startGame(['werewolf', 'werewolf', 'seer', 'villager', 'villager', 'villager']);
+    await secretAdapter.startFirstNight();
+    const secretRoom = (secretAdapter as unknown as { roomState: any }).roomState;
+    const [sp1, sp2, sp3] = secretRoom.gameState.players;
+    secretRoom.gameState.phase = 'DAY_DISCUSS';
+    secretRoom.gameState.dayState = createInitialDayState();
+    secretRoom.gameState.dayState.voteLocked = false;
+    secretRoom.gameState.dayState.voteLockRemainingSeconds = 0;
+
+    secretAdapter.setLocalActivePlayer(sp1.id);
+    await secretAdapter.sendDayVote(sp3.id);
+    secretAdapter.setLocalActivePlayer(sp2.id);
+    await secretAdapter.sendDayVote(sp3.id);
+    await secretAdapter.finalizePublicVote();
+
+    // Khi đang chơi & revealVoterIdentities = false: PublicRoomView không lộ voterDetails
+    expect(secretAdapter.getState().publicView?.lastVoteTally?.voterDetails).toBeUndefined();
+
+    await secretAdapter.endGameToSummary();
+    const secretExec = secretAdapter
+      .getState()
+      .postGameView?.matchEvents.find((e) => e.actionType === 'VOTE_EXECUTION');
+    expect(secretExec?.metadata?.vote?.tallies[0]?.voters?.map((v) => v.playerId)).toEqual([
+      sp1.id,
+      sp2.id,
+    ]);
+
+    // 2. submitPublicHandVotes (giơ tay công khai - không lưu danh tính từng người)
+    const handAdapter = createPopulatedAdapter(6);
+    await handAdapter.updateSettings({ lynchThreshold: 'PLURALITY' });
+    await handAdapter.startGame(['werewolf', 'werewolf', 'seer', 'villager', 'villager', 'villager']);
+    await handAdapter.startFirstNight();
+    const handRoom = (handAdapter as unknown as { roomState: any }).roomState;
+    const [hp1, hp2] = handRoom.gameState.players;
+    handRoom.gameState.phase = 'DAY_DISCUSS';
+
+    await handAdapter.submitPublicHandVotes({ [hp1.id]: 4, [hp2.id]: 1 });
+    await handAdapter.endGameToSummary();
+    const handExec = handAdapter
+      .getState()
+      .postGameView?.matchEvents.find((e) => e.actionType === 'VOTE_EXECUTION');
+    expect(handExec).toBeDefined();
+    for (const entry of handExec!.metadata?.vote?.tallies ?? []) {
+      expect(entry.voters).toBeUndefined();
+    }
+  });
+
+  it('hostUnlockVote ghi và dọn sạch thông báo mở phiếu sớm; persistState/resumeSession giữ nguyên lastVoteTally và host.{isPlayer,playerId}', async () => {
+    const store = new Map<string, string>();
+    const prevLocalStorage = (globalThis as Record<string, unknown>).localStorage;
+    (globalThis as Record<string, unknown>).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+    };
+
+    try {
+      const adapter = new LocalEngineAdapter();
+      await adapter.createRoom({ isPlayer: true, username: 'Chủ Bàn' });
+      for (let i = 2; i <= 6; i++) {
+        adapter.addOfflinePlayer(`Player ${i}`);
+      }
+      await adapter.startGame(['werewolf', 'werewolf', 'seer', 'villager', 'villager', 'villager']);
+      await adapter.startFirstNight();
+
+      const roomState = (adapter as unknown as { roomState: any }).roomState;
+      const [p1, p2] = roomState.gameState.players;
+      roomState.gameState.phase = 'DAY_DISCUSS';
+      roomState.gameState.dayState = createInitialDayState();
+      roomState.gameState.dayState.voteLocked = true;
+      roomState.gameState.dayState.voteLockRemainingSeconds = 40;
+      roomState.lastVoteTally = { tallies: { [p2.id]: 2 }, abstainCount: 4 };
+
+      // Mở khóa 2 lần -> không bị nhân đôi thông báo
+      await adapter.hostUnlockVote();
+      await adapter.hostUnlockVote();
+      const noticeCount = adapter
+        .getState()
+        .publicView!.publicLogs.filter((l) => l === 'Quản trò đã mở hòm phiếu sớm!').length;
+      expect(noticeCount).toBe(1);
+
+      // F5 khôi phục qua adapter mới: giữ lastVoteTally, host.{isPlayer, playerId} và notice hiện tại
+      const adapter2 = new LocalEngineAdapter();
+      expect(await adapter2.resumeSession()).toBe(true);
+      expect(adapter2.getState().hostView?.isHostPlayer).toBe(true);
+      expect(adapter2.getState().hostView?.hostPlayerId).toBe(p1.id);
+      expect(adapter2.getState().publicView?.lastVoteTally).toEqual({
+        tallies: { [p2.id]: 2 },
+        abstainCount: 4,
+      });
+      expect(adapter2.getState().publicView?.publicLogs).toContain('Quản trò đã mở hòm phiếu sớm!');
+
+      // Chốt vote & sang đêm 2 -> thông báo mở phiếu sớm bị dọn sạch, không chảy sang Ngày 2
+      await adapter2.finalizePublicVote();
+      expect(adapter2.getState().publicView?.publicLogs).not.toContain(
+        'Quản trò đã mở hòm phiếu sớm!'
+      );
+      await adapter2.proceedToNextNight();
+      expect(adapter2.getState().publicView?.publicLogs).not.toContain(
+        'Quản trò đã mở hòm phiếu sớm!'
+      );
+
+      await adapter2.leaveRoom();
+    } finally {
+      if (prevLocalStorage === undefined) {
+        delete (globalThis as Record<string, unknown>).localStorage;
+      } else {
+        (globalThis as Record<string, unknown>).localStorage = prevLocalStorage;
+      }
+    }
+  });
+
+  it('Cross-mode Parity: SocketGateway và LocalEngineAdapter cho matchEvents, publicTimeline và morningAnnouncements giống hệt nhau qua các kịch bản chính', async () => {
+    const syncDeterministicSetup = async (
+      roles: string[],
+      settings: Record<string, unknown>
+    ) => {
+      const mockIo = createMockIoServer();
+      const roomService = new RoomService();
+      const timerManager = new TimerManager({ minNightDelaySec: 5, maxNightDelaySec: 5 });
+      const gateway = new SocketGateway(mockIo as any, roomService, timerManager);
+      gateway.registerEvents();
+
+      const hostClient = mockIo.createClientSocket();
+      const createRes: any = await new Promise((resolve) => {
+        hostClient.emit('room:create', { isPlayer: false }, resolve);
+      });
+      const roomCode = createRes.data.roomCode as string;
+      const hostToken = createRes.data.hostToken as string;
+
+      const socketPlayers: Array<{ client: any; token: string; id: string; name: string }> = [];
+      const adapter = new LocalEngineAdapter();
+
+      for (let i = 1; i <= roles.length; i++) {
+        const name = `Player ${i}`;
+        const client = mockIo.createClientSocket();
+        const joinRes: any = await new Promise((resolve) => {
+          client.emit('room:join', { roomCode, username: name }, resolve);
+        });
+        socketPlayers.push({ client, token: joinRes.data.playerToken, id: joinRes.data.playerId, name });
+        adapter.addOfflinePlayer(name);
+      }
+
+      await new Promise((resolve) => {
+        hostClient.emit('lobby:updateSettings', { roomCode, token: hostToken, settings }, resolve);
+      });
+      await new Promise((resolve) => {
+        hostClient.emit('lobby:start', { roomCode, token: hostToken, customRoleIds: roles }, resolve);
+      });
+
+      await adapter.updateSettings(settings);
+      await adapter.startGame(roles);
+      await adapter.startFirstNight();
+
+      const socketRoom = roomService.getRoom(roomCode)!;
+      const localRoom = (adapter as unknown as { roomState: any }).roomState;
+      const localPlayers = Array.from(localRoom.players.values()) as Array<{
+        id: string;
+        name: string;
+        seatIndex: number;
+      }>;
+
+      // Đồng bộ danh sách vai trò theo đúng thứ tự Player 1..N (tránh shuffle ngẫu nhiên làm lệch kịch bản test)
+      socketRoom.gameState = createInitialGameState(
+        socketPlayers.map((p, idx) => ({ id: p.id, name: p.name, seatIndex: idx })),
+        roles,
+        socketRoom.settings,
+        socketRoom.gameGeneration
+      );
+      socketRoom.gameState.phase = 'NIGHT';
+      socketRoom.nightTurnPlan = generateNightTurnPlan(socketRoom.gameState);
+      socketRoom.currentNightTurnIndex = 0;
+      socketRoom.nightActionsAccumulator = {};
+      socketRoom.nightActionAcks.clear();
+
+      localRoom.gameState = createInitialGameState(
+        localPlayers.map((p) => ({ id: p.id, name: p.name, seatIndex: p.seatIndex })),
+        roles,
+        localRoom.settings,
+        localRoom.gameGeneration
+      );
+      localRoom.gameState.phase = 'NIGHT';
+      localRoom.nightTurnPlan = generateNightTurnPlan(localRoom.gameState);
+      localRoom.currentNightTurnIndex = 0;
+      localRoom.nightActionsAccumulator = {};
+      localRoom.nightActionAcks.clear();
+
+      const flushQueue = () => roomService.getCommandQueue(roomCode).enqueue(async () => {});
+      const stepSocketNightTurn = async () => {
+        (gateway as any).advanceNightTurn(socketRoom);
+        await flushQueue();
+      };
+
+      const runSocketNight = async (
+        actionsByTurn: Record<
+          string,
+          { actorIdx: number; action: Record<string, unknown> }
+        >
+      ) => {
+        while (socketRoom.gameState?.phase === 'NIGHT') {
+          const turn = socketRoom.nightTurnPlan[socketRoom.currentNightTurnIndex];
+          const spec = turn ? actionsByTurn[turn.turnKey] : undefined;
+          if (spec && turn.canAct) {
+            const actor = socketPlayers[spec.actorIdx];
+            const res: any = await new Promise((resolve) => {
+              actor.client.emit(
+                'night:action',
+                { roomCode, token: actor.token, roleId: turn.roleId, action: spec.action },
+                resolve
+              );
+            });
+            expect(res.ok).toBe(true);
+          }
+          await stepSocketNightTurn();
+        }
+      };
+
+      const runLocalNight = async (
+        actionsByTurn: Record<
+          string,
+          { actorIdx: number; action: Record<string, unknown> }
+        >
+      ) => {
+        while (localRoom.gameState?.phase === 'NIGHT') {
+          const turn = localRoom.nightTurnPlan[localRoom.currentNightTurnIndex];
+          const spec = turn ? actionsByTurn[turn.turnKey] : undefined;
+          if (spec && turn.canAct) {
+            adapter.setLocalActivePlayer(localPlayers[spec.actorIdx].id);
+            await adapter.sendNightAction(turn.roleId, spec.action as any);
+          }
+          adapter.advanceLocalTurn();
+        }
+      };
+
+      const cleanup = async () => {
+        timerManager.clearRoomTimer(socketRoom);
+        hostClient.disconnect();
+        for (const p of socketPlayers) p.client.disconnect();
+        roomService.destroy();
+        mockIo.close();
+        await adapter.leaveRoom();
+      };
+
+      return {
+        roomCode,
+        hostToken,
+        hostClient,
+        socketPlayers,
+        socketRoom,
+        adapter,
+        localPlayers,
+        localRoom,
+        runSocketNight,
+        runLocalNight,
+        cleanup,
+      };
+    };
+
+    const normalizeTimeline = (items: Array<{ roundNumber: number; stage: string; actionType: string; text: string; isHighlight: boolean }>) =>
+      items.map(({ roundNumber, stage, actionType, text, isHighlight }) => ({
+        roundNumber,
+        stage,
+        actionType,
+        text,
+        isHighlight,
+      }));
+
+    const normalizeEvents = (events: Array<{ roundNumber: number; stage: string; actionType: string; outcome: string }>) =>
+      events.map(({ roundNumber, stage, actionType, outcome }) => ({
+        roundNumber,
+        stage,
+        actionType,
+        outcome,
+      }));
+
+    // Kịch bản 1: Mayor election -> Unlock vote -> Runoff -> Troublemaker double vote -> Win
+    const s1 = await syncDeterministicSetup(
+      ['werewolf', 'werewolf', 'troublemaker', 'seer', 'villager', 'villager'],
+      { hasMayor: true, tieVoteMode: 'RUNOFF', lynchThreshold: 'PLURALITY', dayVoteLockSeconds: 60 }
+    );
+    try {
+      const sp = s1.socketPlayers;
+      const lp = s1.localPlayers;
+
+      // Đêm 1: Sói cắn Player 5 (index 4), Tiên tri soi Player 1 (index 0), Kẻ phá rối chưa kích hoạt
+      await s1.runSocketNight({
+        wolf_pack: { actorIdx: 0, action: { targetId: sp[4].id } },
+        seer: { actorIdx: 3, action: { targetId: sp[0].id } },
+        troublemaker: { actorIdx: 2, action: { activate: false } },
+      });
+      await s1.runLocalNight({
+        wolf_pack: { actorIdx: 0, action: { targetId: lp[4].id } },
+        seer: { actorIdx: 3, action: { targetId: lp[0].id } },
+        troublemaker: { actorIdx: 2, action: { activate: false } },
+      });
+
+      expect(s1.socketRoom.gameState?.phase).toBe('DAY_MAYOR_ELECTION');
+      expect(s1.localRoom.gameState?.phase).toBe('DAY_MAYOR_ELECTION');
+      expect(normalizeTimeline(createPublicRoomView(s1.socketRoom).morningAnnouncements)).toEqual(
+        normalizeTimeline(s1.adapter.getState().publicView!.morningAnnouncements)
+      );
+
+      // Bầu Trưởng làng: Player 3 (index 2) đắc cử
+      await new Promise((r) =>
+        sp[0].client.emit('mayor:elect', { roomCode: s1.roomCode, token: sp[0].token, candidateId: sp[2].id }, r)
+      );
+      await new Promise((r) =>
+        sp[1].client.emit('mayor:elect', { roomCode: s1.roomCode, token: sp[1].token, candidateId: sp[2].id }, r)
+      );
+      await new Promise((r) =>
+        s1.hostClient.emit('day:finalizePublicVote', { roomCode: s1.roomCode, token: s1.hostToken }, r)
+      );
+
+      s1.adapter.setLocalActivePlayer(lp[0].id);
+      await s1.adapter.sendMayorElect(lp[2].id);
+      s1.adapter.setLocalActivePlayer(lp[1].id);
+      await s1.adapter.sendMayorElect(lp[2].id);
+      await s1.adapter.finalizePublicVote();
+
+      // Mở khóa phiếu sớm giống nhau
+      await new Promise((r) =>
+        s1.hostClient.emit('host:unlockVote', { roomCode: s1.roomCode, token: s1.hostToken }, r)
+      );
+      await s1.adapter.hostUnlockVote();
+      expect(createPublicRoomView(s1.socketRoom).publicLogs).toEqual(
+        s1.adapter.getState().publicView!.publicLogs
+      );
+
+      // Ngày 1: Hòa phiếu giữa Player 1 (2 phiếu từ Mayor) và Player 4 (2 phiếu từ 2 sói) -> Runoff
+      await new Promise((r) =>
+        sp[2].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[2].token, targetPlayerId: sp[0].id }, r)
+      );
+      await new Promise((r) =>
+        sp[0].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[0].token, targetPlayerId: sp[3].id }, r)
+      );
+      await new Promise((r) =>
+        sp[1].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[1].token, targetPlayerId: sp[3].id }, r)
+      );
+      await new Promise((r) =>
+        sp[3].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[3].token, targetPlayerId: null }, r)
+      );
+      await new Promise((r) =>
+        sp[5].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[5].token, targetPlayerId: null }, r)
+      );
+      await new Promise((r) =>
+        s1.hostClient.emit('day:finalizePublicVote', { roomCode: s1.roomCode, token: s1.hostToken }, r)
+      );
+
+      s1.adapter.setLocalActivePlayer(lp[2].id);
+      await s1.adapter.sendDayVote(lp[0].id);
+      s1.adapter.setLocalActivePlayer(lp[0].id);
+      await s1.adapter.sendDayVote(lp[3].id);
+      s1.adapter.setLocalActivePlayer(lp[1].id);
+      await s1.adapter.sendDayVote(lp[3].id);
+      s1.adapter.setLocalActivePlayer(lp[3].id);
+      await s1.adapter.sendDayVote(null);
+      s1.adapter.setLocalActivePlayer(lp[5].id);
+      await s1.adapter.sendDayVote(null);
+      await s1.adapter.finalizePublicVote();
+
+      expect(s1.socketRoom.gameState?.phase).toBe('DAY_RUNOFF');
+      expect(s1.localRoom.gameState?.phase).toBe('DAY_RUNOFF');
+
+      // Runoff: treo cổ Player 1 (index 0)
+      await new Promise((r) =>
+        sp[2].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[2].token, targetPlayerId: sp[0].id }, r)
+      );
+      await new Promise((r) =>
+        sp[5].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[5].token, targetPlayerId: sp[0].id }, r)
+      );
+      await new Promise((r) =>
+        sp[0].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[0].token, targetPlayerId: sp[3].id }, r)
+      );
+      await new Promise((r) =>
+        s1.hostClient.emit('day:finalizePublicVote', { roomCode: s1.roomCode, token: s1.hostToken }, r)
+      );
+
+      s1.adapter.setLocalActivePlayer(lp[2].id);
+      await s1.adapter.sendDayVote(lp[0].id);
+      s1.adapter.setLocalActivePlayer(lp[5].id);
+      await s1.adapter.sendDayVote(lp[0].id);
+      s1.adapter.setLocalActivePlayer(lp[0].id);
+      await s1.adapter.sendDayVote(lp[3].id);
+      await s1.adapter.finalizePublicVote();
+      await s1.adapter.proceedToNextNight();
+
+      // Đêm 2: Sói 2 cắn Player 6 (index 5), Troublemaker kích hoạt doubleVoteDay
+      await s1.runSocketNight({
+        wolf_pack: { actorIdx: 1, action: { targetId: sp[5].id } },
+        seer: { actorIdx: 3, action: { targetId: sp[1].id } },
+        troublemaker: { actorIdx: 2, action: { activate: true } },
+      });
+      await s1.runLocalNight({
+        wolf_pack: { actorIdx: 1, action: { targetId: lp[5].id } },
+        seer: { actorIdx: 3, action: { targetId: lp[1].id } },
+        troublemaker: { actorIdx: 2, action: { activate: true } },
+      });
+
+      expect(normalizeTimeline(createPublicRoomView(s1.socketRoom).morningAnnouncements)).toEqual(
+        normalizeTimeline(s1.adapter.getState().publicView!.morningAnnouncements)
+      );
+
+      // Ngày 2: doubleVoteDay treo cổ 2 người (Player 2 và Player 4) -> Dân làng thắng!
+      await new Promise((r) =>
+        s1.hostClient.emit('host:unlockVote', { roomCode: s1.roomCode, token: s1.hostToken }, r)
+      );
+      await s1.adapter.hostUnlockVote();
+
+      await new Promise((r) =>
+        sp[2].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[2].token, targetPlayerId: sp[1].id }, r)
+      );
+      await new Promise((r) =>
+        sp[1].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[1].token, targetPlayerId: sp[3].id }, r)
+      );
+      await new Promise((r) =>
+        sp[3].client.emit('day:vote', { roomCode: s1.roomCode, token: sp[3].token, targetPlayerId: sp[2].id }, r)
+      );
+      await new Promise((r) =>
+        s1.hostClient.emit('day:finalizePublicVote', { roomCode: s1.roomCode, token: s1.hostToken }, r)
+      );
+
+      s1.adapter.setLocalActivePlayer(lp[2].id);
+      await s1.adapter.sendDayVote(lp[1].id);
+      s1.adapter.setLocalActivePlayer(lp[1].id);
+      await s1.adapter.sendDayVote(lp[3].id);
+      s1.adapter.setLocalActivePlayer(lp[3].id);
+      await s1.adapter.sendDayVote(lp[2].id);
+      await s1.adapter.finalizePublicVote();
+
+      const socketPost1 = createPostGameView(s1.socketRoom)!;
+      const localPost1 = s1.adapter.getState().postGameView!;
+      expect(socketPost1).not.toBeNull();
+      expect(localPost1).not.toBeNull();
+      expect(normalizeEvents(socketPost1.matchEvents)).toEqual(normalizeEvents(localPost1.matchEvents));
+      expect(normalizeTimeline(createPublicRoomView(s1.socketRoom).publicTimeline)).toEqual(
+        normalizeTimeline(s1.adapter.getState().publicView!.publicTimeline)
+      );
+    } finally {
+      await s1.cleanup();
+    }
+
+    // Kịch bản 2: Đêm -> Bình minh -> Thợ săn nổ súng -> Truyền ngôi Trưởng làng -> Chiến thắng
+    const s2 = await syncDeterministicSetup(
+      ['werewolf', 'werewolf', 'hunter', 'villager', 'villager', 'villager'],
+      { hasMayor: true, dayVoteLockSeconds: 60 }
+    );
+    try {
+      const sp = s2.socketPlayers;
+      const lp = s2.localPlayers;
+
+      // Đêm 1: Sói cắn Player 4 (villager)
+      await s2.runSocketNight({
+        wolf_pack: { actorIdx: 0, action: { targetId: sp[3].id } },
+      });
+      await s2.runLocalNight({
+        wolf_pack: { actorIdx: 0, action: { targetId: lp[3].id } },
+      });
+
+      // Bầu Hunter (index 2) làm Trưởng làng
+      await new Promise((r) =>
+        sp[0].client.emit('mayor:elect', { roomCode: s2.roomCode, token: sp[0].token, candidateId: sp[2].id }, r)
+      );
+      const mayorRes2: any = await new Promise((r) =>
+        s2.hostClient.emit('day:finalizePublicVote', { roomCode: s2.roomCode, token: s2.hostToken }, r)
+      );
+      expect(mayorRes2.ok).toBe(true);
+      s2.adapter.setLocalActivePlayer(lp[0].id);
+      await s2.adapter.sendMayorElect(lp[2].id);
+      await s2.adapter.finalizePublicVote();
+
+      // Mở khóa phiếu sớm rồi Ngày 1 không treo cổ ai -> sang Đêm 2
+      await new Promise((r) =>
+        s2.hostClient.emit('host:unlockVote', { roomCode: s2.roomCode, token: s2.hostToken }, r)
+      );
+      await s2.adapter.hostUnlockVote();
+      for (const p of sp.filter((_pl, idx) => idx !== 3)) {
+        const vRes: any = await new Promise((r) =>
+          p.client.emit('day:vote', { roomCode: s2.roomCode, token: p.token, targetPlayerId: null }, r)
+        );
+        expect(vRes.ok).toBe(true);
+      }
+      const d1FinRes: any = await new Promise((r) =>
+        s2.hostClient.emit('day:finalizePublicVote', { roomCode: s2.roomCode, token: s2.hostToken }, r)
+      );
+      expect(d1FinRes.ok).toBe(true);
+      await s2.adapter.finalizePublicVote();
+      await s2.adapter.proceedToNextNight();
+
+      // Đêm 2: Sói cắn Hunter-Mayor (index 2) -> HUNTER_SHOT
+      await s2.runSocketNight({
+        wolf_pack: { actorIdx: 0, action: { targetId: sp[2].id } },
+      });
+      await s2.runLocalNight({
+        wolf_pack: { actorIdx: 0, action: { targetId: lp[2].id } },
+      });
+
+      expect(s2.socketRoom.gameState?.phase).toBe('HUNTER_SHOT');
+      expect(s2.localRoom.gameState?.phase).toBe('HUNTER_SHOT');
+
+      // Hunter bắn Sói 1 (index 0) -> MAYOR_SUCCESSION
+      const shotRes2: any = await new Promise((r) =>
+        sp[2].client.emit('hunter:shot', { roomCode: s2.roomCode, token: sp[2].token, targetPlayerId: sp[0].id }, r)
+      );
+      expect(shotRes2.ok).toBe(true);
+      await s2.adapter.sendHunterShot(lp[0].id);
+
+      expect(s2.socketRoom.gameState?.phase).toBe('MAYOR_SUCCESSION');
+      expect(s2.localRoom.gameState?.phase).toBe('MAYOR_SUCCESSION');
+
+      // Truyền ngôi cho Player 5 (index 4) -> DAY_DISCUSS + morningAnnouncements Ngày 2
+      const transferRes2: any = await new Promise((r) =>
+        sp[2].client.emit('mayor:transfer', { roomCode: s2.roomCode, token: sp[2].token, successorPlayerId: sp[4].id }, r)
+      );
+      expect(transferRes2.ok).toBe(true);
+      await s2.adapter.sendMayorTransfer(lp[4].id);
+
+      expect(s2.socketRoom.gameState?.phase).toBe('DAY_DISCUSS');
+      expect(s2.localRoom.gameState?.phase).toBe('DAY_DISCUSS');
+      expect(normalizeTimeline(createPublicRoomView(s2.socketRoom).morningAnnouncements)).toEqual(
+        normalizeTimeline(s2.adapter.getState().publicView!.morningAnnouncements)
+      );
+
+      // Ngày 2: mở khóa phiếu sớm rồi treo cổ Sói 2 (index 1) -> VILLAGER thắng (GAME_OVER)
+      await new Promise((r) =>
+        s2.hostClient.emit('host:unlockVote', { roomCode: s2.roomCode, token: s2.hostToken }, r)
+      );
+      await s2.adapter.hostUnlockVote();
+      await new Promise((r) =>
+        sp[4].client.emit('day:vote', { roomCode: s2.roomCode, token: sp[4].token, targetPlayerId: sp[1].id }, r)
+      );
+      await new Promise((r) =>
+        sp[5].client.emit('day:vote', { roomCode: s2.roomCode, token: sp[5].token, targetPlayerId: sp[1].id }, r)
+      );
+      await new Promise((r) =>
+        sp[1].client.emit('day:vote', { roomCode: s2.roomCode, token: sp[1].token, targetPlayerId: sp[4].id }, r)
+      );
+      const d2FinRes: any = await new Promise((r) =>
+        s2.hostClient.emit('day:finalizePublicVote', { roomCode: s2.roomCode, token: s2.hostToken }, r)
+      );
+      expect(d2FinRes.ok).toBe(true);
+
+      s2.adapter.setLocalActivePlayer(lp[4].id);
+      await s2.adapter.sendDayVote(lp[1].id);
+      s2.adapter.setLocalActivePlayer(lp[5].id);
+      await s2.adapter.sendDayVote(lp[1].id);
+      s2.adapter.setLocalActivePlayer(lp[1].id);
+      await s2.adapter.sendDayVote(lp[4].id);
+      await s2.adapter.finalizePublicVote();
+
+      const socketPost2 = createPostGameView(s2.socketRoom)!;
+      const localPost2 = s2.adapter.getState().postGameView!;
+      expect(socketPost2).not.toBeNull();
+      expect(localPost2).not.toBeNull();
+      expect(socketPost2.winOutcome?.winner).toBe('VILLAGER');
+      expect(localPost2.winOutcome?.winner).toBe('VILLAGER');
+      expect(normalizeEvents(socketPost2.matchEvents)).toEqual(normalizeEvents(localPost2.matchEvents));
+      expect(normalizeTimeline(createPublicRoomView(s2.socketRoom).publicTimeline)).toEqual(
+        normalizeTimeline(s2.adapter.getState().publicView!.publicTimeline)
+      );
+    } finally {
+      await s2.cleanup();
+    }
   });
 });

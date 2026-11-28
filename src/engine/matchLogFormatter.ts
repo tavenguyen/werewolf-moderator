@@ -457,6 +457,18 @@ export function formatMatchEventSegments(
         ];
       }
 
+      if (event.outcome === 'NO_EFFECT') {
+        return [
+          ...attackerPrefix,
+          playerSeg(event, t0, options),
+          txt(
+            event.metadata?.note
+              ? ` nhưng vô hiệu (${event.metadata.note}).`
+              : ' nhưng đòn tấn công vô hiệu.'
+          ),
+        ];
+      }
+
       // SUCCESS kill (hoặc selfHealBlocked)
       const selfHealNote = event.metadata?.witch?.selfHealBlocked
         ? ' (luật cấm Phù thủy tự cứu)'
@@ -527,6 +539,13 @@ export function formatMatchEventSegments(
       if (event.outcome === 'NO_EFFECT') {
         const refunded = event.metadata?.witch?.refundedHeal;
         const blockedByBg = event.metadata?.witch?.blockedByBodyguard;
+        if (event.metadata?.witch?.selfHealBlocked) {
+          return [
+            txt('Phù thủy '),
+            playerSeg(event, actor, options, false),
+            txt(' dùng bình cứu khi tự bị Sói cắn nhưng luật phòng cấm tự cứu (không thể tự cứu).'),
+          ];
+        }
         if (blockedByBg) {
           return [
             txt('Phù thủy '),
@@ -536,6 +555,16 @@ export function formatMatchEventSegments(
                 ? ' dùng bình cứu nhưng Bảo vệ đã chặn đòn trước nên bình cứu dư thừa (hoàn bình).'
                 : ' dùng bình cứu nhưng Bảo vệ đã chặn đòn trước nên bình cứu dư thừa (mất bình).'
             ),
+          ];
+        }
+        if (event.metadata?.note) {
+          return [
+            txt('Phù thủy '),
+            playerSeg(event, actor, options, false),
+            ...(t0
+              ? [txt(' dùng bình cứu '), playerSeg(event, t0, options), txt(' — ')]
+              : [txt(' dùng bình cứu — ')]),
+            txt(`${event.metadata.note}.`),
           ];
         }
         return [
@@ -575,6 +604,19 @@ export function formatMatchEventSegments(
           txt(' nhưng luật phòng cấm dùng 2 bình trong cùng đêm.'),
         ];
       }
+      if (event.outcome === 'NO_EFFECT') {
+        return [
+          txt('Phù thủy '),
+          playerSeg(event, actor, options, false),
+          txt(' định ném độc '),
+          playerSeg(event, t0, options),
+          txt(
+            event.metadata?.note
+              ? ` nhưng vô hiệu (${event.metadata.note}).`
+              : ' nhưng bình độc vô hiệu.'
+          ),
+        ];
+      }
       if (event.outcome === 'OVERRIDDEN_BY_POISON') {
         return [
           txt('Phù thủy '),
@@ -610,6 +652,7 @@ export function formatMatchEventSegments(
         return [
           txt(`${getRoleNameVi(actor.roleId)} `),
           playerSeg(event, actor, options, false),
+          ...(actor.roleId === 'apprentice_seer' ? [txt(' (kế thừa Tiên tri)')] : []),
           txt(' soi '),
           playerSeg(event, t0, options),
           txt('.'),
@@ -621,7 +664,7 @@ export function formatMatchEventSegments(
         const cluster = inv.inspectedPlayers ?? [t0];
         const powerNote =
           actor.roleId === 'pi'
-            ? ' (đã dùng phép)'
+            ? ' (hết phép)'
             : inv.keptPower
               ? ' (giữ phép)'
               : ' (mất phép vĩnh viễn)';
@@ -654,6 +697,7 @@ export function formatMatchEventSegments(
       return [
         txt(`${actorTitle} `),
         playerSeg(event, actor, options, false),
+        ...(actor.roleId === 'apprentice_seer' ? [txt(' (kế thừa Tiên tri)')] : []),
         txt(' soi '),
         playerSeg(event, t0, options),
         txt(' → Kết quả: '),
@@ -1186,7 +1230,14 @@ export function formatMatchEventSegments(
     case 'WIN': {
       const winMeta = event.metadata?.win;
       if (!winMeta) return [emp('Ván đấu kết thúc.', 'warn')];
-      const coWinners = winMeta.coWinners ?? [];
+      const coWinners = (winMeta.coWinners ?? []).filter((cw) => {
+        const escaped = cw.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const nameMentioned = new RegExp(
+          `(?:^|[^\\p{L}\\p{N}_])${escaped}(?:$|[^\\p{L}\\p{N}_])`,
+          'u'
+        ).test(winMeta.reason);
+        return !nameMentioned;
+      });
       const coSegs: MatchTextSegment[] =
         coWinners.length > 0
           ? [

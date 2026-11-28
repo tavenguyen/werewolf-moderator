@@ -3,6 +3,8 @@ import { RoomService } from '../roomService';
 import { TimerManager } from '../timerManager';
 import { SocketGateway } from '../socketGateway';
 import { createMockIoServer, type MockSocketIOServer, type MockClientSocket } from './mockSocket';
+import { createPostGameView, createPublicRoomView } from '../projections';
+import { executeDayVote, executeNightPhase } from '../../engine/gameEngine';
 
 describe('Realtime Backend - Rematch Lifecycle', () => {
   let mockIo: MockSocketIOServer;
@@ -185,5 +187,37 @@ describe('Realtime Backend - Rematch Lifecycle', () => {
     expect(room.foxInvestigationResult).toBeUndefined();
     expect(room.piInvestigationResult).toBeUndefined();
     expect(room.settings.customDeck).toEqual(customDeck);
+  });
+
+  it('rematch dọn sạch publicTimeline, morningAnnouncements và postGameView sau khi ván cũ có dữ liệu', async () => {
+    const { hostClient, roomCode, hostToken, room } = await setupGameOverGame();
+    const villager = room.gameState!.players.find((p) => p.roleId === 'villager')!;
+
+    room.gameState!.phase = 'NIGHT';
+    room.gameState = executeNightPhase(room.gameState!, {
+      wolfPack: { targets: [villager.id] },
+    }).nextState;
+    room.gameState = executeDayVote(room.gameState!, null).nextState;
+    room.gameState!.phase = 'GAME_OVER';
+    room.gameState!.roundNumber = 1;
+
+    // Trước khi rematch: các projection log & post-game đều có dữ liệu
+    const pubBefore = createPublicRoomView(room);
+    expect(pubBefore.publicTimeline.length).toBeGreaterThan(0);
+    expect(pubBefore.morningAnnouncements.length).toBeGreaterThan(0);
+    expect(createPostGameView(room)).not.toBeNull();
+    expect(createPostGameView(room)!.matchEvents.length).toBeGreaterThan(0);
+
+    const rematchRes: any = await new Promise((resolve) => {
+      hostClient.emit('host:rematch', { roomCode, token: hostToken }, resolve);
+    });
+    expect(rematchRes.ok).toBe(true);
+
+    const pubAfter = createPublicRoomView(room);
+    expect(pubAfter.publicTimeline).toEqual([]);
+    expect(pubAfter.morningAnnouncements).toEqual([]);
+    expect(pubAfter.publicLogs).toEqual([]);
+    expect(createPostGameView(room)).toBeNull();
+    expect(room.publicHistoryLogs).toEqual([]);
   });
 });

@@ -539,20 +539,11 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               </div>
             )}
 
-            {/* 1 dòng thông báo sáng duy nhất — luôn ưu tiên DAWN_SUMMARY để badge phụ không đè mất tin người chết */}
+            {/* 1 dòng thông báo sáng duy nhất — chỉ đọc DAWN_SUMMARY từ morningAnnouncements */}
             {!isSpecialInstantPhase && (
               <p className="day-single-morning-line" aria-live="polite">
-                {(() => {
-                  const morningList = publicView?.morningAnnouncements ?? [];
-                  const dawnLine =
-                    morningList.find((m) => m.actionType === 'DAWN_SUMMARY')?.text ??
-                    morningList[0]?.text;
-                  if (dawnLine) return dawnLine;
-                  if (publicView?.publicLogs && publicView.publicLogs.length > 0) {
-                    return publicView.publicLogs[publicView.publicLogs.length - 1];
-                  }
-                  return 'Đêm qua bình yên.';
-                })()}
+                {publicView?.morningAnnouncements?.find((m) => m.actionType === 'DAWN_SUMMARY')
+                  ?.text ?? 'Đêm qua bình yên.'}
               </p>
             )}
           </section>

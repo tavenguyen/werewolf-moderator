@@ -403,6 +403,7 @@ export interface GameState {
   pendingHunterQueue?: PlayerId[];
   pendingHunterDeathEventIds?: Record<PlayerId, string>;
   pendingMayorSuccessionPlayerId?: PlayerId | null;
+  pendingMayorDeathEventIds?: Record<PlayerId, string>;
   morningAnnouncedRound?: number;
   interruptedPhaseDuringNight?: boolean;
   previousPhaseBeforeHunter?: GamePhase;
