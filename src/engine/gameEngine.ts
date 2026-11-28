@@ -8,6 +8,7 @@ import {
 import { resolveNight, type NightResolutionOutput } from './nightResolution';
 import { isBitingWolf, ROLES_BY_ID } from './roles';
 import { getAliveNeighbors } from './seating';
+import { createInitialLunarState, resetDayLunarFlagsOnNightStart } from './lunarEvents';
 import type {
   GameState,
   MatchEventMetadata,
@@ -75,6 +76,9 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   lynchThreshold: 'PLURALITY',
   hunterShootsOnPoison: true,
   allowHunterSkipShot: true,
+  lunarEventsEnabled: false,
+  lunarEventCadence: 'ALTERNATE_DAYS',
+  lunarAllowSpiritism: true,
   customDeck: {
     werewolf: 2,
     seer: 1,
@@ -158,6 +162,7 @@ export function createInitialGameState(
     pendingHunterQueue: [],
     pendingHunterDeathEventIds: {},
     pendingMayorSuccessionPlayerId: null,
+    lunarState: createInitialLunarState(),
     historyLogs: [],
     eventLog: [],
     eventSeq: 0,
@@ -393,6 +398,31 @@ export function executeDayVote(
       });
     }
 
+    if (nextState.lunarState?.bloodOathPendingToday) {
+      nextState.lunarState.wolfDoubleKillTonight = true;
+      nextState.lunarState.bloodOathPendingToday = false;
+      nextState.historyLogs.push(
+        'Lời Thề Máu kích hoạt: Không ai bị treo cổ hôm nay, đêm nay Ma Sói được cắn 2 người!'
+      );
+      appendMatchEvent(nextState, {
+        roundNumber: dayRound,
+        stage: 'DAY_VOTE',
+        actionType: 'LUNAR_BLOOD_OATH_TRIGGERED',
+        visibility: 'PUBLIC',
+        actor: null,
+        targets: [],
+        outcome: 'SUCCESS',
+        metadata: {
+          lunar: {
+            eventId: 'blood_oath',
+            category: 'CRESCENT',
+            titleVi: 'Lời Thề Máu',
+            summaryVi: 'Không ai bị treo cổ hôm nay — đêm nay Ma Sói được cắn 2 người!',
+          },
+        },
+      });
+    }
+
     nextState.doubleVoteDay = false;
     const winOutcome = checkWinCondition(nextState);
     if (winOutcome) {
@@ -403,6 +433,7 @@ export function executeDayVote(
 
     nextState.roundNumber += 1;
     nextState.phase = 'NIGHT';
+    resetDayLunarFlagsOnNightStart(nextState);
     return { nextState, survivedByReveal: false, winOutcome: null };
   }
 
@@ -542,11 +573,33 @@ export function executeDayVote(
   transitionAngelDay1Survival(nextState, dayRound);
 
   const hasAlivePlayers = nextState.players.some((p) => p.isAlive);
+  const lynchedInRound = nextState.deaths.filter(
+    (d) => d.roundNumber === dayRound && d.cause === 'VILLAGE_VOTE'
+  );
 
-  if (nextState.pendingHunterShotPlayerId && hasAlivePlayers) {
-    nextState.phase = 'HUNTER_SHOT';
-    nextState.previousPhaseBeforeHunter = 'NIGHT';
-    return { nextState, survivedByReveal, winOutcome: null };
+  if (lynchedInRound.length === 0 && nextState.lunarState?.bloodOathPendingToday) {
+    nextState.lunarState.wolfDoubleKillTonight = true;
+    nextState.lunarState.bloodOathPendingToday = false;
+    nextState.historyLogs.push(
+      'Lời Thề Máu kích hoạt: Không ai bị treo cổ hôm nay, đêm nay Ma Sói được cắn 2 người!'
+    );
+    appendMatchEvent(nextState, {
+      roundNumber: dayRound,
+      stage: 'DAY_VOTE',
+      actionType: 'LUNAR_BLOOD_OATH_TRIGGERED',
+      visibility: 'PUBLIC',
+      actor: null,
+      targets: [],
+      outcome: 'SUCCESS',
+      metadata: {
+        lunar: {
+          eventId: 'blood_oath',
+          category: 'CRESCENT',
+          titleVi: 'Lời Thề Máu',
+          summaryVi: 'Không ai bị treo cổ hôm nay — đêm nay Ma Sói được cắn 2 người!',
+        },
+      },
+    });
   }
 
   const finalWin = checkWinCondition(nextState);
@@ -554,6 +607,28 @@ export function executeDayVote(
     nextState.phase = 'GAME_OVER';
     recordWinOutcomeEvent(nextState, finalWin, dayRound);
     return { nextState, survivedByReveal, winOutcome: finalWin };
+  }
+
+  if (
+    lynchedInRound.length >= 1 &&
+    nextState.lunarState?.lastEchoPermanentActive &&
+    hasAlivePlayers
+  ) {
+    const queue = lynchedInRound.map((d) => d.playerId);
+    nextState.lunarState.lastEchoState = {
+      pendingQueuePlayerIds: queue,
+      activeExecutorId: queue[0] ?? null,
+      hasPendingHunterAfter: Boolean(nextState.pendingHunterShotPlayerId),
+      hasPendingMayorAfter: Boolean(nextState.pendingMayorSuccessionPlayerId),
+    };
+    nextState.phase = 'LAST_ECHO_MARK';
+    return { nextState, survivedByReveal, winOutcome: null };
+  }
+
+  if (nextState.pendingHunterShotPlayerId && hasAlivePlayers) {
+    nextState.phase = 'HUNTER_SHOT';
+    nextState.previousPhaseBeforeHunter = 'NIGHT';
+    return { nextState, survivedByReveal, winOutcome: null };
   }
 
   if (nextState.pendingMayorSuccessionPlayerId && hasAlivePlayers) {
@@ -564,6 +639,7 @@ export function executeDayVote(
 
   nextState.roundNumber += 1;
   nextState.phase = 'NIGHT';
+  resetDayLunarFlagsOnNightStart(nextState);
 
   return { nextState, survivedByReveal, winOutcome: null };
 }
@@ -700,6 +776,7 @@ export function executeHunterShot(
         resumedInterruptedNight = true;
       } else {
         nextState.roundNumber += 1;
+        resetDayLunarFlagsOnNightStart(nextState);
       }
     } else if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
       if (!nextState.dayState) {
@@ -744,6 +821,8 @@ export function executeMayorSuccession(
 
   if (nextState.phase === 'DAY_DISCUSS' || nextState.phase === 'DAY_MAYOR_ELECTION') {
     emitMorningAnnouncements(nextState);
+  } else if (nextState.phase === 'NIGHT' && !wasInterruptedNight) {
+    resetDayLunarFlagsOnNightStart(nextState);
   }
 
   return {
@@ -773,7 +852,7 @@ export function executeEmergencyEliminate(
 
   const prevPhase = nextState.phase;
   const isAlreadySpecialPhase = prevPhase === 'HUNTER_SHOT' || prevPhase === 'MAYOR_SUCCESSION';
-  const effectiveReturnPhase = isAlreadySpecialPhase
+  let effectiveReturnPhase = isAlreadySpecialPhase
     ? (nextState.previousPhaseBeforeHunter ??
         nextState.previousPhaseBeforeMayorSuccession ??
         'DAY_DISCUSS')
@@ -782,6 +861,34 @@ export function executeEmergencyEliminate(
     effectiveReturnPhase === 'NIGHT' &&
     (!isAlreadySpecialPhase || Boolean(nextState.interruptedPhaseDuringNight));
   const eventRound = nextState.roundNumber;
+
+  let seanceClearedByElim = false;
+  if (prevPhase === 'LUNAR_SEANCE' && nextState.lunarState?.seanceState) {
+    const seance = nextState.lunarState.seanceState;
+    if (targetPlayerId === seance.mediumPlayerId || targetPlayerId === seance.targetDeadPlayerId) {
+      nextState.lunarState.seanceState = null;
+      seanceClearedByElim = true;
+      effectiveReturnPhase = 'DAY_DISCUSS';
+    }
+  }
+
+  let lastEchoQueueEmptiedByElim = false;
+  if (prevPhase === 'LAST_ECHO_MARK' && nextState.lunarState?.lastEchoState) {
+    const lastEcho = nextState.lunarState.lastEchoState;
+    if (
+      targetPlayerId === lastEcho.activeExecutorId ||
+      lastEcho.pendingQueuePlayerIds.includes(targetPlayerId)
+    ) {
+      lastEcho.pendingQueuePlayerIds = lastEcho.pendingQueuePlayerIds.filter(
+        (id) => id !== targetPlayerId
+      );
+      lastEcho.activeExecutorId = lastEcho.pendingQueuePlayerIds[0] ?? null;
+      if (lastEcho.pendingQueuePlayerIds.length === 0) {
+        lastEchoQueueEmptiedByElim = true;
+        effectiveReturnPhase = 'NIGHT';
+      }
+    }
+  }
 
   nextState.historyLogs.push(`Quản trò đã trục xuất khẩn cấp [${target.name}] khỏi bàn.`);
   const elimEvt = appendMatchEvent(nextState, {
@@ -828,6 +935,17 @@ export function executeEmergencyEliminate(
     nextState.previousPhaseBeforeMayorSuccession = undefined;
     recordWinOutcomeEvent(nextState, winOutcome, eventRound);
     return { nextState, winOutcome };
+  }
+
+  if (seanceClearedByElim) {
+    if (!nextState.dayState) {
+      nextState.dayState = createInitialDayState();
+    }
+    nextState.phase = 'DAY_DISCUSS';
+  } else if (lastEchoQueueEmptiedByElim) {
+    nextState.roundNumber += 1;
+    nextState.phase = 'NIGHT';
+    resetDayLunarFlagsOnNightStart(nextState);
   }
 
   return { nextState, winOutcome: null };

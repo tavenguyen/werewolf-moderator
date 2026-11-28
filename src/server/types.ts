@@ -1,4 +1,5 @@
 import type {
+  ActiveLunarAnnouncement,
   DeathCause,
   DeathRecord,
   GamePhase,
@@ -9,6 +10,7 @@ import type {
   PlayerId,
   PublicMatchLogItem,
   RoomSettings,
+  SeanceQuestionId,
   WinOutcome,
 } from '../engine/types';
 import type { Faction, SeerResult } from '../engine/roles';
@@ -104,11 +106,28 @@ export interface RoomState {
   publicHistoryLogs: string[];
 
   // Kết quả điều tra tạm thời trong đêm (chỉ gửi riêng cho người có quyền)
-  seerInvestigationResult?: { targetId: PlayerId; result: SeerResult | string };
-  sorcererInvestigationResult?: { targetId: PlayerId; isSeer: boolean };
+  seerInvestigationResult?: {
+    targetId: PlayerId;
+    result: SeerResult | string;
+    hasWerewolf?: boolean;
+    inspectedPlayerIds?: PlayerId[];
+    mistyMoon?: boolean;
+  };
+  sorcererInvestigationResult?: {
+    targetId: PlayerId;
+    isSeer: boolean;
+    hasWerewolf?: boolean;
+    inspectedPlayerIds?: PlayerId[];
+    mistyMoon?: boolean;
+  };
   auraInvestigationResult?: { targetId: PlayerId; result: 'NORMAL' | 'SPECIAL' };
   piInvestigationResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
-  foxInvestigationResult?: { targetId: PlayerId; hasWerewolf: boolean; inspectedPlayerIds: PlayerId[] };
+  foxInvestigationResult?: {
+    targetId: PlayerId;
+    hasWerewolf: boolean;
+    inspectedPlayerIds: PlayerId[];
+    keptPower?: boolean;
+  };
 
   // Kết quả vote công khai sau cùng
   lastVoteTally?: {
@@ -136,6 +155,24 @@ export type PublicDeathRecord = Omit<DeathRecord, 'cause' | 'cascadeDepth'> & {
   cause: DeathCause | 'UNKNOWN';
   cascadeDepth?: number;
 };
+
+export interface PublicLunarView {
+  currentDayEvent: ActiveLunarAnnouncement | null;
+  lastEchoPermanentActive: boolean;
+  neighborsFuryPlayerIds: PlayerId[];
+  flashTrialActiveToday: boolean;
+  openBallotActiveToday: boolean;
+  todayPenaltyVotes: Record<PlayerId, number>;
+  seance: {
+    stage: 'PICK_QUESTION' | 'WAIT_ANSWER' | 'RESOLVED';
+    mediumPlayerId: PlayerId;
+    targetDeadPlayerId: PlayerId;
+    selectedQuestionId: SeanceQuestionId | null;
+    selectedQuestionText: string | null;
+    answer: 'YES' | 'NO' | null;
+  } | null;
+  activeLastEchoExecutorId: PlayerId | null;
+}
 
 export interface PublicRoomView {
   roomCode: string;
@@ -176,6 +213,7 @@ export interface PublicRoomView {
   voteProgress?: { submitted: number; total: number } | null;
   dayVerdict?: { headline: string; detail: string; isPendingNextNight: boolean } | null;
   nightIntroUntil?: number | null;
+  lunarView?: PublicLunarView | null;
 }
 
 export interface HostBoardView {
@@ -225,6 +263,8 @@ export interface PlayerPrivateView {
     isCultMember?: boolean;
     doppelgangerTargetId?: PlayerId | null;
     drunkRealRoleId?: string | null;
+    silverShieldActiveTonight?: boolean;
+    mistyMoonActiveTonight?: boolean;
   };
   teammates: Array<{ id: PlayerId; name: string; roleId: string }>;
   investigationResult?: {
@@ -232,6 +272,14 @@ export interface PlayerPrivateView {
     result: SeerResult | boolean | 'NORMAL' | 'SPECIAL' | string;
     hasWerewolf?: boolean;
     inspectedPlayerIds?: PlayerId[];
+    mistyMoon?: boolean;
+    keptPower?: boolean;
+  } | null;
+  lunarActions?: {
+    canPickSeanceQuestion: boolean;
+    canAnswerSeance: boolean;
+    canMarkLastEcho: boolean;
+    seanceQuestions?: Array<{ id: SeanceQuestionId; text: string }>;
   } | null;
 }
 
@@ -340,6 +388,24 @@ export interface ClientEmergencyEliminatePayload {
   roomCode: string;
   token: string;
   targetPlayerId: PlayerId;
+}
+
+export interface ClientSeancePickQuestionPayload {
+  roomCode: string;
+  token: string;
+  questionId: SeanceQuestionId;
+}
+
+export interface ClientSeanceAnswerPayload {
+  roomCode: string;
+  token: string;
+  answer: 'YES' | 'NO';
+}
+
+export interface ClientLastEchoSubmitPayload {
+  roomCode: string;
+  token: string;
+  targetPlayerId: PlayerId | null;
 }
 
 export interface TimerSnapshotPayload {

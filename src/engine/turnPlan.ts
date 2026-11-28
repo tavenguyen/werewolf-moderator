@@ -11,6 +11,7 @@ export interface NightTurnPlanItem {
   isFake: boolean;
   canAct: boolean;
   audioKey: string | null;
+  maxTargets?: number;
 }
 
 /**
@@ -256,6 +257,10 @@ export function generateNightTurnPlan(state: GameState): NightTurnPlanItem[] {
       isFake: wakingWolves.length === 0,
       canAct: wakingWolves.length > 0,
       audioKey: 'night_werewolf',
+      maxTargets: Math.min(
+        2,
+        state.wolfCubDoubleKillNextNight || state.lunarState?.wolfDoubleKillTonight ? 2 : 1
+      ),
     });
   }
 

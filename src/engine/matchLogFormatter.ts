@@ -73,12 +73,37 @@ function getCauseLabelVi(cause: DeathCause): string {
   }
 }
 
+function getLunarCategoryLabelVi(category?: string): string {
+  switch (category) {
+    case 'FULL_MOON':
+      return 'Trăng Tròn';
+    case 'CRESCENT':
+      return 'Trăng Lưỡi Liềm';
+    case 'NEW_MOON':
+      return 'Trăng Non';
+    case 'SPIRITISM':
+      return 'Thuật Chiêu Hồn';
+    default:
+      return 'Tuần Trăng';
+  }
+}
+
 function shouldRevealParticipantRole(
   event: MatchEvent,
   participant: EventParticipantSnapshot,
   options: FormatMatchEventOptions
 ): { showRole: boolean; roleIdOverride?: string } {
   if (options.mode === 'POST_GAME') {
+    return { showRole: true };
+  }
+
+  if (
+    event.metadata?.lunar?.forceReveal ||
+    (event.actionType === 'DAWN_SUMMARY' &&
+      event.metadata?.dawnDeaths?.some(
+        (d) => d.victim.playerId === participant.playerId && d.forceReveal
+      ))
+  ) {
     return { showRole: true };
   }
 
@@ -1026,6 +1051,51 @@ export function formatMatchEventSegments(
 
     case 'TROUBLEMAKER_ANNOUNCE':
       return [emp('Kẻ phá rối ra tay: hôm nay cả làng phải treo cổ 2 người!', 'warn')];
+
+    case 'LUNAR_EVENT_DRAWN': {
+      const lunar = event.metadata?.lunar;
+      const categoryLabel = getLunarCategoryLabelVi(lunar?.category);
+      const titleVi = lunar?.titleVi ?? 'Sự kiện bí ẩn';
+      const detail = lunar?.detailLineVi ?? lunar?.summaryVi ?? '';
+      return [
+        txt(`Sự kiện Tuần Trăng (${categoryLabel}): `),
+        emp(titleVi, 'warn'),
+        ...(detail ? [txt(` — ${detail}`)] : []),
+      ];
+    }
+
+    case 'LUNAR_SEANCE_RESULT': {
+      const lunar = event.metadata?.lunar;
+      const questionText = lunar?.questionText ?? 'Câu hỏi Chiêu Hồn';
+      const answerLabel =
+        lunar?.answer === 'YES'
+          ? 'Có'
+          : lunar?.answer === 'NO'
+            ? 'Không'
+            : 'Giữ im lặng';
+      return [
+        txt(`Chiêu Hồn: "${questionText}" -> `),
+        emp(answerLabel, lunar?.answer === 'YES' ? 'safe' : lunar?.answer === 'NO' ? 'danger' : 'muted'),
+      ];
+    }
+
+    case 'LUNAR_LAST_ECHO': {
+      if (!actor || !t0) {
+        return [txt('Dấu Ấn Di Ngôn: Lượt đánh dấu đã qua.')];
+      }
+      return [
+        txt('Dấu Ấn Di Ngôn: '),
+        playerSeg(event, actor, options),
+        txt(' đánh dấu +1 phiếu bất lợi cho '),
+        playerSeg(event, t0, options),
+      ];
+    }
+
+    case 'LUNAR_MIRROR_REFLECTION':
+      return [emp('Ánh trăng đêm qua đã phản chiếu một cặp mắt đỏ.', 'warn')];
+
+    case 'LUNAR_BLOOD_OATH_TRIGGERED':
+      return [emp('Lời Thề Máu ứng nghiệm: Đêm nay bầy Sói được cắn 2 nạn nhân.', 'wolf')];
 
     case 'MAYOR_ELECTED': {
       if (!t0) return [txt('Không có Trưởng làng được bầu.')];

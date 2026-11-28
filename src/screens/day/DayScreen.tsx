@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { ScreenName } from '../../navigation';
 import { useGameSession } from '../../adapters/useGameSession';
 import { ROLES_BY_ID } from '../../engine/roles';
+import { SEANCE_QUESTIONS } from '../../engine/lunarEvents';
 import { getRoleImage } from '../../assets/roles';
 import { formatTime } from '../../utils/formatTime';
 import CompactHostControlBar from '../../components/CompactHostControlBar';
 import QuickEndGameModal from '../../components/QuickEndGameModal';
-import type { PlayerId } from '../../engine/types';
+import type { LunarEventCategory, PlayerId, SeanceQuestionId } from '../../engine/types';
 import './day.css';
 
 type DayScreenProps = {
@@ -44,9 +45,12 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
   const isVerdictPendingNextNight = Boolean(isSingleDevice && dayVerdict?.isPendingNextNight);
   const isHunterShotPhase = phase === 'HUNTER_SHOT';
   const isMayorSuccessionPhase = phase === 'MAYOR_SUCCESSION';
+  const isLunarSeancePhase = phase === 'LUNAR_SEANCE';
+  const isLastEchoMarkPhase = phase === 'LAST_ECHO_MARK';
   const isMayorElectionPhase = phase === 'DAY_MAYOR_ELECTION';
   const isRunoffPhase = phase === 'DAY_RUNOFF';
-  const isSpecialInstantPhase = isHunterShotPhase || isMayorSuccessionPhase;
+  const isSpecialInstantPhase =
+    isHunterShotPhase || isMayorSuccessionPhase || isLunarSeancePhase || isLastEchoMarkPhase;
 
   const players = publicView?.players ?? [];
   const livingPlayers = players.filter((p) => p.isAlive);
@@ -82,6 +86,10 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
         ? 15
         : isMayorSuccessionPhase
         ? 10
+        : isLunarSeancePhase
+        ? 30
+        : isLastEchoMarkPhase
+        ? 10
         : 180;
       setRemainingTime(fallbackSeconds);
       return;
@@ -108,6 +116,8 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     isRunoffPhase,
     isHunterShotPhase,
     isMayorSuccessionPhase,
+    isLunarSeancePhase,
+    isLastEchoMarkPhase,
   ]);
 
   // Reset voteSubmitted khi sang ngày mới, đổi phase, hoặc khi đổi người chơi ở chế độ 1 máy
@@ -239,6 +249,48 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     }
   };
 
+  const handleSeancePickQuestion = async (questionId: SeanceQuestionId) => {
+    if (isSubmittingSpecial) return;
+    setIsSubmittingSpecial(true);
+    setNotice('');
+    try {
+      await actions.sendSeancePickQuestion?.(questionId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể chọn câu hỏi chiêu hồn';
+      setNotice(msg);
+    } finally {
+      setIsSubmittingSpecial(false);
+    }
+  };
+
+  const handleSeanceAnswer = async (answer: 'YES' | 'NO') => {
+    if (isSubmittingSpecial) return;
+    setIsSubmittingSpecial(true);
+    setNotice('');
+    try {
+      await actions.sendSeanceAnswer?.(answer);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể gửi câu trả lời chiêu hồn';
+      setNotice(msg);
+    } finally {
+      setIsSubmittingSpecial(false);
+    }
+  };
+
+  const handleLastEchoSubmit = async (targetId: PlayerId | null) => {
+    if (isSubmittingSpecial) return;
+    setIsSubmittingSpecial(true);
+    setNotice('');
+    try {
+      await actions.sendLastEchoTarget?.(targetId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể để lại Dấu Ấn Di Ngôn';
+      setNotice(msg);
+    } finally {
+      setIsSubmittingSpecial(false);
+    }
+  };
+
   const handleAdjustHandVote = (playerId: PlayerId, delta: number) => {
     if (effectiveVoteLocked || isSubmittingFinalize) return;
     setHandVotes((prev) => {
@@ -312,9 +364,31 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
     }
   };
 
+  const lunarView = publicView?.lunarView ?? null;
+  const neighborsFurySet = new Set(lunarView?.neighborsFuryPlayerIds ?? []);
+  const todayPenaltyVotes = lunarView?.todayPenaltyVotes ?? {};
+
+  const getMoonCategoryBadge = (category: LunarEventCategory): { icon: string; label: string } => {
+    switch (category) {
+      case 'FULL_MOON':
+        return { icon: '🌕', label: 'Trăng Tròn' };
+      case 'CRESCENT':
+        return { icon: '🌒', label: 'Trăng Lưỡi Liềm' };
+      case 'NEW_MOON':
+        return { icon: '🌑', label: 'Trăng Non' };
+      case 'SPIRITISM':
+      default:
+        return { icon: '🕯️', label: 'Thuật Chiêu Hồn' };
+    }
+  };
+
   const maxPossibleVotes = isMayorElectionPhase
     ? livingPlayers.length
-    : livingPlayers.reduce((sum, p) => sum + (p.voteWeight ?? 1), 0);
+    : livingPlayers.reduce((sum, p) => {
+        const baseWeight = p.voteWeight ?? 1;
+        if (baseWeight === 0) return sum;
+        return sum + (neighborsFurySet.has(p.id) ? Math.max(baseWeight, 2) : baseWeight);
+      }, 0);
 
   const handVoteSummary = (() => {
     const rawRunoffIds =
@@ -367,6 +441,10 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
               ? ' · PHÁT SÚNG THỢ SĂN'
               : isMayorSuccessionPhase
               ? ' · CHỌN TRƯỞNG LÀNG KẾ NHIỆM'
+              : isLunarSeancePhase
+              ? ' · THUẬT CHIÊU HỒN'
+              : isLastEchoMarkPhase
+              ? ' · DẤU ẤN DI NGÔN'
               : isMayorElectionPhase
               ? ' · BẦU TRƯỞNG LÀNG'
               : isRunoffPhase
@@ -603,6 +681,33 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           </div>
         )}
 
+        {/* Thẻ Sự Kiện Tuần Trăng */}
+        {lunarView?.currentDayEvent && (() => {
+          const ev = lunarView.currentDayEvent;
+          const badge = getMoonCategoryBadge(ev.category);
+          return (
+            <section className={`lunar-event-card category-${ev.category.toLowerCase()}`} aria-live="polite">
+              <div className="lunar-event-header">
+                <span className="lunar-category-badge">
+                  <span aria-hidden="true">{badge.icon}</span>
+                  <span>{badge.label}</span>
+                </span>
+              </div>
+              <strong className="lunar-event-title">{ev.titleVi}</strong>
+              <p className="lunar-event-summary">{ev.summaryVi}</p>
+              {ev.detailLineVi && <p className="lunar-event-detail">{ev.detailLineVi}</p>}
+            </section>
+          );
+        })()}
+
+        {/* Pill Dấu Ấn Di Ngôn */}
+        {lunarView?.lastEchoPermanentActive && (
+          <div className="lunar-last-echo-pill" role="status">
+            <span aria-hidden="true">🌑</span>
+            <span>Dấu Ấn Di Ngôn đang hiệu lực</span>
+          </div>
+        )}
+
         </div>
         )}
 
@@ -827,6 +932,198 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
           );
         })()}
 
+        {/* Pha đặc biệt: Thuật Chiêu Hồn (LUNAR_SEANCE) */}
+        {isLunarSeancePhase && lunarView?.seance && (() => {
+          const seance = lunarView.seance;
+          const deadTarget = players.find((p) => p.id === seance.targetDeadPlayerId);
+          const deadTargetName = deadTarget ? `#${deadTarget.seatIndex} ${deadTarget.name}` : 'Người đã khuất';
+          const canPick = isSingleDevice || Boolean(privateView?.lunarActions?.canPickSeanceQuestion);
+          const canAnswer = isSingleDevice || Boolean(privateView?.lunarActions?.canAnswerSeance);
+          const questionList: Array<{ id: SeanceQuestionId; text: string }> =
+            privateView?.lunarActions?.seanceQuestions?.length
+              ? privateView.lunarActions.seanceQuestions
+              : (Object.entries(SEANCE_QUESTIONS) as Array<[SeanceQuestionId, string]>).map(
+                  ([id, text]) => ({ id, text })
+                );
+          const selectedQuestionLabel =
+            seance.selectedQuestionText ||
+            (seance.selectedQuestionId ? SEANCE_QUESTIONS[seance.selectedQuestionId] : null);
+
+          return (
+            <section
+              className="day-players-panel special-phase-panel lunar-seance-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="lunar-seance-title"
+              aria-live="polite"
+            >
+              <div className="day-panel-heading">
+                <div className="heading-group">
+                  <span className="heading-dot" />
+                  <strong id="lunar-seance-title">🕯️ THUẬT CHIÊU HỒN</strong>
+                </div>
+                <span className="unlocked-label">⏱ {remainingTime}s</span>
+              </div>
+
+              <div className="lunar-seance-status">
+                <span className="lunar-stage-pill">
+                  {seance.stage === 'PICK_QUESTION'
+                    ? 'Bước 1/2: Chọn câu hỏi'
+                    : seance.stage === 'WAIT_ANSWER'
+                    ? 'Bước 2/2: Chờ người chết trả lời'
+                    : 'Đã hoàn tất chiêu hồn'}
+                </span>
+                <p className="special-phase-desc">
+                  Đang chiêu hồn {deadTargetName}...
+                </p>
+              </div>
+
+              {seance.stage === 'PICK_QUESTION' && (
+                canPick ? (
+                  <div className="lunar-seance-questions">
+                    {questionList.map((q) => (
+                      <button
+                        key={q.id}
+                        type="button"
+                        disabled={isSubmittingSpecial}
+                        className="lunar-action-btn lunar-question-btn"
+                        onClick={() => handleSeancePickQuestion(q.id)}
+                      >
+                        {q.text}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="special-waiting-note" role="status">
+                    Đang chờ Thầy Chiêu Hồn chọn câu hỏi cho {deadTargetName}...
+                  </div>
+                )
+              )}
+
+              {seance.stage === 'WAIT_ANSWER' && (
+                <div className="lunar-seance-answer-stage">
+                  {selectedQuestionLabel && (
+                    <div className="lunar-selected-question-box">
+                      <small>Câu hỏi đã chọn:</small>
+                      <strong>{selectedQuestionLabel}</strong>
+                    </div>
+                  )}
+                  {canAnswer ? (
+                    <div className="lunar-answer-actions">
+                      <button
+                        type="button"
+                        disabled={isSubmittingSpecial}
+                        className="lunar-action-btn lunar-answer-yes"
+                        onClick={() => handleSeanceAnswer('YES')}
+                      >
+                        ✓ Có
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSubmittingSpecial}
+                        className="lunar-action-btn lunar-answer-no"
+                        onClick={() => handleSeanceAnswer('NO')}
+                      >
+                        ✕ Không
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="special-waiting-note" role="status">
+                      Đang chờ {deadTargetName} trả lời...
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {seance.stage === 'RESOLVED' && (
+                <div className="lunar-seance-answer-stage">
+                  {selectedQuestionLabel && (
+                    <div className="lunar-selected-question-box">
+                      <small>Câu hỏi:</small>
+                      <strong>{selectedQuestionLabel}</strong>
+                    </div>
+                  )}
+                  <div className="special-waiting-note" role="status">
+                    Câu trả lời: <strong>{seance.answer === 'YES' ? 'Có' : 'Không'}</strong>
+                  </div>
+                </div>
+              )}
+
+              {notice && <p role="status" className="vote-notice">{notice}</p>}
+            </section>
+          );
+        })()}
+
+        {/* Pha đặc biệt: Dấu Ấn Di Ngôn (LAST_ECHO_MARK) */}
+        {isLastEchoMarkPhase && (() => {
+          const canMark = isSingleDevice || Boolean(privateView?.lunarActions?.canMarkLastEcho);
+          const executor = lunarView?.activeLastEchoExecutorId
+            ? players.find((p) => p.id === lunarView.activeLastEchoExecutorId)
+            : null;
+          const executorName = executor ? `#${executor.seatIndex} ${executor.name}` : 'người vừa ngã xuống';
+          const markTargets = privateView?.validTargets?.length
+            ? players.filter((p) => privateView.validTargets.includes(p.id))
+            : livingPlayers;
+
+          return (
+            <section
+              className="day-players-panel special-phase-panel lunar-last-echo-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="last-echo-title"
+              aria-live="polite"
+            >
+              <div className="day-panel-heading">
+                <div className="heading-group">
+                  <span className="heading-dot" />
+                  <strong id="last-echo-title">🌑 DẤU ẤN DI NGÔN</strong>
+                </div>
+                <span className="unlocked-label">⏱ {remainingTime}s</span>
+              </div>
+
+              <p className="special-phase-desc">
+                Dấu Ấn Di Ngôn: Chọn 1 người chơi còn sống nhận +1 phiếu bất lợi ngày mai
+              </p>
+
+              {canMark ? (
+                <div className="lunar-last-echo-targets">
+                  <div className="day-vote-grid">
+                    {markTargets.map((player) => (
+                      <button
+                        key={player.id}
+                        type="button"
+                        disabled={isSubmittingSpecial}
+                        className="day-vote-card lunar-action-btn"
+                        onClick={() => handleLastEchoSubmit(player.id)}
+                      >
+                        <div className="vote-card-header">
+                          <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
+                          <span className="vote-name">{player.name}</span>
+                        </div>
+                        <small className="vote-weight">Chọn nhận +1 phiếu bất lợi</small>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isSubmittingSpecial}
+                    className="special-skip-button lunar-action-btn"
+                    onClick={() => handleLastEchoSubmit(null)}
+                  >
+                    Bỏ qua
+                  </button>
+                </div>
+              ) : (
+                <div className="special-waiting-note" role="status">
+                  Đang chờ {executorName} để lại Dấu Ấn Di Ngôn...
+                </div>
+              )}
+
+              {notice && <p role="status" className="vote-notice">{notice}</p>}
+            </section>
+          );
+        })()}
+
         {/* Danh sách người chơi / Bỏ phiếu */}
         {!isSpecialInstantPhase && !isVerdictPendingNextNight && (mode === 'player' ? (
           <section className="day-players-panel">
@@ -927,14 +1224,29 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                               <span className="vote-seat">#{String(player.seatIndex).padStart(2, '0')}</span>
                               <div className="hand-vote-name-wrap">
                                 <span className="vote-name">{player.name}</span>
-                                {(player.isMayor || player.voteWeight === 0) && (
-                                  <small className="vote-weight">
-                                    {player.isMayor
-                                      ? player.voteWeight === 0
-                                        ? 'Trưởng làng · mất quyền'
-                                        : 'Trưởng làng (x2)'
-                                      : 'Mất quyền'}
-                                  </small>
+                                {(player.isMayor ||
+                                  player.voteWeight === 0 ||
+                                  neighborsFurySet.has(player.id) ||
+                                  (todayPenaltyVotes[player.id] ?? 0) > 0) && (
+                                  <div className="lunar-inline-badges">
+                                    {(player.isMayor || player.voteWeight === 0) && (
+                                      <small className="vote-weight">
+                                        {player.isMayor
+                                          ? player.voteWeight === 0
+                                            ? 'Trưởng làng · mất quyền'
+                                            : 'Trưởng làng (x2)'
+                                          : 'Mất quyền'}
+                                      </small>
+                                    )}
+                                    {neighborsFurySet.has(player.id) && (
+                                      <span className="lunar-badge fury-badge">2 phiếu</span>
+                                    )}
+                                    {(todayPenaltyVotes[player.id] ?? 0) > 0 && (
+                                      <span className="lunar-badge penalty-badge">
+                                        +{todayPenaltyVotes[player.id]} phiếu bất lợi
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1034,6 +1346,18 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                               ? '🃏 Đã mất quyền vote'
                               : '1 phiếu'}
                           </small>
+                          {(neighborsFurySet.has(player.id) || (todayPenaltyVotes[player.id] ?? 0) > 0) && (
+                            <div className="lunar-inline-badges">
+                              {neighborsFurySet.has(player.id) && (
+                                <span className="lunar-badge fury-badge">2 phiếu</span>
+                              )}
+                              {(todayPenaltyVotes[player.id] ?? 0) > 0 && (
+                                <span className="lunar-badge penalty-badge">
+                                  +{todayPenaltyVotes[player.id]} phiếu bất lợi
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </button>
                       ) : (
                         <div key={player.id} className="day-vote-card dead-vote-card">
@@ -1095,6 +1419,18 @@ export default function DayScreen({ onOpenRules }: DayScreenProps) {
                     <span className={`player-title ${player.isAlive ? '' : 'crossed-out'}`}>
                       {player.name}
                     </span>
+                    {player.isAlive && (neighborsFurySet.has(player.id) || (todayPenaltyVotes[player.id] ?? 0) > 0) && (
+                      <div className="lunar-inline-badges">
+                        {neighborsFurySet.has(player.id) && (
+                          <span className="lunar-badge fury-badge">2 phiếu</span>
+                        )}
+                        {(todayPenaltyVotes[player.id] ?? 0) > 0 && (
+                          <span className="lunar-badge penalty-badge">
+                            +{todayPenaltyVotes[player.id]} phiếu bất lợi
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {player.isMayor ? (
                     <b className="mayor-badge">👑 TRƯỞNG LÀNG</b>

@@ -9,4 +9,5 @@ export * from './voting';
 export * from './nightResolution';
 export * from './matchLogFormatter';
 export * from './matchLog';
+export * from './lunarEvents';
 export * from './gameEngine';

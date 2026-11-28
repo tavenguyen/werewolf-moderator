@@ -153,17 +153,91 @@ export const TOXIC_DEPENDENCY_CLUSTERS: ToxicClusterSpec[] = [
   },
 ];
 
+export const LUNAR_TOXIC_DEPENDENCY_CLUSTERS: ToxicClusterSpec[] = [
+  {
+    id: 'LUNAR_BLOOD_MOON_PACK_CLASH',
+    description: 'Sói con + Sói đại ca + Bảo vệ + Phù thủy + Già làng + Người cứng cỏi + Trăng Máu',
+    coreRoles: [
+      'wolf_cub',
+      'big_bad_wolf',
+      'bodyguard',
+      'witch',
+      'elder',
+      'tough_guy',
+      'werewolf',
+    ],
+    forcedSettings: {
+      lunarEventsEnabled: true,
+      lunarEventCadence: 'EVERY_DAY',
+      lunarAllowSpiritism: true,
+      witchHealMode: 'AOE',
+      allowBodyguardSelfProtect: true,
+      witchDoubleProtectKills: true,
+      revealOnDeath: false,
+    },
+  },
+  {
+    id: 'LUNAR_LAST_ECHO_VOTE_CHAOS',
+    description: 'Kẻ phá rối + Hoàng tử + Thằng ngốc + Thợ săn + Kẻ chán đời + Thiên sứ + Dư Âm Cuối Cùng',
+    coreRoles: [
+      'troublemaker',
+      'prince',
+      'village_idiot',
+      'hunter',
+      'tanner',
+      'angel',
+      'werewolf',
+      'lone_wolf',
+    ],
+    forcedSettings: {
+      lunarEventsEnabled: true,
+      lunarEventCadence: 'EVERY_DAY',
+      lunarAllowSpiritism: true,
+      hasMayor: true,
+      lynchThreshold: 'MAJORITY',
+      tieVoteMode: 'RUNOFF',
+      allowHunterSkipShot: false,
+    },
+  },
+  {
+    id: 'LUNAR_MISTY_MIRROR_INSPECT_CLASH',
+    description: 'Kẻ say rượu + Người lai sói + Phản bội + Cáo + Tiên tri + Pháp sư + Trăng Sương Mù',
+    coreRoles: [
+      'drunk',
+      'lycan',
+      'minion',
+      'fox',
+      'seer',
+      'sorcerer',
+      'apprentice_seer',
+      'werewolf',
+      'wolf_accursed',
+    ],
+    forcedSettings: {
+      lunarEventsEnabled: true,
+      lunarEventCadence: 'EVERY_DAY',
+      lunarAllowSpiritism: true,
+      seerRevealMode: 'EXACT_ROLE',
+      revealOnDeath: false,
+    },
+  },
+];
+
 /**
  * Sinh bàn đấu combinatorial nhắm thẳng vào một cụm phụ thuộc chéo hoặc cặp va chạm ngẫu nhiên.
  */
 export function generateToxicCombinatorialConfig(
   rng: SeededRng,
-  clusterIndex?: number
+  clusterIndex?: number,
+  options?: { useLunarClusters?: boolean }
 ): { config: FuzzMatchConfig; clusterId: string } {
+  const clusterPool = options?.useLunarClusters
+    ? LUNAR_TOXIC_DEPENDENCY_CLUSTERS
+    : TOXIC_DEPENDENCY_CLUSTERS;
   const cluster =
     clusterIndex !== undefined
-      ? TOXIC_DEPENDENCY_CLUSTERS[clusterIndex % TOXIC_DEPENDENCY_CLUSTERS.length]
-      : rng.pick(TOXIC_DEPENDENCY_CLUSTERS);
+      ? clusterPool[clusterIndex % clusterPool.length]
+      : rng.pick(clusterPool);
 
   const minPlayers = Math.max(6, Math.min(16, cluster.coreRoles.length));
   const playerCount = rng.nextInt(minPlayers, 16);
@@ -219,6 +293,9 @@ export function generateToxicCombinatorialConfig(
     lynchThreshold: rng.chance(0.5) ? 'MAJORITY' : 'PLURALITY',
     hunterShootsOnPoison: rng.chance(0.5),
     allowHunterSkipShot: rng.chance(0.5),
+    lunarEventsEnabled: rng.chance(0.35),
+    lunarEventCadence: rng.chance(0.5) ? 'EVERY_DAY' : 'ALTERNATE_DAYS',
+    lunarAllowSpiritism: rng.chance(0.75),
     ...cluster.forcedSettings,
   };
 

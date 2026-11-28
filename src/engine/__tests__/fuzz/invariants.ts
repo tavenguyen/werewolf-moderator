@@ -88,6 +88,10 @@ export function assertTurnPlanInvariants(
       fail('I3', `Active NightTurnPlan ${item.turnKey} has empty activePlayerIds`, ctx);
     }
 
+    if (item.turnKey === 'wolf_pack' && item.maxTargets !== undefined && item.maxTargets > 2) {
+      fail('LUNAR', `wolf_pack maxTargets=${item.maxTargets} exceeds 2`, ctx);
+    }
+
     for (const pId of item.activePlayerIds) {
       const player = playerById.get(pId);
       if (!player) {
@@ -205,11 +209,42 @@ export function assertGameStateInvariants(
     fail('I6', 'villagePowerStripped is true without an unjust Elder death', ctx);
   }
 
+  // LUNAR: Kiểm tra bất biến LunarEventState
+  if (state.lunarState) {
+    for (const [targetId, count] of Object.entries(state.lunarState.todayPenaltyVotes)) {
+      if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) {
+        fail('LUNAR', `Invalid todayPenaltyVotes[${targetId}]=${count}`, ctx);
+      }
+      if (!playerById.has(targetId)) {
+        fail('LUNAR', `todayPenaltyVotes references unknown player ${targetId}`, ctx);
+      }
+    }
+    for (const [targetId, count] of Object.entries(state.lunarState.penaltyVotesNextDay)) {
+      if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) {
+        fail('LUNAR', `Invalid penaltyVotesNextDay[${targetId}]=${count}`, ctx);
+      }
+      if (!playerById.has(targetId)) {
+        fail('LUNAR', `penaltyVotesNextDay references unknown player ${targetId}`, ctx);
+      }
+    }
+    for (const pid of state.lunarState.bloodMoonRevealedPlayerIds) {
+      const death = state.deaths.find((d) => d.playerId === pid);
+      if (!death) {
+        fail('LUNAR', `bloodMoonRevealedPlayerIds contains ${pid} who is not in state.deaths`, ctx);
+      }
+      if (death.phase !== 'NIGHT') {
+        fail('LUNAR', `bloodMoonRevealedPlayerIds contains ${pid} who died in phase ${death.phase}`, ctx);
+      }
+    }
+  }
+
   // I7: MatchEvent monotonicity & an toàn format
   let prevSeq = 0;
   const seenEvtIds = new Set<string>();
-  // Trọng số tối đa lịch sử trong phòng tại bất kỳ vòng nào (khi hasMayor bật, tối đa +1 cho 1 Trưởng làng sống)
-  const maxHistoricalVoteWeight = state.players.length + (state.settings.hasMayor ? 1 : 0);
+  // Trọng số tối đa lịch sử trong phòng tại bất kỳ vòng nào (khi hasMayor bật, +1 cho 1 Trưởng làng; khi lunarEventsEnabled bật, Cơn Thịnh Nộ Của Hàng Xóm có thể x2 phiếu + phiếu phạt Last Echo)
+  const maxHistoricalVoteWeight = state.settings.lunarEventsEnabled
+    ? state.players.length * 4
+    : state.players.length + (state.settings.hasMayor ? 1 : 0);
   const events = state.eventLog ?? [];
   const startFormatIdx =
     ctx.stepLabel === 'FINAL' ? 0 : Math.min(ctx.verifiedEventCount ?? 0, events.length);
@@ -286,6 +321,17 @@ export function assertGameStateInvariants(
     if (evt.visibility === 'SECRET_NIGHT' && publicIds.has(evt.id)) {
       fail('I8', `SECRET_NIGHT event ${evt.id} leaked into buildPublicTimeline`, ctx);
     }
+    if (evt.actionType === 'LUNAR_MIRROR_REFLECTION') {
+      const pubText = formatMatchEventText(evt, { mode: 'PUBLIC', revealOnDeath: false });
+      if (evt.actor !== null || evt.targets.length > 0) {
+        fail('I8', `LUNAR_MIRROR_REFLECTION must not carry actor/targets`, ctx);
+      }
+      for (const p of state.players) {
+        if (pubText.includes(p.name)) {
+          fail('I8', `LUNAR_MIRROR_REFLECTION leaked player name ${p.name}: "${pubText}"`, ctx);
+        }
+      }
+    }
     if (!state.settings.revealOnDeath && publicIds.has(evt.id)) {
       const pubText = formatMatchEventText(evt, { mode: 'PUBLIC', revealOnDeath: false });
       if (evt.actionType === 'CASCADE_DEATH') {
@@ -293,7 +339,11 @@ export function assertGameStateInvariants(
           fail('I8', `CASCADE_DEATH leaked hidden link when revealOnDeath=false: "${pubText}"`, ctx);
         }
       }
-      if (pubText.includes('Nhân bản')) {
+      const hasBloodMoonForceReveal =
+        Boolean(evt.metadata?.lunar?.forceReveal) ||
+        (evt.actionType === 'DAWN_SUMMARY' &&
+          Boolean(evt.metadata?.dawnDeaths?.some((d) => d.forceReveal)));
+      if (!hasBloodMoonForceReveal && pubText.includes('Nhân bản')) {
         fail('I8', `Public timeline leaked Nhân bản origin before GAME_OVER: "${pubText}"`, ctx);
       }
     }

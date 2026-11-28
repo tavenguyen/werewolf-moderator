@@ -1,5 +1,6 @@
 import { canHostTallyEarly } from '../engine/voting';
 import { checkWinCondition } from '../engine/winConditions';
+import { SEANCE_QUESTIONS } from '../engine/lunarEvents';
 import { getRawWolfTargets, getWitchVictimsPreview } from '../engine/nightResolution';
 import { buildPublicTimeline, getMorningAnnouncements } from '../engine/matchLog';
 import { ROLES_BY_ID } from '../engine/roles';
@@ -7,12 +8,13 @@ import type {
   HostBoardView,
   PlayerPrivateView,
   PostGameView,
+  PublicLunarView,
   PublicPlayerView,
   PublicRoomView,
   RoomPlayer,
   RoomState,
 } from './types';
-import type { DeathCause, PlayerId } from '../engine/types';
+import type { DeathCause, PlayerId, SeanceQuestionId } from '../engine/types';
 
 const PUBLIC_WITNESSED_DEATH_CAUSES = new Set<DeathCause>([
   'VILLAGE_VOTE',
@@ -60,13 +62,16 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
   }
 
   // Nếu revealOnDeath = false thì giấu vai trò, nguyên nhân ngầm và độ sâu chuỗi chết cho đến khi GAME_OVER
+  // Ngoại lệ: Trăng Máu (bloodMoonRevealedPlayerIds) vẫn công bố roleId của nạn nhân đêm đó
+  const bloodMoonRevealedIds = gameState?.lunarState?.bloodMoonRevealedPlayerIds ?? [];
   const deaths = (gameState?.deaths ?? []).map((d) => {
     if (room.settings.revealOnDeath) {
       return d;
     }
+    const isBloodMoonRevealed = bloodMoonRevealedIds.includes(d.playerId);
     return {
       playerId: d.playerId,
-      roleId: 'unknown',
+      roleId: isBloodMoonRevealed ? d.roleId : 'unknown',
       roundNumber: d.roundNumber,
       phase: d.phase,
       cause: PUBLIC_WITNESSED_DEATH_CAUSES.has(d.cause) ? d.cause : ('UNKNOWN' as const),
@@ -121,6 +126,29 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     ? [...publicTimeline.map((item) => item.text), ...operationalNotices]
     : (room.publicHistoryLogs ?? []);
 
+  const lunarState = gameState?.lunarState;
+  const lunarView: PublicLunarView | null = lunarState
+    ? {
+        currentDayEvent: lunarState.currentDayEvent ?? null,
+        lastEchoPermanentActive: Boolean(lunarState.lastEchoPermanentActive),
+        neighborsFuryPlayerIds: lunarState.neighborsFuryPlayerIds ?? [],
+        flashTrialActiveToday: Boolean(lunarState.flashTrialActiveToday),
+        openBallotActiveToday: Boolean(lunarState.openBallotActiveToday),
+        todayPenaltyVotes: lunarState.todayPenaltyVotes ?? {},
+        seance: lunarState.seanceState
+          ? {
+              stage: lunarState.seanceState.stage,
+              mediumPlayerId: lunarState.seanceState.mediumPlayerId,
+              targetDeadPlayerId: lunarState.seanceState.targetDeadPlayerId,
+              selectedQuestionId: lunarState.seanceState.selectedQuestionId,
+              selectedQuestionText: lunarState.seanceState.selectedQuestionText ?? null,
+              answer: lunarState.seanceState.answer,
+            }
+          : null,
+        activeLastEchoExecutorId: lunarState.lastEchoState?.activeExecutorId ?? null,
+      }
+    : null;
+
   return {
     roomCode: room.roomCode,
     gameGeneration: room.gameGeneration,
@@ -154,6 +182,7 @@ export function createPublicRoomView(room: RoomState): PublicRoomView {
     activeHunterPlayerId:
       gameState?.phase === 'HUNTER_SHOT' ? (gameState.pendingHunterShotPlayerId ?? null) : null,
     voteProgress,
+    lunarView,
   };
 }
 
@@ -231,6 +260,7 @@ export function createPlayerPrivateView(
       skills: {},
       teammates: [],
       investigationResult: null,
+      lunarActions: null,
     };
   }
 
@@ -288,6 +318,8 @@ export function createPlayerPrivateView(
       (pState.roleId === 'drunk' || pState.initialRoleId === 'drunk') && gameState.roundNumber >= 3
         ? (pState.drunkRealRoleId ?? null)
         : undefined,
+    silverShieldActiveTonight: Boolean(gameState.lunarState?.silverShieldActiveTonight),
+    mistyMoonActiveTonight: Boolean(gameState.lunarState?.mistyMoonActiveTonight),
   };
 
   if (effectiveRoleId === 'mason' || pState.initialRoleId === 'mason') {
@@ -324,6 +356,7 @@ export function createPlayerPrivateView(
   }
 
   let investigationResult: PlayerPrivateView['investigationResult'] = null;
+  let lunarActions: PlayerPrivateView['lunarActions'] = null;
 
   // Xử lý theo từng pha game
   if (gameState.phase === 'NIGHT' && room.nightTurnPlan.length > 0) {
@@ -370,7 +403,12 @@ export function createPlayerPrivateView(
     } else if (effectiveRoleId === 'sorcerer' && room.sorcererInvestigationResult) {
       investigationResult = {
         targetId: room.sorcererInvestigationResult.targetId,
-        result: room.sorcererInvestigationResult.isSeer,
+        result: room.sorcererInvestigationResult.mistyMoon
+          ? Boolean(room.sorcererInvestigationResult.hasWerewolf)
+          : room.sorcererInvestigationResult.isSeer,
+        hasWerewolf: room.sorcererInvestigationResult.hasWerewolf,
+        inspectedPlayerIds: room.sorcererInvestigationResult.inspectedPlayerIds,
+        mistyMoon: room.sorcererInvestigationResult.mistyMoon,
       };
     } else if (
       (effectiveRoleId === 'aura_seer' || pState.initialRoleId === 'aura_seer') &&
@@ -386,6 +424,7 @@ export function createPlayerPrivateView(
         result: room.foxInvestigationResult.hasWerewolf,
         hasWerewolf: room.foxInvestigationResult.hasWerewolf,
         inspectedPlayerIds: room.foxInvestigationResult.inspectedPlayerIds,
+        keptPower: room.foxInvestigationResult.keptPower,
       };
     } else if (
       (effectiveRoleId === 'pi' || pState.initialRoleId === 'pi') &&
@@ -448,6 +487,38 @@ export function createPlayerPrivateView(
         .filter((p) => p.isAlive && p.id !== playerId)
         .map((p) => p.id);
     }
+  } else if (gameState.phase === 'LUNAR_SEANCE' && gameState.lunarState?.seanceState) {
+    const seance = gameState.lunarState.seanceState;
+    const canPickSeanceQuestion =
+      seance.stage === 'PICK_QUESTION' && seance.mediumPlayerId === playerId;
+    const canAnswerSeance =
+      seance.stage === 'WAIT_ANSWER' && seance.targetDeadPlayerId === playerId;
+    if (canPickSeanceQuestion || canAnswerSeance) {
+      canActCurrentTurn = true;
+      turnKey = canPickSeanceQuestion ? 'lunar_seance_pick' : 'lunar_seance_answer';
+    }
+    lunarActions = {
+      canPickSeanceQuestion,
+      canAnswerSeance,
+      canMarkLastEcho: false,
+      seanceQuestions: canPickSeanceQuestion
+        ? (Object.entries(SEANCE_QUESTIONS) as Array<[SeanceQuestionId, string]>).map(
+            ([id, text]) => ({ id, text })
+          )
+        : undefined,
+    };
+  } else if (gameState.phase === 'LAST_ECHO_MARK') {
+    const activeExecutorId = gameState.lunarState?.lastEchoState?.activeExecutorId ?? null;
+    if (activeExecutorId === playerId) {
+      canActCurrentTurn = true;
+      turnKey = 'last_echo_mark';
+      validTargets = gameState.players.filter((p) => p.isAlive).map((p) => p.id);
+    }
+    lunarActions = {
+      canPickSeanceQuestion: false,
+      canAnswerSeance: false,
+      canMarkLastEcho: activeExecutorId === playerId,
+    };
   }
 
   // Đồng đội (Teammates):
@@ -525,6 +596,7 @@ export function createPlayerPrivateView(
     skills,
     teammates,
     investigationResult,
+    lunarActions,
   };
 }
 
@@ -548,7 +620,10 @@ function calculateNightValidTargets(
         : livingPlayers.map((p) => p.id);
 
     case 'bodyguard':
-      // Không được bảo vệ cùng 1 người 2 đêm liên tiếp
+      // Không được bảo vệ cùng 1 người 2 đêm liên tiếp (trừ khi Khiên Bạc đang hiệu lực)
+      if (gameState.lunarState?.silverShieldActiveTonight) {
+        return livingPlayers.map((p) => p.id);
+      }
       return livingPlayers
         .filter((p) => p.id !== gameState.lastProtectedPlayerId)
         .map((p) => p.id);
